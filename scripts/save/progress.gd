@@ -69,7 +69,7 @@ func to_dict() -> Dictionary:
 ## Restores saved progress. Missing or broken values fall back to a new game's values.
 static func from_dict(saved: Dictionary, data) -> RefCounted:
 	var progress = new_game(data)
-	if int(saved.get("version", -1)) != VERSION:
+	if _to_int(saved.get("version"), -1) != VERSION:
 		push_warning("Unknown save version %s, starting a new game" % str(saved.get("version")))
 		return progress
 	progress.silver = maxi(0, _to_int(saved.get("silver"), progress.silver))

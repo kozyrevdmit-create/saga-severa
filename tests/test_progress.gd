@@ -121,3 +121,9 @@ func test_broken_values_fall_back_to_safe_ones() -> void:
 	assert_eq(restored.level_of("torvald"), data.max_level(), "level clamped to max")
 	assert_eq(restored.level_of("sigrid"), 1, "broken level falls back to 1")
 	assert_true(not restored.hero_levels.has("unknown_hero"), "unknown hero ignored")
+
+
+func test_non_number_version_starts_new_game() -> void:
+	for broken_version in [{}, [], "1", null]:
+		var restored = Progress.from_dict({"version": broken_version, "silver": 999}, data)
+		assert_eq(restored.to_dict(), Progress.new_game(data).to_dict(), "version %s gives a new game" % str(broken_version))
