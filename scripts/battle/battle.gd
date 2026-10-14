@@ -14,7 +14,7 @@ var auto_ultimates := false  ## "Авто": heroes use ultimates as soon as they
 var finished := false
 var victory := false
 
-var _energy: Dictionary  ## balance.json "energy"
+var _energy: Dictionary  ## balance.json "energy": max, per_attack, per_heal, per_hit_taken
 var _rng := RandomNumberGenerator.new()
 var _events: Array[Dictionary] = []
 var _time_accumulator := 0.0
@@ -123,7 +123,7 @@ func _perform_action(unit) -> void:
 			var ally = _pick_most_wounded_ally(unit)
 			if ally != null and ally.hp_fraction() < float(unit.action_params["heal_below_hp_fraction"]):
 				_heal(unit, ally, roundi(unit.attack_power() * float(unit.action_params["heal_attack_multiplier"])))
-				_gain_energy(unit, int(_energy["per_attack"]))
+				_gain_energy(unit, int(_energy["per_heal"]))
 			else:
 				_attack(unit, _pick_front_row_target(unit))
 		_:

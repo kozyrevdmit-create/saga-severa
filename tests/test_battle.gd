@@ -178,6 +178,18 @@ func test_volva_heals_wounded_ally() -> void:
 	var heal := roundi(volva.attack_power() * float(volva.action_params["heal_attack_multiplier"]))
 	assert_eq(ally.hp, hp_before + heal, "ally healed")
 	assert_eq(enemy.hp, enemy.max_hp, "no attack while healing")
+	assert_eq(volva.energy, int(data.balance["energy"]["per_heal"]), "energy for healing comes from per_heal")
+
+
+func test_volva_heal_energy_is_configured_separately() -> void:
+	var balance: Dictionary = data.balance.duplicate(true)
+	balance["energy"]["per_heal"] = 3
+	var volva = hero_from_data("angrboda")
+	var ally = make_unit(HEROES, "front", 1000, 1, 1000.0)
+	ally.hp = 1
+	var battle = Battle.new([ally, volva], [make_dummy()], balance, 1)
+	battle.run_to_end(volva.attack_interval + 0.1)
+	assert_eq(volva.energy, 3, "heal energy follows balance.json, not per_attack")
 
 
 func test_volva_attacks_when_nobody_is_wounded() -> void:

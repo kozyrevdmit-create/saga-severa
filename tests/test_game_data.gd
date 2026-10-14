@@ -74,4 +74,5 @@ func test_energy_balance_present() -> void:
 	var energy: Dictionary = data.balance["energy"]
 	assert_true(energy["max"] > 0, "energy max")
 	assert_true(energy["per_attack"] > 0, "energy per attack")
+	assert_true(energy["per_heal"] >= 0, "energy per heal")
 	assert_true(energy["per_hit_taken"] > 0, "energy per hit taken")
