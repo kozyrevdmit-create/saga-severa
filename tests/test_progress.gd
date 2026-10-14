@@ -217,6 +217,33 @@ func test_offline_income_gets_jarl_bonus() -> void:
 	assert_eq(progress.offline_income(data, 1000000 + 10 * 60), floori(10 * rate), "with the bonus")
 
 
+func test_return_banks_offline_income_and_restarts_the_clock() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 2)
+	progress.experience = 0
+	progress.last_seen_unix = 1000000
+	var expected: int = progress.offline_income(data, 1000000 + 3600)
+	assert_eq(progress.collect_offline_income(data, 1000000 + 3600), expected, "income for the hour away")
+	assert_eq(progress.offline_bank, expected, "banked, not yet in silver")
+	assert_eq(progress.last_seen_unix, 1000000 + 3600, "clock restarted")
+	assert_eq(progress.collect_offline_income(data, 1000000 + 3600), 0, "coming back again at once adds nothing")
+
+
+func test_each_absence_is_capped_separately_and_claim_moves_bank_to_silver() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 2)
+	progress.experience = 0
+	var silver_before: int = progress.silver
+	progress.last_seen_unix = 1000000
+	var cap: int = progress.offline_income(data, 1000000 + 100 * 3600)
+	progress.collect_offline_income(data, 1000000 + 100 * 3600)
+	progress.collect_offline_income(data, 1000000 + 200 * 3600)
+	assert_eq(progress.offline_bank, 2 * cap, "two long absences, each up to the cap")
+	assert_eq(progress.claim_offline_bank(), 2 * cap, "claimed amount")
+	assert_eq(progress.silver, silver_before + 2 * cap, "added to silver")
+	assert_eq(progress.offline_bank, 0, "bank emptied")
+
+
 # --- saves --------------------------------------------------------------------
 
 func test_progress_survives_dict_round_trip() -> void:
@@ -226,6 +253,7 @@ func test_progress_survives_dict_round_trip() -> void:
 	progress.hero_levels["eyvind"] = 7
 	progress.formation_remove("sigrid")
 	progress.last_seen_unix = 1790000000
+	progress.offline_bank = 321
 	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
 	assert_eq(restored.to_dict(), progress.to_dict(), "same progress after JSON round trip")
 

@@ -12,6 +12,7 @@ var cleared_stage := 0  ## highest stage won, 0 = none yet
 var hero_levels := {}  ## unlocked hero id -> level, in unlock order
 var formation: Array[String] = []  ## one hero id or EMPTY per slot; front slots first
 var last_seen_unix := 0  ## when the game was last open; 0 = never
+var offline_bank := 0  ## offline income collected on return, waiting for «Забрать»
 
 
 static func new_game(data) -> RefCounted:
@@ -186,6 +187,23 @@ func offline_income(data, now_unix: int) -> int:
 	return floori(minutes * offline_income_per_minute(data))
 
 
+## Called when the game starts or comes back from the background: puts the income for the time away
+## into the bank (saved, so it cannot be lost) and starts counting from now. Returns the amount added.
+func collect_offline_income(data, now_unix: int) -> int:
+	var gained := offline_income(data, now_unix)
+	offline_bank += gained
+	last_seen_unix = now_unix
+	return gained
+
+
+## «Забрать»: moves the bank into silver. Returns the amount.
+func claim_offline_bank() -> int:
+	var amount := offline_bank
+	silver += amount
+	offline_bank = 0
+	return amount
+
+
 # --- saving -------------------------------------------------------------------
 
 func to_dict() -> Dictionary:
@@ -197,6 +215,7 @@ func to_dict() -> Dictionary:
 		"hero_levels": hero_levels.duplicate(),
 		"formation": formation.duplicate(),
 		"last_seen_unix": last_seen_unix,
+		"offline_bank": offline_bank,
 	}
 
 
@@ -211,6 +230,7 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.experience = maxi(0, _to_int(saved.get("experience"), 0))
 	progress.cleared_stage = clampi(_to_int(saved.get("cleared_stage"), 0), 0, data.stage_count())
 	progress.last_seen_unix = maxi(0, _to_int(saved.get("last_seen_unix"), 0))
+	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
 
 	# Unlocked heroes follow the won stages, so a version 1 save gets the heroes it has earned.
 	var levels = saved.get("hero_levels")

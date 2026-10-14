@@ -29,6 +29,7 @@
   },
   "offline_income": {
     "silver_per_minute_per_stage": 2,
-    "max_hours": 8
+    "max_hours": 8,
+    "last_seen_refresh_seconds": 60
   }
 }

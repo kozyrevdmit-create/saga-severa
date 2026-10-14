@@ -127,7 +127,9 @@ func test_m4_balance_settings_present() -> void:
 	assert_eq([int(formation["front_slots"]), int(formation["back_slots"])], [2, 3], "2 front and 3 back slots")
 	assert_true(data.balance["replay_reward_share"] > 0 and data.balance["replay_reward_share"] <= 1, "replay share")
 	assert_true(data.balance["jarl"]["exp_per_level"] > 0 and data.balance["jarl"]["silver_bonus_per_level"] >= 0, "jarl")
-	assert_true(data.balance["offline_income"]["silver_per_minute_per_stage"] > 0 and data.balance["offline_income"]["max_hours"] > 0, "offline income")
+	var offline: Dictionary = data.balance["offline_income"]
+	assert_true(offline["silver_per_minute_per_stage"] > 0 and offline["max_hours"] > 0, "offline income")
+	assert_true(offline["last_seen_refresh_seconds"] > 0, "last-seen refresh interval")
 
 
 func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:

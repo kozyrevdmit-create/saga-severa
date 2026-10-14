@@ -16,10 +16,17 @@ func _ready() -> void:
 	%SettlementButton.pressed.connect(_open.bind(SETTLEMENT_SCENE))
 	%ClaimButton.pressed.connect(_on_claim_pressed)
 	%JarlBar.fill_color = JARL_BAR_COLOR
-	if GameState.pending_offline_income > 0:
-		%OfflineAmount.text = "+%d серебра" % GameState.pending_offline_income
-		%OfflineOverlay.visible = true
+	GameState.offline_bank_changed.connect(_show_offline_income)
+	_show_offline_income()
 	_refresh()
+
+
+## «Пока тебя не было»: shown when the game starts or comes back with offline income waiting.
+func _show_offline_income() -> void:
+	var bank: int = GameState.progress.offline_bank
+	if bank > 0:
+		%OfflineAmount.text = "+%d серебра" % bank
+		%OfflineOverlay.visible = true
 
 
 func _on_claim_pressed() -> void:
