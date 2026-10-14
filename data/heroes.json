@@ -53,6 +53,7 @@
       "attack_interval": 1.2,
       "unlock_after_stage": 0,
       "ultimate": {
+        "energy_cost": 165,
         "name": "Стена щитов",
         "description": "Отряд получает на 40% меньше урона 4 с",
         "effects": [
@@ -70,6 +71,7 @@
       "attack_interval": 0.9,
       "unlock_after_stage": 0,
       "ultimate": {
+        "energy_cost": 200,
         "name": "Ярость",
         "description": "3 быстрых удара по 150% атаки",
         "effects": [
@@ -92,6 +94,7 @@
       "attack_interval": 1.3,
       "unlock_after_stage": 0,
       "ultimate": {
+        "energy_cost": 90,
         "name": "Песнь битвы",
         "description": "Отряд +30% атаки на 5 с",
         "effects": [
@@ -109,6 +112,7 @@
       "attack_interval": 1.1,
       "unlock_after_stage": 3,
       "ultimate": {
+        "energy_cost": 135,
         "name": "Ледяной залп",
         "description": "120% атаки по всем врагам, замедление 30% на 2 с",
         "effects": [
@@ -131,6 +135,7 @@
       "attack_interval": 1.4,
       "unlock_after_stage": 6,
       "ultimate": {
+        "energy_cost": 80,
         "name": "Исцеление",
         "description": "Лечит отряд на 25% макс. HP каждого",
         "effects": [
@@ -148,6 +153,7 @@
       "attack_interval": 1.4,
       "unlock_after_stage": 9,
       "ultimate": {
+        "energy_cost": 135,
         "name": "Каменный удар",
         "description": "200% атаки по первому ряду врагов, оглушение 1.5 с",
         "effects": [

@@ -16,7 +16,7 @@ var _energy_bar: StatBar
 var _body: ColorRect
 
 
-func _init(unit, show_energy: bool) -> void:
+func _init(unit) -> void:
 	custom_minimum_size = Vector2(WIDTH, 0)
 	add_theme_constant_override("separation", 4)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -24,7 +24,7 @@ func _init(unit, show_energy: bool) -> void:
 	_hp_bar = StatBar.new(HP_COLOR, 16)
 	add_child(_hp_bar)
 	_energy_bar = StatBar.new(ENERGY_COLOR, 10)
-	_energy_bar.visible = show_energy
+	_energy_bar.visible = unit.has_ultimate()
 	add_child(_energy_bar)
 
 	_body = ColorRect.new()
@@ -45,9 +45,10 @@ func _init(unit, show_energy: bool) -> void:
 	_body.add_child(label)
 
 
-func refresh(unit, max_energy: int) -> void:
+func refresh(unit) -> void:
 	_hp_bar.value = unit.hp_fraction()
-	_energy_bar.value = float(unit.energy) / max_energy
+	if unit.has_ultimate():
+		_energy_bar.value = float(unit.energy) / unit.ultimate_cost()
 	modulate.a = 1.0 if unit.is_alive() else 0.25
 
 

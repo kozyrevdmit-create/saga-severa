@@ -8,7 +8,7 @@ const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 
 const HEROES := BattleUnit.Team.HEROES
 const ENEMIES := BattleUnit.Team.ENEMIES
-const NO_ULTIMATE_EFFECTS := {"name": "test", "effects": []}
+const NO_ULTIMATE_EFFECTS := {"name": "test", "energy_cost": 100, "effects": []}
 
 var data = GameData.load_all()
 
@@ -44,8 +44,6 @@ func events_of(events: Array, type: String) -> Array:
 	return events.filter(func(e): return e["type"] == type)
 
 
-func max_energy() -> int:
-	return int(data.balance["energy"]["max"])
 
 
 func ultimate_effect(hero_id: String) -> Dictionary:
@@ -97,14 +95,27 @@ func test_energy_for_attack_and_for_hit_taken() -> void:
 	assert_eq(hero.energy, int(energy["per_attack"]) + int(energy["per_hit_taken"]), "energy after one attack and one hit")
 
 
-func test_ultimate_ready_only_at_max_energy() -> void:
+func test_each_hero_has_own_ultimate_cost() -> void:
+	var sigrid = hero_from_data("sigrid")
+	var battle = make_battle([sigrid], [make_dummy()])
+	var cost := int(data.get_hero("sigrid")["ultimate"]["energy_cost"])
+	sigrid.energy = cost - 1
+	assert_true(not battle.can_use_ultimate(sigrid.id), "not ready one point short of her own cost")
+	sigrid.energy = cost
+	assert_true(battle.can_use_ultimate(sigrid.id), "ready at her own cost")
+	sigrid.energy = 0
+	battle.run_to_end(60.0)
+	assert_eq(sigrid.energy, cost, "energy is capped at the hero's cost")
+
+
+func test_ultimate_ready_only_at_its_energy_cost() -> void:
 	var hero = make_unit(HEROES, "front", 1000, 10, 1.0)
 	hero.ultimate = NO_ULTIMATE_EFFECTS
 	var battle = make_battle([hero], [make_dummy()])
-	hero.energy = max_energy() - 1
+	hero.energy = hero.ultimate_cost() - 1
 	assert_true(not battle.can_use_ultimate(hero.id), "not ready below max")
 	assert_true(not battle.use_ultimate(hero.id), "cannot use below max")
-	hero.energy = max_energy()
+	hero.energy = hero.ultimate_cost()
 	assert_true(battle.can_use_ultimate(hero.id), "ready at max")
 	assert_true(battle.use_ultimate(hero.id), "used at max")
 	assert_eq(hero.energy, 0, "energy spent")
@@ -115,9 +126,9 @@ func test_auto_mode_uses_ready_ultimate() -> void:
 	var hero = make_unit(HEROES, "front", 1000, 10, 100.0)
 	hero.ultimate = NO_ULTIMATE_EFFECTS
 	var battle = make_battle([hero], [make_dummy()])
-	hero.energy = max_energy()
+	hero.energy = hero.ultimate_cost()
 	battle.step()
-	assert_eq(hero.energy, max_energy(), "manual mode waits for a tap")
+	assert_eq(hero.energy, hero.ultimate_cost(), "manual mode waits for a tap")
 	battle.auto_ultimates = true
 	battle.step()
 	assert_eq(hero.energy, 0, "auto mode used the ultimate")
@@ -230,7 +241,7 @@ func test_shield_wall_reduces_damage_taken() -> void:
 	var ally = make_unit(HEROES, "front", 100000, 1, 1000.0)
 	var enemy = make_unit(ENEMIES, "front", 100000, 100, 1.0)
 	var battle = make_battle([torvald, ally], [enemy])
-	torvald.energy = max_energy()
+	torvald.energy = torvald.ultimate_cost()
 	battle.use_ultimate(torvald.id)
 	battle.run_to_end(1.5)  # one enemy hit during the wall
 	var hits := events_of(battle.take_events(), "damage").filter(func(e): return e["source"] == enemy.id)
@@ -245,7 +256,7 @@ func test_battle_song_boosts_squad_attack() -> void:
 	var eyvind = hero_from_data("eyvind")
 	var ally = make_unit(HEROES, "front", 100000, 50, 1000.0)
 	var battle = make_battle([eyvind, ally], [make_dummy()])
-	eyvind.energy = max_energy()
+	eyvind.energy = eyvind.ultimate_cost()
 	battle.use_ultimate(eyvind.id)
 	var effect := ultimate_effect("eyvind")
 	assert_near(ally.attack_power(), 50 * float(effect["multiplier"]), 0.001, "ally attack boosted")
@@ -257,14 +268,14 @@ func test_battle_song_boosts_squad_attack() -> void:
 func test_fury_strikes_three_times() -> void:
 	var sigrid = hero_from_data("sigrid")
 	var battle = make_battle([sigrid], [make_dummy()])
-	sigrid.energy = max_energy()
+	sigrid.energy = sigrid.ultimate_cost()
 	battle.use_ultimate(sigrid.id)
 	var effect := ultimate_effect("sigrid")
 	var hits := events_of(battle.take_events(), "damage")
 	assert_eq(hits.size(), int(effect["count"]), "number of strikes")
 	for hit in hits:
 		assert_eq(hit["amount"], roundi(sigrid.attack_power() * float(effect["attack_multiplier"])), "strike damage")
-		assert_true(hit["ultimate"], "strike marked as ultimate")
+		assert_eq(hit["kind"], "ultimate", "strike marked as ultimate")
 
 
 func test_berserker_gets_stronger_when_wounded() -> void:
@@ -279,7 +290,7 @@ func test_ice_volley_hits_all_enemies_and_slows() -> void:
 	var skadi = hero_from_data("skadi")
 	var enemies := [make_dummy("front"), make_dummy("front"), make_dummy("back")]
 	var battle = make_battle([skadi], enemies)
-	skadi.energy = max_energy()
+	skadi.energy = skadi.ultimate_cost()
 	battle.use_ultimate(skadi.id)
 	var effect := ultimate_effect("skadi")
 	var damage := roundi(skadi.attack_power() * float(effect["attack_multiplier"]))
@@ -305,7 +316,7 @@ func test_stone_strike_hits_front_row_and_stuns() -> void:
 	var enemy_front = make_unit(ENEMIES, "front", 100000, 10, 0.5)
 	var enemy_back = make_dummy("back")
 	var battle = make_battle([hrungnir], [enemy_front, enemy_back])
-	hrungnir.energy = max_energy()
+	hrungnir.energy = hrungnir.ultimate_cost()
 	battle.use_ultimate(hrungnir.id)
 	var effect := ultimate_effect("hrungnir")
 	assert_eq(enemy_front.hp, enemy_front.max_hp - roundi(hrungnir.attack_power() * float(effect["attack_multiplier"])), "front row hit")
@@ -325,7 +336,7 @@ func test_healing_restores_share_of_max_hp() -> void:
 	ally.hp = 100
 	angrboda.hp = 100
 	var battle = make_battle([ally, angrboda], [make_dummy()])
-	angrboda.energy = max_energy()
+	angrboda.energy = angrboda.ultimate_cost()
 	battle.use_ultimate(angrboda.id)
 	var share := float(ultimate_effect("angrboda")["max_hp_fraction"])
 	assert_eq(ally.hp, 100 + roundi(ally.max_hp * share), "ally healed")

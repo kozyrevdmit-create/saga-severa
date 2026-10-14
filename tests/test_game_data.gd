@@ -25,6 +25,7 @@ func test_heroes_have_valid_fields() -> void:
 		assert_true(data.heroes["classes"].has(hero["class"]), "%s class exists" % who)
 		assert_true(data.heroes["clans"].has(hero["clan"]), "%s clan exists" % who)
 		assert_true(hero["hp"] > 0 and hero["attack"] > 0 and hero["attack_interval"] > 0, "%s stats positive" % who)
+		assert_true(hero["ultimate"].get("energy_cost", 0) > 0, "%s ultimate has an energy cost" % who)
 		var effects: Array = hero["ultimate"]["effects"]
 		assert_true(not effects.is_empty(), "%s ultimate has effects" % who)
 		for effect in effects:
@@ -48,31 +49,53 @@ func test_starting_heroes_and_unlocks() -> void:
 	assert_eq(int(data.get_hero("hrungnir")["unlock_after_stage"]), 9, "Hrungnir unlock")
 
 
-func test_three_enemy_types() -> void:
-	var ids := []
+func test_three_enemy_types_and_the_boss() -> void:
+	var regular := []
+	var bosses := []
 	for enemy in data.enemies["enemies"]:
-		ids.append(enemy["id"])
+		(bosses if enemy.get("boss", false) else regular).append(enemy["id"])
 		assert_true(enemy["row"] in ["front", "back"], "%s row" % enemy["id"])
 		assert_true(enemy["action"] in KNOWN_ACTIONS, "%s action" % enemy["id"])
 		assert_true(enemy["hp"] > 0 and enemy["attack"] > 0 and enemy["attack_interval"] > 0, "%s stats positive" % enemy["id"])
 		assert_true(Color.html_is_valid(enemy["color"]), "%s color" % enemy["id"])
-	assert_eq(ids, ["draugr", "wolf", "draugr_archer"], "enemy ids")
+	assert_eq(regular, ["draugr", "wolf", "draugr_archer"], "regular enemy ids")
+	assert_eq(bosses, ["draugr_king"], "boss ids")
+	var special: Dictionary = data.get_enemy("draugr_king")["special"]
+	assert_eq(special["type"], "hit_all", "boss strikes the whole squad")
+	assert_true(special["interval"] > 0 and special["attack_multiplier"] > 0, "boss strike numbers positive")
 
 
-func test_stage_waves_reference_known_enemies() -> void:
+func test_ten_stages_of_three_waves() -> void:
 	var known := []
 	for enemy in data.enemies["enemies"]:
 		known.append(enemy["id"])
-	for stage in data.stages["stages"]:
-		assert_true(not stage["waves"].is_empty(), "stage %s has waves" % stage["id"])
-		for wave in stage["waves"]:
+	assert_eq(data.stage_count(), 10, "stage count")
+	for i in data.stage_count():
+		var stage: Dictionary = data.stages["stages"][i]
+		assert_eq(int(stage["id"]), i + 1, "stage ids in order")
+		assert_true(not data.get_chapter(int(stage["chapter"])).is_empty(), "stage %s chapter exists" % stage["id"])
+		assert_eq(stage["waves"].size(), 3, "stage %s has 3 waves" % stage["id"])
+		assert_true(stage["reward"]["silver"] > 0 and stage["reward"]["experience"] > 0, "stage %s reward" % stage["id"])
+		for w in stage["waves"].size():
+			var wave: Array = stage["waves"][w]
+			assert_true(not wave.is_empty(), "stage %s wave %d not empty" % [stage["id"], w + 1])
 			for enemy_id in wave:
 				assert_true(enemy_id in known, "stage %s enemy %s known" % [stage["id"], enemy_id])
+				var is_boss_slot: bool = int(stage["id"]) == 10 and w == 2
+				assert_eq(data.get_enemy(enemy_id).get("boss", false), is_boss_slot, "boss only in stage 10 wave 3 (stage %s wave %d)" % [stage["id"], w + 1])
+
+
+func test_leveling_and_growth_present() -> void:
+	var leveling: Dictionary = data.balance["leveling"]
+	assert_true(leveling["max_level"] > 1, "max level")
+	assert_true(leveling["cost_base"] > 0 and leveling["cost_growth"] >= 1.0, "level cost")
+	assert_true(leveling["stat_growth_per_level"] > 0, "stat growth")
+	assert_true(data.balance["enemy_power_growth_per_stage"] >= 0, "enemy growth")
+	assert_true(data.balance["start_silver"] >= 0, "start silver")
 
 
 func test_energy_balance_present() -> void:
 	var energy: Dictionary = data.balance["energy"]
-	assert_true(energy["max"] > 0, "energy max")
 	assert_true(energy["per_attack"] > 0, "energy per attack")
 	assert_true(energy["per_heal"] >= 0, "energy per heal")
 	assert_true(energy["per_hit_taken"] > 0, "energy per hit taken")
