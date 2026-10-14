@@ -1,7 +1,8 @@
 ## Autoload "GameState": game data and the player's progress, shared by all screens.
 ## Screens call save() after every change. Offline income: when the game starts or comes back from the
 ## background, the income for the time away goes into the bank (Progress.collect_offline_income);
-## leaving or hiding the game saves the time it was last seen.
+## leaving, hiding or unfocusing the game saves the time it was last seen and stops the heartbeat,
+## so the time in the background is not overwritten before it is counted.
 extends Node
 
 signal offline_bank_changed  ## new offline income is waiting for «Забрать»
@@ -14,18 +15,19 @@ var progress
 var selected_stage := 1  ## stage the battle screen should fight (set by the chapter map)
 
 var _visibility_callback  ## keeps the browser callback alive
+var _heartbeat := Timer.new()  ## refreshes "last seen" while the game is in front
+var _away := false  ## the game is in the background (between leaving and coming back)
 
 
 func _ready() -> void:
 	data = GameData.load_all()
 	progress = SaveStorage.load_progress(data)
-	_on_resumed()
-	# While the game is open, refresh the "last seen" time now and then, in case it is closed without notice.
-	var heartbeat := Timer.new()
-	heartbeat.wait_time = float(data.balance["offline_income"]["last_seen_refresh_seconds"])
-	heartbeat.timeout.connect(save)
-	add_child(heartbeat)
-	heartbeat.start()
+	# While the game is in front, refresh the "last seen" time now and then, in case it is closed without notice.
+	_heartbeat.wait_time = float(data.balance["offline_income"]["last_seen_refresh_seconds"])
+	_heartbeat.timeout.connect(save)
+	add_child(_heartbeat)
+	_bank_offline_income()
+	_heartbeat.start()
 	if OS.has_feature("web"):
 		# Switching away from the browser tab and back does not always reach the engine as a notification.
 		_visibility_callback = JavaScriptBridge.create_callback(_on_page_visibility_changed)
@@ -39,7 +41,9 @@ func claim_offline_income() -> void:
 
 
 func save() -> void:
-	progress.last_seen_unix = _now()
+	# In the background the "last seen" time stays at the moment the game left, so that time is counted later.
+	if not _away:
+		progress.last_seen_unix = _now()
 	SaveStorage.save_progress(progress)
 
 
@@ -48,20 +52,38 @@ func _notification(what: int) -> void:
 		return
 	match what:
 		NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_WM_CLOSE_REQUEST:
-			save()
+			_on_left()
 		NOTIFICATION_APPLICATION_FOCUS_IN, NOTIFICATION_APPLICATION_RESUMED:
-			_on_resumed()
+			_on_returned()
 
 
 func _on_page_visibility_changed(_args: Array) -> void:
 	if JavaScriptBridge.get_interface("document").hidden:
-		save()
+		_on_left()
 	else:
-		_on_resumed()
+		_on_returned()
+
+
+## The game went to the background: remember when, and stop refreshing that time until it comes back.
+func _on_left() -> void:
+	if _away:
+		return
+	save()
+	_heartbeat.stop()
+	_away = true
+
+
+## The game came back: count the time away first, then resume refreshing "last seen".
+func _on_returned() -> void:
+	if not _away:
+		return
+	_away = false
+	_bank_offline_income()
+	_heartbeat.start()
 
 
 ## Banks the income for the time away (from the saved "last seen" time to now), then saves.
-func _on_resumed() -> void:
+func _bank_offline_income() -> void:
 	var gained: int = progress.collect_offline_income(data, _now())
 	SaveStorage.save_progress(progress)
 	if gained > 0:
