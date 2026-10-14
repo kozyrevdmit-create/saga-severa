@@ -40,6 +40,13 @@ func claim_offline_income() -> void:
 	save()
 
 
+## Debug panel «Сбросить прогресс»: a new game, saved at once.
+func reset_progress() -> void:
+	progress.reset(data, _now())
+	selected_stage = 1
+	save()
+
+
 func save() -> void:
 	# In the background the "last seen" time stays at the moment the game left, so that time is counted later.
 	if not _away:

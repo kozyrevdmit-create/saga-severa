@@ -1,0 +1,109 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/debug_panel.gd" id="1_debug"]
+
+[node name="DebugPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_debug")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.92)
+
+[node name="Box" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_right = -48.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="Title" type="Label" parent="Box"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Отладка"
+horizontal_alignment = 1
+
+[node name="ResetButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "Сбросить прогресс"
+
+[node name="CloseButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "Закрыть"
+
+[node name="ConfirmBox" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.09, 0.13, 1)
+
+[node name="ConfirmLayout" type="VBoxContainer" parent="ConfirmBox"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_right = -48.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 32
+alignment = 1
+
+[node name="ConfirmTitle" type="Label" parent="ConfirmBox/ConfirmLayout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 52
+text = "Точно сбросить?"
+horizontal_alignment = 1
+
+[node name="ConfirmText" type="Label" parent="ConfirmBox/ConfirmLayout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.75)
+theme_override_font_sizes/font_size = 30
+text = "Пропадёт всё: пройденные этапы, герои и их уровни, отряд, серебро, уровень ярла и копилка поселения. Игра начнётся заново."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="ConfirmYesButton" type="Button" parent="ConfirmBox/ConfirmLayout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.55, 0.5, 1)
+theme_override_font_sizes/font_size = 40
+text = "Да, сбросить"
+
+[node name="ConfirmNoButton" type="Button" parent="ConfirmBox/ConfirmLayout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "Отмена"
