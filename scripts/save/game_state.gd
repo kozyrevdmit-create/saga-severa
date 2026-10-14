@@ -47,6 +47,32 @@ func reset_progress() -> void:
 	save()
 
 
+## Debug panel «+N серебра».
+func debug_add_silver() -> void:
+	progress.silver += int(data.balance["debug_panel"]["add_silver"])
+	save()
+
+
+## Debug panel «Открыть всех героев».
+func debug_unlock_all_heroes() -> void:
+	progress.unlock_all_heroes(data)
+	save()
+
+
+## Debug panel «Перейти к этапу N».
+func debug_jump_to_stage(stage_id: int) -> void:
+	progress.jump_to_stage(data, stage_id)
+	selected_stage = progress.next_stage_id(data)
+	save()
+
+
+## Debug panel «Промотать время»: as if the game had been closed for skip_time_hours; the income goes
+## into the bank and the «Пока тебя не было» window shows it.
+func debug_skip_time() -> void:
+	progress.last_seen_unix = _now() - roundi(float(data.balance["debug_panel"]["skip_time_hours"]) * 3600.0)
+	_bank_offline_income()
+
+
 func save() -> void:
 	# In the background the "last seen" time stays at the moment the game left, so that time is counted later.
 	if not _away:

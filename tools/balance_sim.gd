@@ -3,14 +3,21 @@
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --campaigns=40 --runs=200
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --level=12
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --until=6   (campaigns stop after stage 6, table 1 only)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --sensitivity   (table 5 only, variants run in parallel)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --heroes=0.9 --rewards=1.1   (changed numbers)
 ## 1. Campaign: a player goes through the chapter from a new game. Before every fight they spend all their
 ##    silver; when they lose a stage they replay the previous one (for the replay reward) and try again.
-##    Two players: "разумный" buys the level-up with the best gain in squad power per silver,
+##    Two players: "разумный" buys, one level-up at a time, the one that raises the chance to win the stage
+##    they are trying to beat the most per silver (measured by test fights, see _best_upgrade);
 ##    "неидеальный" spreads silver evenly over all heroes (lowest level first, bench included).
-##    Prints replays needed per stage, where players get stuck, and how many level-ups a first win buys.
+##    With --old-bot a third player is added: the sensible player of M4 (best gain in total HP × damage per silver).
+##    Prints replays needed per stage, where players get stuck, how many level-ups a first win buys
+##    and each player's hero levels at the first win.
 ## 2. Per stage: win rate at level 1 and at the levels the sensible player had when they first won it
 ##    (with and without ultimates). With --level=N all heroes are at level N instead.
 ## 3. Average time for each hero's ultimate to charge (auto mode, sensible player's fights).
+## 4. Offline income for a full absence on every stage, in first wins of the current stage.
+## 5. (--sensitivity) The campaign again with all heroes' HP and attack and all stage silver rewards at −10% and +10%.
 extends SceneTree
 
 const GameData := preload("res://scripts/data/game_data.gd")
@@ -22,13 +29,23 @@ const Progress := preload("res://scripts/save/progress.gd")
 const HANG_GUARD_SECONDS := 3600.0
 ## A player who needs more replays than this for one stage counts as stuck there.
 const STUCK_AFTER_REPLAYS := 40
-const POLICIES := {"sensible": "разумный", "uneven": "неидеальный"}
+const POLICY_NAMES := {"sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
+## Sensitivity variants: [name, hero HP and attack multiplier, stage silver multiplier].
+const VARIANTS := [
+	["как есть", 1.0, 1.0], ["герои −10%", 0.9, 1.0], ["герои +10%", 1.1, 1.0],
+	["награды −10%", 1.0, 0.9], ["награды +10%", 1.0, 1.1],
+]
+## Warning marks of table 5: a stage this hard, or a chapter this easy, means the balance breaks.
+const TOO_MANY_REPLAYS := 5.0
 
 var data
 var _hung := false
 var _seed := 1
 var _charges := {}  ## hero id -> [sum of charge times, count]
 var _last_stage := 0  ## campaigns stop after this stage
+var _policies: Array = ["sensible", "uneven"]
+var _score_fights := 12  ## test fights per squad when the sensible player picks a level-up
+var _score_cache := {}  ## "stage|hero:level,..." -> score; test fights use fixed seeds, so a score never changes
 
 
 func _initialize() -> void:
@@ -36,6 +53,10 @@ func _initialize() -> void:
 	var campaigns := 20
 	var forced_level := 0
 	var until := 0
+	var hero_scale := 1.0
+	var reward_scale := 1.0
+	var sensitivity := false
+	var summary_path := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			runs = int(arg.get_slice("=", 1))
@@ -45,33 +66,70 @@ func _initialize() -> void:
 			forced_level = int(arg.get_slice("=", 1))
 		elif arg.begins_with("--until="):
 			until = int(arg.get_slice("=", 1))
-	data = GameData.load_all()
+		elif arg.begins_with("--score-fights="):
+			_score_fights = maxi(1, int(arg.get_slice("=", 1)))
+		elif arg.begins_with("--heroes="):
+			hero_scale = float(arg.get_slice("=", 1))
+		elif arg.begins_with("--rewards="):
+			reward_scale = float(arg.get_slice("=", 1))
+		elif arg == "--sensitivity":
+			sensitivity = true
+		elif arg.begins_with("--summary="):
+			summary_path = arg.get_slice("=", 1)
+		elif arg == "--old-bot":
+			_policies.append("power")
+	_load_data(hero_scale, reward_scale)
 	_last_stage = until if until > 0 else data.stage_count()
 
+	if sensitivity:
+		_print_sensitivity(campaigns)
+		quit(1 if _hung else 0)
+		return
+	if summary_path != "":
+		_write_summary(campaigns, summary_path)
+		quit(1 if _hung else 0)
+		return
+
 	# 1. Campaigns.
-	var results := {}
-	for policy in POLICIES:
-		results[policy] = []
-		for i in campaigns:
-			results[policy].append(_campaign(policy))
-			if _hung:
-				quit(1)
-				return
+	var results := _run_campaigns(campaigns)
+	if _hung:
+		quit(1)
+		return
+	if hero_scale != 1.0 or reward_scale != 1.0:
+		print("Изменённые цифры: HP и атака героев ×%.2f, серебро за этапы ×%.2f" % [hero_scale, reward_scale])
 	print("1. Прохождение главы с нуля (%d прохождений на каждого игрока, ульты — «Авто»)" % campaigns)
 	print("Повторы = сколько раз пришлось перепройти предыдущий этап, чтобы взять этот.")
 	print("")
-	print("Этап | разумный: повторы ср./макс. | уровни | улучшений за 1-ю победу, ср. (мин–макс) | неидеальный: повторы ср./макс. | застряли")
-	print("-----+-----------------------------+--------+-------------------------+---------------------------------+---------")
+	print("Улучшения = сколько улучшений одного героя (среднего по уровню в отряде) покупает первая победа.")
+	var header := "Этап"
+	for policy in _policies:
+		header += " | %s: повторы ср./макс., застряли, улучшения" % POLICY_NAMES[policy]
+	print(header)
 	for stage in range(1, _last_stage + 1):
-		var sensible := _stage_summary(results["sensible"], stage)
-		var uneven := _stage_summary(results["uneven"], stage)
-		print("%4d | %21s | %6s | %23s | %31s | %7s" % [
-			stage, _replays_text(sensible), sensible["levels"], sensible["upgrades"],
-			_replays_text(uneven), "%d%%" % uneven["stuck_share"]])
-	for policy in POLICIES:
+		var line := "%4d" % stage
+		for policy in _policies:
+			var summary := _stage_summary(results[policy], stage)
+			line += " | %10s, %3d%%, %11s" % [_replays_text(summary), summary["stuck_share"], summary["upgrades"]]
+		print(line)
+	for policy in _policies:
 		var totals := _totals(results[policy])
 		print("Всего (%s): боёв %s, время боёв %s мин, дошли до конца %d%%" % [
-			POLICIES[policy], totals["fights"], totals["minutes"], totals["finished_share"]])
+			POLICY_NAMES[policy], totals["fights"], totals["minutes"], totals["finished_share"]])
+
+	print("")
+	print("Уровни героев при первой победе (медиана по прохождениям; «—» — героя ещё нет):")
+	var hero_ids: Array = data.heroes["heroes"].map(func(hero): return hero["id"])
+	var names_line := "Этап"
+	for policy in _policies:
+		names_line += " | %-23s" % POLICY_NAMES[policy]
+	print(names_line)
+	print("     | " + " | ".join(_policies.map(func(_p): return " ".join(hero_ids.map(func(id): return "%3s" % data.get_hero(id)["name"].substr(0, 3))))))
+	for stage in range(1, _last_stage + 1):
+		var line := "%4d" % stage
+		for policy in _policies:
+			var levels := _median_levels(results[policy], stage)
+			line += " | " + " ".join(hero_ids.map(func(id): return "%3s" % (str(levels[id]) if levels.has(id) else "—")))
+		print(line)
 	if until > 0:
 		quit()
 		return
@@ -116,7 +174,111 @@ func _initialize() -> void:
 		var entry: Array = _charges.get(hero["id"], [0.0, 0])
 		if entry[1] > 0:
 			print("  %-9s стоимость %3d: %5.1f с" % [hero["name"], int(hero["ultimate"]["energy_cost"]), entry[0] / entry[1]])
+
+	# 4. Offline income.
+	print("")
+	var max_hours := float(data.balance["offline_income"]["max_hours"])
+	print("4. Оффлайн-доход за %d ч отсутствия (ярл 1-го уровня; с ярлом доход и награды растут одинаково)" % int(max_hours))
+	print("Пройдено этапов | текущий этап | доход | первых побед текущего этапа")
+	var offline_progress = Progress.new_game(data)
+	for stage in range(1, data.stage_count() + 1):
+		offline_progress.apply_victory(data, stage)
+		offline_progress.experience = 0
+		var cap: int = offline_progress.offline_income_cap(data)
+		var current: int = offline_progress.next_stage_id(data)
+		print("%15d | %12d | %5d | %.1f" % [stage, current, cap, float(cap) / float(data.get_stage(current)["reward"]["silver"])])
 	quit()
+
+
+func _load_data(hero_scale: float, reward_scale: float) -> void:
+	data = GameData.load_all()
+	for hero in data.heroes["heroes"]:
+		hero["hp"] = float(hero["hp"]) * hero_scale
+		hero["attack"] = float(hero["attack"]) * hero_scale
+	for stage in data.stages["stages"]:
+		stage["reward"]["silver"] = roundi(float(stage["reward"]["silver"]) * reward_scale)
+	_score_cache.clear()
+
+
+func _run_campaigns(campaigns: int) -> Dictionary:
+	var results := {}
+	for policy in _policies:
+		results[policy] = []
+		for i in campaigns:
+			results[policy].append(_campaign(policy))
+			if _hung:
+				return results
+	return results
+
+
+# --- sensitivity --------------------------------------------------------------
+
+## Each variant runs as a separate copy of this tool (in parallel, --summary=...), then the results are joined.
+func _print_sensitivity(campaigns: int) -> void:
+	var jobs := []
+	for i in VARIANTS.size():
+		var path := ProjectSettings.globalize_path("user://balance_sim_variant_%d.json" % i)
+		DirAccess.remove_absolute(path)
+		var args := ["--headless", "--path", ProjectSettings.globalize_path("res://"), "--script", "res://tools/balance_sim.gd", "--",
+			"--campaigns=%d" % campaigns, "--until=%d" % _last_stage, "--score-fights=%d" % _score_fights,
+			"--heroes=%s" % VARIANTS[i][1], "--rewards=%s" % VARIANTS[i][2], "--summary=%s" % path]
+		if "power" in _policies:
+			args.append("--old-bot")
+		jobs.append({"pid": OS.create_process(OS.get_executable_path(), args), "path": path})
+	var per_variant := []
+	for job in jobs:
+		while OS.is_process_running(job["pid"]):
+			OS.delay_msec(500)
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(job["path"])) if FileAccess.file_exists(job["path"]) else null
+		if not parsed is Dictionary:
+			push_error("A sensitivity variant failed: no results in %s" % job["path"])
+			_hung = true
+			return
+		per_variant.append(parsed)
+		DirAccess.remove_absolute(job["path"])
+	print("5. Устойчивость баланса (%d прохождений на игрока и вариант): повторы в среднем по этапам" % campaigns)
+	print("Меняются HP и атака всех героев или серебро за все этапы. «!» — 5+ повторов на этапе или кто-то застрял.")
+	for policy in _policies:
+		print("")
+		print("Игрок: %s" % POLICY_NAMES[policy])
+		print("Этап | " + " | ".join(VARIANTS.map(func(v): return "%12s" % v[0])))
+		for stage in range(1, _last_stage + 1):
+			var cells := []
+			for results in per_variant:
+				var average: float = results[policy]["replays"][stage - 1]
+				var mark := "!" if average >= TOO_MANY_REPLAYS or results[policy]["stuck"][stage - 1] > 0 else " "
+				cells.append("%11.1f%s" % [average, mark])
+			print("%4d | " % stage + " | ".join(cells))
+		var replays_line := []
+		var fights_line := []
+		for results in per_variant:
+			var total := 0.0
+			for value in results[policy]["replays"]:
+				total += value
+			replays_line.append("%12.1f" % total)
+			fights_line.append("%12s" % ("%s / %s мин" % [results[policy]["fights"], results[policy]["minutes"]]))
+		print("Всего повторов | " + " | ".join(replays_line))
+		print("Боёв / минут   | " + " | ".join(fights_line))
+
+
+## A sensitivity variant: campaigns only, the per-stage averages written as JSON for _print_sensitivity.
+func _write_summary(campaigns: int, path: String) -> void:
+	var results := _run_campaigns(campaigns)
+	if _hung:
+		return
+	var summary := {}
+	for policy in _policies:
+		var replays := []
+		var stuck := []
+		for stage in range(1, _last_stage + 1):
+			var stage_summary := _stage_summary(results[policy], stage)
+			replays.append(_average(stage_summary["replays"]))
+			stuck.append(stage_summary["stuck_share"])
+		var totals := _totals(results[policy])
+		summary[policy] = {"replays": replays, "stuck": stuck, "fights": totals["fights"], "minutes": totals["minutes"]}
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(JSON.stringify(summary))
+	file.close()
 
 
 # --- campaign ---------------------------------------------------------------
@@ -130,7 +292,7 @@ func _campaign(policy: String) -> Dictionary:
 		var replays := 0
 		var record := {"stage": stage, "stuck": false}
 		while true:
-			_spend(progress, policy)
+			_spend(progress, policy, stage)
 			var fight := _fight(stage, progress.squad(data), policy == "sensible")
 			fights += 1
 			battle_time += fight["time"]
@@ -146,7 +308,7 @@ func _campaign(policy: String) -> Dictionary:
 				break
 			replays += 1
 			if stage > 1:
-				_spend(progress, policy)
+				_spend(progress, policy, stage)
 				var replay := _fight(stage - 1, progress.squad(data), policy == "sensible")
 				fights += 1
 				battle_time += replay["time"]
@@ -159,16 +321,61 @@ func _campaign(policy: String) -> Dictionary:
 	return {"stages": stages, "fights": fights, "battle_time": battle_time}
 
 
-## Spends silver before a fight.
-func _spend(progress, policy: String) -> void:
+## Spends silver before a fight; `goal` is the stage the player is trying to beat.
+func _spend(progress, policy: String, goal: int) -> void:
 	while true:
-		var hero_id := _best_upgrade(progress) if policy == "sensible" else _lowest_level_hero(progress)
+		var hero_id := ""
+		match policy:
+			"sensible":
+				hero_id = _best_upgrade(progress, goal)
+			"power":
+				hero_id = _best_power_upgrade(progress)
+			_:
+				hero_id = _lowest_level_hero(progress)
 		if hero_id == "" or not progress.level_up(data, hero_id):
 			return
 
 
-## The affordable squad level-up with the largest gain in squad power (total HP × total damage per second) per silver.
-func _best_upgrade(progress) -> String:
+## The sensible player: the affordable squad level-up that raises the chance to beat `goal` the most per silver.
+## The chance is measured by test fights with fixed seeds (the same for every option, so only the level-up
+## makes the difference). A fight scores 1 + the squad's HP left on a win and the share of the stage's enemy HP
+## taken on a loss: this tells "almost won" from "far off" when a few test fights all end the same way.
+func _best_upgrade(progress, goal: int) -> String:
+	var squad: Array = progress.squad(data)
+	var base := _squad_score(goal, squad)
+	var best := ""
+	var best_ratio := 0.0
+	for member in squad:
+		var hero_id: String = member["id"]
+		if not progress.can_level_up(data, hero_id):
+			continue
+		member["level"] += 1
+		var ratio: float = (_squad_score(goal, squad) - base) / progress.level_up_cost(data, hero_id)
+		member["level"] -= 1
+		if best == "" or ratio > best_ratio:
+			best = hero_id
+			best_ratio = ratio
+	return best
+
+
+func _squad_score(stage: int, squad: Array) -> float:
+	var key := "%d|%s" % [stage, ",".join(squad.map(func(m): return "%s:%d:%s" % [m["id"], m["level"], m["row"]]))]
+	if _score_cache.has(key):
+		return _score_cache[key]
+	var total := 0.0
+	for i in _score_fights:
+		var battle = StageBattle.from_data(data, stage, squad, 104729 * (i + 1) + stage)
+		battle.auto_ultimates = true
+		_run(battle)
+		total += (1.0 + battle.hero_hp_share_left()) if battle.victory else battle.enemy_hp_share_taken()
+	var score := total / _score_fights
+	_score_cache[key] = score
+	return score
+
+
+## The sensible player of M4: the affordable squad level-up with the largest gain in squad power
+## (total HP × total damage per second) per silver. Kept to show why it lost to the uneven player.
+func _best_power_upgrade(progress) -> String:
 	var best := ""
 	var best_ratio := 0.0
 	var base_power := _squad_power(progress, "")
@@ -218,6 +425,15 @@ func _upgrades_bought_by(level: int, silver: int) -> int:
 		level += 1
 		count += 1
 	return count
+
+
+func _run(battle) -> void:
+	while not battle.finished:
+		if battle.time > HANG_GUARD_SECONDS:
+			push_error("Stage %d did not end after %d s of battle time: a bug in the battle rules" % [battle.stage_id, HANG_GUARD_SECONDS])
+			_hung = true
+			return
+		battle.step()
 
 
 func _fight(stage: int, squad: Array, record_charges: bool) -> Dictionary:
@@ -279,10 +495,7 @@ func _replays_text(summary: Dictionary) -> String:
 	var replays: Array = summary["replays"]
 	if replays.is_empty():
 		return "—"
-	var total := 0
-	for value in replays:
-		total += value
-	return "%.1f / %d" % [float(total) / replays.size(), replays.max()]
+	return "%.1f / %d" % [_average(replays), replays.max()]
 
 
 func _totals(campaigns: Array) -> Dictionary:
@@ -302,7 +515,7 @@ func _totals(campaigns: Array) -> Dictionary:
 	}
 
 
-## Hero levels the sensible player most often had when first winning the stage (median per hero).
+## Hero levels the player most often had when first winning the stage (median per hero).
 func _median_levels(campaigns: Array, stage: int) -> Dictionary:
 	var per_hero := {}
 	for campaign in campaigns:
@@ -333,12 +546,9 @@ func _win_rate(stage: int, squad: Array, auto: bool, runs: int) -> int:
 	for run in runs:
 		var battle = StageBattle.from_data(data, stage, squad, run * 7919 + stage)
 		battle.auto_ultimates = auto
-		while not battle.finished:
-			if battle.time > HANG_GUARD_SECONDS:
-				push_error("Stage %d did not end after %d s of battle time: a bug in the battle rules" % [stage, HANG_GUARD_SECONDS])
-				_hung = true
-				return 0
-			battle.step()
+		_run(battle)
+		if _hung:
+			return 0
 		if battle.victory:
 			wins += 1
 	return roundi(100.0 * wins / runs)

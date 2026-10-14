@@ -28,11 +28,13 @@
     "silver_bonus_per_level": 0.05
   },
   "offline_income": {
-    "silver_per_minute_per_stage": 2,
+    "full_time_in_first_wins": 2.5,
     "max_hours": 8,
     "last_seen_refresh_seconds": 60
   },
   "debug_panel": {
-    "long_press_seconds": 0.8
+    "long_press_seconds": 0.8,
+    "add_silver": 10000,
+    "skip_time_hours": 1
   }
 }

@@ -11,12 +11,13 @@ func _ready() -> void:
 	if progress.cleared_stage == 0:
 		%Info.text = "Поселение начнёт приносить серебро после первого пройденного этапа."
 	else:
-		var per_minute: float = progress.offline_income_per_minute(data)
+		var cap: int = progress.offline_income_cap(data)
+		var per_minute: float = float(cap) / progress.offline_max_minutes(data)
 		%Info.text = ("Пока тебя нет в игре, поселение приносит %s серебра в минуту.\n\n"
 			+ "Доход копится до %d часов, потом перестаёт расти — заходи, чтобы забрать.\n\n"
-			+ "Доход растёт с каждым пройденным этапом и с уровнем ярла (сейчас +%d%%).") % [
+			+ "Доход растёт вместе с наградой текущего этапа и с уровнем ярла (сейчас +%d%%).") % [
 				_format_rate(per_minute), int(max_hours), roundi((progress.silver_multiplier(data) - 1.0) * 100)]
-		%Total.text = "За %d часов: %d серебра" % [int(max_hours), floori(per_minute * max_hours * 60.0)]
+		%Total.text = "За %d часов: %d серебра" % [int(max_hours), cap]
 	%BackButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 
 

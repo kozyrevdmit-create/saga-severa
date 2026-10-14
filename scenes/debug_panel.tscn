@@ -29,7 +29,7 @@ offset_left = 48.0
 offset_right = -48.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 32
+theme_override_constants/separation = 20
 alignment = 1
 
 [node name="Title" type="Label" parent="Box"]
@@ -38,20 +38,82 @@ theme_override_font_sizes/font_size = 48
 text = "Отладка"
 horizontal_alignment = 1
 
-[node name="ResetButton" type="Button" parent="Box"]
+[node name="AddSilverButton" type="Button" parent="Box"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 112)
+custom_minimum_size = Vector2(0, 104)
 layout_mode = 2
 focus_mode = 0
-theme_override_font_sizes/font_size = 40
+theme_override_font_sizes/font_size = 38
+text = "+10 000 серебра"
+
+[node name="UnlockHeroesButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+text = "Открыть всех героев"
+
+[node name="StageRow" type="HBoxContainer" parent="Box"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="StageDownButton" type="Button" parent="Box/StageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(104, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 44
+text = "−"
+
+[node name="JumpButton" type="Button" parent="Box/StageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+text = "Перейти к этапу 1"
+
+[node name="StageUpButton" type="Button" parent="Box/StageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(104, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 44
+text = "+"
+
+[node name="SkipTimeButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+text = "Промотать время на 1 час"
+
+[node name="ResetButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.55, 0.5, 1)
+theme_override_font_sizes/font_size = 38
 text = "Сбросить прогресс"
+
+[node name="Status" type="Label" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 30
+horizontal_alignment = 1
+autowrap_mode = 3
 
 [node name="CloseButton" type="Button" parent="Box"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 112)
+custom_minimum_size = Vector2(0, 104)
 layout_mode = 2
 focus_mode = 0
-theme_override_font_sizes/font_size = 40
+theme_override_font_sizes/font_size = 38
 text = "Закрыть"
 
 [node name="ConfirmBox" type="ColorRect" parent="."]

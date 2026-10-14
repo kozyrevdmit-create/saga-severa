@@ -95,6 +95,27 @@ func run_to_end(max_seconds: float) -> void:
 		step()
 
 
+## How far the squad got: the share of all enemy HP of the stage (every wave) taken off so far, 0..1.
+func enemy_hp_share_taken() -> float:
+	var total := 0
+	var left := 0
+	for wave in _waves:
+		for unit in wave:
+			total += unit.max_hp
+			left += unit.hp
+	return 1.0 - float(left) / maxi(1, total)
+
+
+## The squad's HP left as a share of its max HP, 0..1.
+func hero_hp_share_left() -> float:
+	var total := 0
+	var left := 0
+	for unit in _heroes:
+		total += unit.max_hp
+		left += unit.hp
+	return float(left) / maxi(1, total)
+
+
 func step() -> void:
 	if finished:
 		return

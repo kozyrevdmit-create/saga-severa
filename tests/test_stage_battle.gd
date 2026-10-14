@@ -184,3 +184,16 @@ func test_energy_carries_into_the_boss_wave() -> void:
 	for hero in stage.heroes():
 		total_energy += hero.energy
 	assert_true(total_energy > 0, "energy from earlier waves is kept")
+
+
+func test_progress_shares_count_every_wave() -> void:
+	var hero = make_unit(HEROES, "front", 1000, 1000, 0.5)
+	var waves := [[make_unit(ENEMIES, "front", 500, 1, 1.0)], [make_unit(ENEMIES, "front", 1500, 1, 1.0)]]
+	var stage = StageBattle.new(1, [hero], waves, data.balance, 1)
+	assert_near(stage.enemy_hp_share_taken(), 0.0, 0.0001, "nothing taken at the start")
+	assert_near(stage.hero_hp_share_left(), 1.0, 0.0001, "full HP at the start")
+	waves[0][0].hp = 0
+	waves[1][0].hp = 1000
+	hero.hp = 250
+	assert_near(stage.enemy_hp_share_taken(), 0.5, 0.0001, "1000 of 2000 enemy HP over both waves")
+	assert_near(stage.hero_hp_share_left(), 0.25, 0.0001, "a quarter of the squad's HP left")

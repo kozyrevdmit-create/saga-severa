@@ -188,18 +188,34 @@ func test_jarl_level_raises_silver() -> void:
 
 # --- offline income -----------------------------------------------------------
 
-func test_offline_income_per_minute_and_cap() -> void:
-	var offline: Dictionary = data.balance["offline_income"]
+func expected_offline_cap(progress) -> int:
+	var first_win: float = data.get_stage(progress.next_stage_id(data))["reward"]["silver"]
+	return roundi(float(data.balance["offline_income"]["full_time_in_first_wins"]) * first_win * progress.silver_multiplier(data))
+
+
+func test_full_absence_pays_set_number_of_first_wins_of_current_stage() -> void:
 	var progress = Progress.new_game(data)
 	win_stages(progress, 3)
 	progress.experience = 0
 	progress.last_seen_unix = 1000000
-	var rate := float(offline["silver_per_minute_per_stage"]) * 3
-	assert_eq(progress.offline_income(data, 1000000 + 30 * 60), floori(30 * rate), "30 minutes away")
-	assert_eq(progress.offline_income(data, 1000000 + 30 * 60 + 59), floori(30 * rate), "whole minutes only")
-	var cap_minutes := int(float(offline["max_hours"]) * 60)
-	assert_eq(progress.offline_income(data, 1000000 + 100 * 3600), floori(cap_minutes * rate), "capped")
+	var cap := expected_offline_cap(progress)
+	var max_hours := float(data.balance["offline_income"]["max_hours"])
+	assert_eq(progress.offline_income_cap(data), cap, "cap from stage 4 first-win silver")
+	assert_eq(progress.offline_income(data, 1000000 + int(max_hours * 3600)), cap, "full absence")
+	assert_eq(progress.offline_income(data, 1000000 + 100 * 3600), cap, "capped")
+	var max_minutes := int(max_hours * 60)
+	assert_eq(progress.offline_income(data, 1000000 + 30 * 60), cap * 30 / max_minutes, "30 minutes away")
+	assert_eq(progress.offline_income(data, 1000000 + 30 * 60 + 59), cap * 30 / max_minutes, "whole minutes only")
 	assert_eq(progress.offline_income(data, 1000000 - 3600), 0, "clock moved back")
+
+
+func test_offline_income_follows_the_current_stage_up_to_the_last() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, data.stage_count())
+	progress.experience = 0
+	var last_win: float = data.get_stage(data.stage_count())["reward"]["silver"]
+	assert_eq(progress.offline_income_cap(data),
+		roundi(float(data.balance["offline_income"]["full_time_in_first_wins"]) * last_win), "chapter done: last stage reward")
 
 
 func test_no_offline_income_before_first_win_or_first_visit() -> void:
@@ -216,8 +232,8 @@ func test_offline_income_gets_jarl_bonus() -> void:
 	win_stages(progress, 2)
 	progress.experience = int(data.balance["jarl"]["exp_per_level"])  # level 2
 	progress.last_seen_unix = 1000000
-	var rate: float = float(data.balance["offline_income"]["silver_per_minute_per_stage"]) * 2 * progress.silver_multiplier(data)
-	assert_eq(progress.offline_income(data, 1000000 + 10 * 60), floori(10 * rate), "with the bonus")
+	assert_true(progress.silver_multiplier(data) > 1.0, "jarl bonus active")
+	assert_eq(progress.offline_income_cap(data), expected_offline_cap(progress), "with the bonus")
 
 
 func test_return_banks_offline_income_and_restarts_the_clock() -> void:
@@ -261,6 +277,35 @@ func test_reset_returns_everything_to_a_new_game() -> void:
 	expected["last_seen_unix"] = 2000000
 	assert_eq(progress.to_dict(), expected, "same as a new game, offline clock restarted at the reset")
 	assert_eq(progress.collect_offline_income(data, 2000000 + 8 * 3600), 0, "no offline income until the first win again")
+
+
+func test_unlock_all_heroes_joins_the_locked_ones_at_the_weakest_level() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 3)
+	progress.hero_levels["torvald"] = 5
+	var locked: Array = data.heroes["heroes"].map(func(h): return h["id"]).filter(func(id): return not progress.hero_levels.has(id))
+	var joined: Array[String] = progress.unlock_all_heroes(data)
+	assert_eq(Array(joined), locked, "the locked heroes joined, in data order")
+	assert_eq(progress.hero_levels.size(), data.heroes["heroes"].size(), "every hero unlocked")
+	for hero_id in joined:
+		assert_eq(progress.level_of(hero_id), 1, "%s joins at the weakest level" % hero_id)
+	assert_eq(progress.squad_ids().size(), data.slot_count(), "free slots filled")
+	assert_true(progress.unlock_all_heroes(data).is_empty(), "nothing left to unlock")
+
+
+func test_jump_to_stage_marks_earlier_stages_won_without_rewards() -> void:
+	var progress = Progress.new_game(data)
+	progress.jump_to_stage(data, 7)
+	assert_eq(progress.cleared_stage, 6, "stages 1–6 won")
+	assert_eq(progress.next_stage_id(data), 7, "stage 7 is the next battle")
+	assert_eq(progress.silver, int(data.balance["start_silver"]), "no rewards paid")
+	assert_eq(progress.experience, 0, "no experience")
+	assert_eq(progress.hero_levels.keys(), data.unlocked_hero_ids(6), "heroes of stages 1–6 joined")
+	progress.jump_to_stage(data, 2)
+	assert_eq(progress.next_stage_id(data), 2, "can jump back")
+	assert_eq(progress.hero_levels.keys(), data.unlocked_hero_ids(6), "unlocked heroes stay")
+	progress.jump_to_stage(data, 999)
+	assert_eq(progress.next_stage_id(data), data.stage_count(), "clamped to the last stage")
 
 
 # --- saves --------------------------------------------------------------------
