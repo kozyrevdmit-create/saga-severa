@@ -14,7 +14,10 @@ const GameData := preload("res://scripts/data/game_data.gd")
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
 const Progress := preload("res://scripts/save/progress.gd")
 
-const MAX_BATTLE_SECONDS := 900.0  ## safety cap for the simulation only; longer counts as a loss
+## Hang guard only, not a game rule: battles always end (enemies never heal, heroes always deal damage).
+## A battle still running after this long means a bug, and the simulation stops with an error
+## instead of counting it as a loss.
+const HANG_GUARD_SECONDS := 3600.0
 ## Squads for measuring ultimate charge times: the starting trio, plus 5-hero squads for the others.
 const CHARGE_SQUADS := [
 	["torvald", "sigrid", "eyvind"],
@@ -23,6 +26,7 @@ const CHARGE_SQUADS := [
 ]
 
 var data
+var _hung := false  ## a battle never ended: stop and fail instead of reporting numbers
 
 
 func _initialize() -> void:
@@ -51,6 +55,9 @@ func _initialize() -> void:
 		var base := _simulate(stage, _levels_of(levels.keys(), 1), true, runs)
 		var leveled := _simulate(stage, levels, true, runs)
 		var no_ults := _simulate(stage, levels, false, runs)
+		if _hung:
+			quit(1)
+			return
 		print("%4d | %10d%% | %4.0f с | %4s | %10d%% | %4.0f с | %18d%%" % [
 			stage, base["win_rate"], base["avg_time"], _levels_text(levels),
 			leveled["win_rate"], leveled["avg_time"], no_ults["win_rate"]])
@@ -66,6 +73,9 @@ func _initialize() -> void:
 		for stage in range(1, data.stage_count() + 1):
 			var level: int = expected_levels[stage].values().min()
 			var result := _simulate(stage, _levels_of(CHARGE_SQUADS[i], level), true, maxi(1, runs / 5))
+			if _hung:
+				quit(1)
+				return
 			for hero_id in result["charges"]:
 				# The starting trio is measured in its own squad, the other heroes in the 5-hero squads.
 				if (i == 0) == (hero_id in CHARGE_SQUADS[0]):
@@ -100,7 +110,11 @@ func _simulate(stage: int, levels: Dictionary, auto: bool, runs: int) -> Diction
 		var charge_started := {}  ## hero id -> time its energy was last at zero
 		for hero in battle.heroes():
 			charge_started[hero.def_id] = 0.0
-		while not battle.finished and battle.time < MAX_BATTLE_SECONDS:
+		while not battle.finished:
+			if battle.time > HANG_GUARD_SECONDS:
+				push_error("Stage %d did not end after %d s of battle time: a bug in the battle rules" % [stage, HANG_GUARD_SECONDS])
+				_hung = true
+				return {}
 			battle.step()
 			for event in battle.take_events():
 				if event["type"] == "ultimate":
@@ -110,7 +124,7 @@ func _simulate(stage: int, levels: Dictionary, auto: bool, runs: int) -> Diction
 					entry[1] += 1
 					charges[hero_id] = entry
 					charge_started[hero_id] = battle.time
-		if battle.finished and battle.victory:
+		if battle.victory:
 			wins += 1
 		total_time += battle.time
 	return {"win_rate": roundi(100.0 * wins / runs), "avg_time": total_time / runs, "charges": charges}

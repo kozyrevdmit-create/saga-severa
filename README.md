@@ -44,6 +44,7 @@ godot --headless --path . --export-release "Web" build/web/index.html
 - `scripts/ui/`, `scenes/` — экраны.
 - `tests/` — тесты, запускаются без экрана.
 - `AGENTS.md` — правила для ИИ-агентов, в том числе для ревью Codex.
+- `docs/SPEC_CHANGES.md` — изменения ТЗ, утверждённые заказчиком после приёмки этапов.
 
 ## Тесты
 
