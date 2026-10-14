@@ -137,6 +137,28 @@ func test_enemies_hit_front_row_first() -> void:
 	assert_eq(back.hp, back.max_hp, "back row untouched while front row stands")
 
 
+func test_enemies_prefer_shieldbearer_by_weight() -> void:
+	var tank = hero_from_data("torvald")
+	var berserker = hero_from_data("sigrid")
+	for hero in [tank, berserker]:
+		hero.max_hp = 10000000
+		hero.hp = hero.max_hp
+		hero.attack_interval = 1000.0
+	var enemies := []
+	for i in 3:
+		enemies.append(make_unit(ENEMIES, "front", 100000, 1, 0.1))
+	var battle = make_battle([tank, berserker], enemies)
+	battle.run_to_end(100.0)
+	var hits := events_of(battle.take_events(), "damage")
+	var on_tank := hits.filter(func(e): return e["target"] == tank.id).size()
+	var weights: Dictionary = data.balance["target_weights"]
+	var tank_weight := float(weights["by_class"].get("shieldbearer", weights["default"]))
+	var other_weight := float(weights["by_class"].get("berserker", weights["default"]))
+	assert_true(hits.size() > 2000, "enough hits to measure")
+	assert_near(float(on_tank) / hits.size(), tank_weight / (tank_weight + other_weight), 0.03, "share of hits on the shieldbearer")
+	assert_true(on_tank < hits.size(), "the berserker is still hit sometimes")
+
+
 func test_back_row_is_hit_when_front_row_falls() -> void:
 	var front = make_unit(HEROES, "front", 10, 1, 1000.0)
 	var back = make_unit(HEROES, "back", 100000, 1, 1000.0)
