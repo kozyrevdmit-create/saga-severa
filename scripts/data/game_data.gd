@@ -91,6 +91,60 @@ func enemy_power_multiplier(stage_id: int) -> float:
 	return pow(1.0 + float(balance["enemy_power_growth_per_stage"]), stage_id - 1)
 
 
+func front_slot_count() -> int:
+	return int(balance["formation"]["front_slots"])
+
+
+func slot_count() -> int:
+	return front_slot_count() + int(balance["formation"]["back_slots"])
+
+
+## Heroes that join the squad after winning `stage_id` for the first time (in data order).
+func heroes_unlocked_at(stage_id: int) -> Array[String]:
+	var ids: Array[String] = []
+	for hero in heroes.get("heroes", []):
+		if int(hero["unlock_after_stage"]) == stage_id and stage_id > 0:
+			ids.append(hero["id"])
+	return ids
+
+
+## All heroes available once stages up to `cleared_stage` are won (in data order).
+func unlocked_hero_ids(cleared_stage: int) -> Array[String]:
+	var ids: Array[String] = []
+	for hero in heroes.get("heroes", []):
+		if int(hero["unlock_after_stage"]) <= cleared_stage:
+			ids.append(hero["id"])
+	return ids
+
+
+## Clan bonuses for a squad: every clan with at least min_heroes members gives its bonus to the whole squad.
+## Returns [{clan_id, name, count, needed, active, stat, bonus, description}] in data order.
+func clan_synergies(hero_ids: Array) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for clan_id in heroes["clans"]:
+		var clan: Dictionary = heroes["clans"][clan_id]
+		var synergy: Dictionary = clan["synergy"]
+		var count := 0
+		for hero_id in hero_ids:
+			if get_hero(hero_id)["clan"] == clan_id:
+				count += 1
+		result.append({
+			"clan_id": clan_id, "name": clan["name"], "count": count, "needed": int(synergy["min_heroes"]),
+			"active": count >= int(synergy["min_heroes"]), "stat": synergy["stat"],
+			"bonus": float(synergy["bonus"]), "description": synergy["description"],
+		})
+	return result
+
+
+## Total active clan bonus per stat: {"hp": 0.2, "attack": 0.0}.
+func synergy_bonuses(hero_ids: Array) -> Dictionary:
+	var bonuses := {"hp": 0.0, "attack": 0.0}
+	for synergy in clan_synergies(hero_ids):
+		if synergy["active"]:
+			bonuses[synergy["stat"]] += synergy["bonus"]
+	return bonuses
+
+
 ## Heroes available from the very start (in data order).
 func starting_hero_ids() -> Array[String]:
 	var ids: Array[String] = []

@@ -1,5 +1,6 @@
 ## Battle screen: shows the stage battle (scripts/battle) and passes taps to it.
-## The squad fights the next stage's waves; a win pays the stage reward. Progress is saved after every stage.
+## The squad from the formation fights the stage picked on the chapter map; a win pays the reward
+## (less for a replay) and may bring a new hero. Progress is saved after every stage.
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -7,7 +8,7 @@ const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 const FighterView := preload("res://scripts/ui/fighter_view.gd")
 const HeroCard := preload("res://scripts/ui/hero_card.gd")
 
-const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
+const MAP_SCENE := "res://scenes/map.tscn"
 
 ## Top of each battlefield row, as a share of the field height (top to bottom).
 const ROW_TOP := {"enemy_back": 0.03, "enemy_front": 0.27, "hero_front": 0.53, "hero_back": 0.77}
@@ -26,13 +27,20 @@ var _speed := 1
 var _views := {}  ## unit id -> FighterView (enemy ids are reused by every wave)
 var _popups_this_frame := {}  ## unit id -> popups already shown this frame (stacked, not overlapped)
 var _cards := {}  ## unit id -> HeroCard
+var _new_heroes: Array[String] = []  ## heroes still to announce after a win
 
 
 func _ready() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
-	_stage_id = progress.next_stage_id(data)
-	_battle = StageBattle.from_data(data, _stage_id, progress.hero_levels, randi())
+	_stage_id = GameState.selected_stage if progress.is_stage_open(data, GameState.selected_stage) else progress.next_stage_id(data)
+	_battle = StageBattle.from_data(data, _stage_id, progress.squad(data), randi())
+	var active: Array[String] = []
+	for synergy in data.clan_synergies(progress.squad_ids()):
+		if synergy["active"]:
+			active.append("%s: %s" % [synergy["name"], synergy["description"]])
+	%SynergyLabel.text = " · ".join(PackedStringArray(active))
+	%SynergyLabel.visible = not active.is_empty()
 
 	for hero in _battle.heroes():
 		_add_view(hero)
@@ -44,7 +52,8 @@ func _ready() -> void:
 
 	%AutoButton.toggled.connect(_on_auto_toggled)
 	%SpeedButton.pressed.connect(_on_speed_pressed)
-	%MenuButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
+	%MenuButton.pressed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
+	%NewHeroButton.pressed.connect(_show_next_new_hero)
 	%Field.resized.connect(_layout_fighters)
 	_refresh()
 
@@ -93,6 +102,8 @@ func _show_wave() -> void:
 	for enemy in _battle.enemies():
 		_add_view(enemy)
 	%StageLabel.text = "Этап %d · Волна %d/%d" % [_stage_id, _battle.wave_index + 1, _battle.wave_count]
+	if GameState.progress.is_replay(_stage_id):
+		%StageLabel.text += " · повтор"
 	_layout_fighters()
 
 
@@ -186,8 +197,30 @@ func _finish_stage(victory: bool) -> void:
 		var reward: Dictionary = progress.apply_victory(GameState.data, _stage_id)
 		%ResultTitle.text = "Победа!"
 		%ResultHint.text = "+%d серебра · +%d опыта" % [int(reward["silver"]), int(reward["experience"])]
+		if reward["replay"]:
+			%ResultHint.text += "\nПовтор: %d%% награды" % roundi(float(GameState.data.balance["replay_reward_share"]) * 100)
+		_new_heroes = reward["new_heroes"]
 	else:
 		%ResultTitle.text = "Дружина пала"
 		%ResultHint.text = "Подсказка: прокачай героев или поменяй расстановку отряда."
 	GameState.save()
 	%ResultOverlay.visible = true
+	_show_next_new_hero()
+
+
+## «Новый герой присоединился к дружине» for each hero this win unlocked, one after another.
+func _show_next_new_hero() -> void:
+	if _new_heroes.is_empty():
+		%NewHeroOverlay.visible = false
+		return
+	var data = GameState.data
+	var hero_id: String = _new_heroes.pop_front()
+	var hero: Dictionary = data.get_hero(hero_id)
+	var hero_class: Dictionary = data.get_hero_class(hero)
+	%NewHeroSwatch.color = Color.html(hero_class["color"])
+	%NewHeroName.text = hero["name"]
+	var where := "Уже в отряде." if GameState.progress.is_in_formation(hero_id) else "Поставь в отряд на экране «Отряд»."
+	%NewHeroInfo.text = "%s · %s · род %s\nУльта: %s\n%s" % [
+		hero_class["name"], hero_class["role_short"], data.heroes["clans"][hero["clan"]]["name"],
+		hero["ultimate"]["name"], where]
+	%NewHeroOverlay.visible = true

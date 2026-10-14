@@ -107,3 +107,32 @@ func test_target_weights_present() -> void:
 	for class_id in weights["by_class"]:
 		assert_true(data.heroes["classes"].has(class_id), "weighted class %s exists" % class_id)
 		assert_true(weights["by_class"][class_id] > 0, "weight of %s positive" % class_id)
+
+
+func test_classes_have_short_roles() -> void:
+	for class_id in data.heroes["classes"]:
+		assert_true(data.heroes["classes"][class_id]["role_short"] in ["Танк", "Урон", "Лекарь", "Поддержка"], "%s role" % class_id)
+
+
+func test_clan_synergies_present() -> void:
+	for clan_id in data.heroes["clans"]:
+		var synergy: Dictionary = data.heroes["clans"][clan_id]["synergy"]
+		assert_true(synergy["min_heroes"] > 1, "%s needs several heroes" % clan_id)
+		assert_true(synergy["stat"] in ["hp", "attack"], "%s bonus stat" % clan_id)
+		assert_true(synergy["bonus"] > 0, "%s bonus positive" % clan_id)
+
+
+func test_m4_balance_settings_present() -> void:
+	var formation: Dictionary = data.balance["formation"]
+	assert_eq([int(formation["front_slots"]), int(formation["back_slots"])], [2, 3], "2 front and 3 back slots")
+	assert_true(data.balance["replay_reward_share"] > 0 and data.balance["replay_reward_share"] <= 1, "replay share")
+	assert_true(data.balance["jarl"]["exp_per_level"] > 0 and data.balance["jarl"]["silver_bonus_per_level"] >= 0, "jarl")
+	var offline: Dictionary = data.balance["offline_income"]
+	assert_true(offline["silver_per_minute_per_stage"] > 0 and offline["max_hours"] > 0, "offline income")
+	assert_true(offline["last_seen_refresh_seconds"] > 0, "last-seen refresh interval")
+
+
+func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:
+	for hero in data.heroes["heroes"]:
+		var stage := int(hero["unlock_after_stage"])
+		assert_true(stage >= 0 and stage < data.stage_count(), "%s unlocks on an existing stage" % hero["id"])

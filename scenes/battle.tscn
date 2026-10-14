@@ -43,11 +43,13 @@ theme_override_constants/separation = 16
 
 [node name="StageLabel" type="Label" parent="Margin/Layout/TopBar"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 30
 text = "Этап 1 · Волна 1"
 vertical_alignment = 1
+autowrap_mode = 3
 
 [node name="AutoButton" type="Button" parent="Margin/Layout/TopBar"]
 unique_name_in_owner = true
@@ -65,6 +67,13 @@ layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 30
 text = "x1"
+
+[node name="SynergyLabel" type="Label" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.48, 0.88, 0.56, 1)
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
 
 [node name="Field" type="Control" parent="Margin/Layout"]
 unique_name_in_owner = true
@@ -120,4 +129,62 @@ custom_minimum_size = Vector2(0, 120)
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 40
-text = "На главный экран"
+text = "На карту"
+
+[node name="NewHeroOverlay" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.06, 0.09, 0.96)
+
+[node name="NewHeroBox" type="VBoxContainer" parent="NewHeroOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_right = -48.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 28
+alignment = 1
+
+[node name="NewHeroTitle" type="Label" parent="NewHeroOverlay/NewHeroBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 44
+text = "Новый герой присоединился к дружине!"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="NewHeroSwatch" type="ColorRect" parent="NewHeroOverlay/NewHeroBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 220)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="NewHeroName" type="Label" parent="NewHeroOverlay/NewHeroBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 56
+horizontal_alignment = 1
+
+[node name="NewHeroInfo" type="Label" parent="NewHeroOverlay/NewHeroBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="NewHeroButton" type="Button" parent="NewHeroOverlay/NewHeroBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "Отлично!"

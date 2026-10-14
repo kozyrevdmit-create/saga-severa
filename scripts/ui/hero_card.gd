@@ -30,17 +30,19 @@ func _init(unit) -> void:
 
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	box.offset_left = 12
+	box.offset_left = 8
 	box.offset_top = 12
-	box.offset_right = -12
+	box.offset_right = -8
 	box.offset_bottom = -12
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 10)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
 
-	box.add_child(_make_label(unit.display_name, 28))
-	box.add_child(_make_label(unit.ultimate["name"], 20))
+	var name_label := _make_label(unit.display_name, 21)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF  # five cards in a row: keep the name on one line
+	box.add_child(name_label)
+	box.add_child(_make_label(unit.ultimate["name"], 18))
 	_energy_bar = StatBar.new(READY_BORDER, 18)
 	box.add_child(_energy_bar)
 

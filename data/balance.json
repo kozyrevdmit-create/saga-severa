@@ -17,5 +17,19 @@
     "stat_growth_per_level": 0.08
   },
   "enemy_power_growth_per_stage": 0.18,
-  "start_silver": 0
+  "start_silver": 0,
+  "formation": {
+    "front_slots": 2,
+    "back_slots": 3
+  },
+  "replay_reward_share": 0.5,
+  "jarl": {
+    "exp_per_level": 100,
+    "silver_bonus_per_level": 0.05
+  },
+  "offline_income": {
+    "silver_per_minute_per_stage": 2,
+    "max_hours": 8,
+    "last_seen_refresh_seconds": 60
+  }
 }

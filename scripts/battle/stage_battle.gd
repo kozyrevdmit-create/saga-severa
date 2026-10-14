@@ -40,13 +40,19 @@ func _init(stage: int, hero_units: Array, waves: Array, balance: Dictionary, rng
 	_start_wave(0)
 
 
-## Builds a stage from game data: heroes at their levels, enemies scaled by the stage's power.
-static func from_data(data, stage: int, hero_levels: Dictionary, rng_seed: int) -> RefCounted:
+## Builds a stage from game data. squad: [{id, level, row}] from the formation (Progress.squad).
+## Heroes get their level multiplier and the squad's clan bonuses; enemies are scaled by the stage's power.
+static func from_data(data, stage: int, squad: Array, rng_seed: int) -> RefCounted:
+	var squad_ids := squad.map(func(member): return member["id"])
+	var synergy: Dictionary = data.synergy_bonuses(squad_ids)
 	var hero_units: Array = []
-	for hero_id in hero_levels:
-		var hero: Dictionary = data.get_hero(hero_id)
-		var multiplier: float = data.hero_stat_multiplier(int(hero_levels[hero_id]))
-		hero_units.append(BattleUnit.from_hero(hero, data.get_hero_class(hero), multiplier))
+	for member in squad:
+		var hero: Dictionary = data.get_hero(member["id"])
+		var level_multiplier: float = data.hero_stat_multiplier(int(member["level"]))
+		var unit = BattleUnit.from_hero(hero, data.get_hero_class(hero),
+				level_multiplier * (1.0 + synergy["hp"]), level_multiplier * (1.0 + synergy["attack"]))
+		unit.row = member["row"]
+		hero_units.append(unit)
 	var power: float = data.enemy_power_multiplier(stage)
 	var waves: Array = []
 	for wave in data.get_stage(stage)["waves"]:
