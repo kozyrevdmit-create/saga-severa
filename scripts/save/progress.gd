@@ -25,6 +25,19 @@ static func new_game(data) -> RefCounted:
 	return progress
 
 
+## Debug panel «Сбросить прогресс»: everything back to a new game (stages, heroes and their levels, squad,
+## silver, jarl experience, offline bank). The offline clock restarts now, so the time before the reset earns nothing.
+func reset(data, now_unix: int) -> void:
+	var fresh = new_game(data)
+	silver = fresh.silver
+	experience = fresh.experience
+	cleared_stage = fresh.cleared_stage
+	hero_levels = fresh.hero_levels
+	formation = fresh.formation
+	offline_bank = fresh.offline_bank
+	last_seen_unix = now_unix
+
+
 # --- stages and rewards -------------------------------------------------------
 
 ## The first stage not won yet, or the last one once the chapter is done.

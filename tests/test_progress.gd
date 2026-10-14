@@ -247,6 +247,22 @@ func test_each_absence_is_capped_separately_and_claim_moves_bank_to_silver() -> 
 	assert_eq(progress.offline_bank, 0, "bank emptied")
 
 
+func test_reset_returns_everything_to_a_new_game() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 9)
+	progress.silver = 5000
+	progress.hero_levels["sigrid"] = 12
+	progress.formation_remove("eyvind")
+	progress.last_seen_unix = 1000000
+	progress.collect_offline_income(data, 1000000 + 3600)
+	assert_true(progress.offline_bank > 0, "something in the offline bank before the reset")
+	progress.reset(data, 2000000)
+	var expected: Dictionary = Progress.new_game(data).to_dict()
+	expected["last_seen_unix"] = 2000000
+	assert_eq(progress.to_dict(), expected, "same as a new game, offline clock restarted at the reset")
+	assert_eq(progress.collect_offline_income(data, 2000000 + 8 * 3600), 0, "no offline income until the first win again")
+
+
 # --- saves --------------------------------------------------------------------
 
 func test_progress_survives_dict_round_trip() -> void:

@@ -31,5 +31,8 @@
     "silver_per_minute_per_stage": 2,
     "max_hours": 8,
     "last_seen_refresh_seconds": 60
+  },
+  "debug_panel": {
+    "long_press_seconds": 0.8
   }
 }
