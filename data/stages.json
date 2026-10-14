@@ -1,0 +1,14 @@
+{
+  "chapters": [
+    { "id": 1, "name": "Мидгард" }
+  ],
+  "stages": [
+    {
+      "id": 1,
+      "chapter": 1,
+      "waves": [
+        ["draugr", "wolf", "draugr_archer"]
+      ]
+    }
+  ]
+}

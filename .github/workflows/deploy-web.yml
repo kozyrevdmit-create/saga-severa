@@ -1,5 +1,5 @@
-# Builds the web version on every pull request (check only)
-# and on every push to main (build + deploy to GitHub Pages).
+# Runs tests and builds the web version on every pull request (check only)
+# and on every push to main (tests + build + deploy to GitHub Pages).
 name: Web build and deploy
 
 on:
@@ -51,10 +51,15 @@ jobs:
           unzip -q -j /tmp/templates.tpz 'templates/version.txt' 'templates/web_nothreads_*' -d "$template_dir"
           ls -la "$template_dir"
 
+      - name: Import project
+        run: ~/godot/godot --headless --path . --import
+
+      - name: Run tests (headless)
+        run: ~/godot/godot --headless --path . --script res://tests/run_tests.gd
+
       - name: Export web version
         run: |
           mkdir -p build/web
-          ~/godot/godot --headless --path . --import
           ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
           test -f build/web/index.html
           test -f build/web/index.pck

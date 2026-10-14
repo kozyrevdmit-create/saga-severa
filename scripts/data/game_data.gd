@@ -1,0 +1,68 @@
+## Loads game content (heroes, enemies, stages, balance) from JSON files in res://data/.
+## All balance numbers live in those files, never in code.
+extends RefCounted
+
+const DATA_DIR := "res://data/"
+
+var heroes: Dictionary  ## heroes.json: classes, clans, heroes
+var enemies: Dictionary  ## enemies.json
+var stages: Dictionary  ## stages.json
+var balance: Dictionary  ## balance.json
+
+
+static func load_all() -> RefCounted:
+	var data = new()
+	data.heroes = load_json("heroes.json")
+	data.enemies = load_json("enemies.json")
+	data.stages = load_json("stages.json")
+	data.balance = load_json("balance.json")
+	return data
+
+
+static func load_json(file_name: String) -> Dictionary:
+	var path := DATA_DIR + file_name
+	if not FileAccess.file_exists(path):
+		push_error("Data file not found: %s" % path)
+		return {}
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not parsed is Dictionary:
+		push_error("Data file is not a valid JSON object: %s" % path)
+		return {}
+	return parsed
+
+
+func get_hero(hero_id: String) -> Dictionary:
+	for hero in heroes.get("heroes", []):
+		if hero["id"] == hero_id:
+			return hero
+	push_error("Unknown hero: %s" % hero_id)
+	return {}
+
+
+func get_hero_class(hero: Dictionary) -> Dictionary:
+	return heroes["classes"][hero["class"]]
+
+
+func get_enemy(enemy_id: String) -> Dictionary:
+	for enemy in enemies.get("enemies", []):
+		if enemy["id"] == enemy_id:
+			return enemy
+	push_error("Unknown enemy: %s" % enemy_id)
+	return {}
+
+
+func get_stage(stage_id: int) -> Dictionary:
+	for stage in stages.get("stages", []):
+		if int(stage["id"]) == stage_id:
+			return stage
+	push_error("Unknown stage: %d" % stage_id)
+	return {}
+
+
+## Heroes available from the very start (in data order).
+func starting_hero_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for hero in heroes.get("heroes", []):
+		if int(hero["unlock_after_stage"]) == 0:
+			ids.append(hero["id"])
+	return ids
