@@ -67,7 +67,8 @@ func _refresh() -> void:
 	for synergy in data.clan_synergies(progress.squad_ids()):
 		var text := "%s: %d из %d — %s" % [synergy["name"], synergy["count"], synergy["needed"], synergy["description"]]
 		var color := ACTIVE_SYNERGY_COLOR if synergy["active"] else INACTIVE_SYNERGY_COLOR
-		%Synergies.add_child(_make_label(("✔ " if synergy["active"] else "") + text, 24, color))
+		# Words, not a check mark: the web build's font has no ✔ glyph.
+		%Synergies.add_child(_make_label(text + (" — активен" if synergy["active"] else ""), 24, color))
 
 
 ## A hero card: name, role and level on the class colour; an empty slot when hero_id is "".
