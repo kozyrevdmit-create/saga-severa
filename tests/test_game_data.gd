@@ -132,6 +132,10 @@ func test_m4_balance_settings_present() -> void:
 	assert_true(offline["last_seen_refresh_seconds"] > 0, "last-seen refresh interval")
 
 
+func test_debug_panel_settings_present() -> void:
+	assert_true(data.balance["debug_panel"]["long_press_seconds"] > 0, "hold time for the debug panel")
+
+
 func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:
 	for hero in data.heroes["heroes"]:
 		var stage := int(hero["unlock_after_stage"])

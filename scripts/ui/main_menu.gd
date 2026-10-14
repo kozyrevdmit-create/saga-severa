@@ -8,9 +8,7 @@ const FORMATION_SCENE := "res://scenes/formation.tscn"
 const SETTLEMENT_SCENE := "res://scenes/settlement.tscn"
 
 const JARL_BAR_COLOR := Color("#8fb8ff")
-const LONG_PRESS_SECONDS := 0.8  ## how long to hold the silver counter to open the debug panel
-
-var _long_press: Timer
+var _long_press: Timer  ## holding the silver counter this long opens the debug panel
 
 
 func _ready() -> void:
@@ -22,10 +20,11 @@ func _ready() -> void:
 	%JarlBar.fill_color = JARL_BAR_COLOR
 	_long_press = Timer.new()
 	_long_press.one_shot = true
-	_long_press.wait_time = LONG_PRESS_SECONDS
+	_long_press.wait_time = float(GameState.data.balance["debug_panel"]["long_press_seconds"])
 	_long_press.timeout.connect(%DebugPanel.open)
 	add_child(_long_press)
 	%SilverLabel.gui_input.connect(_on_silver_input)
+	%SilverLabel.mouse_exited.connect(_long_press.stop)
 	%DebugPanel.progress_changed.connect(_on_debug_changed)
 	GameState.offline_bank_changed.connect(_show_offline_income)
 	_show_offline_income()
@@ -42,11 +41,14 @@ func _show_offline_income() -> void:
 
 ## Touches arrive as mouse events too (touch-to-mouse emulation is on by default).
 func _on_silver_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_long_press.start()
-		else:
-			_long_press.stop()
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_long_press.start()
+
+
+## Letting go anywhere (also outside the counter) or sliding off the counter cancels the hold.
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		_long_press.stop()
 
 
 func _on_debug_changed() -> void:
