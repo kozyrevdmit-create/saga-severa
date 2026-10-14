@@ -1,0 +1,7 @@
+{
+  "energy": {
+    "max": 100,
+    "per_attack": 10,
+    "per_hit_taken": 5
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "classes": {
+    "shieldbearer": {
+      "name": "Щитоносец",
+      "role": "Танк, принимает удары",
+      "row": "front",
+      "color": "#2f6fdb",
+      "action": "attack_front_row"
+    },
+    "berserker": {
+      "name": "Берсерк",
+      "role": "Урон вблизи",
+      "row": "front",
+      "color": "#d23c3c",
+      "action": "attack_front_row"
+    },
+    "archer": {
+      "name": "Лучник",
+      "role": "Урон издалека",
+      "row": "back",
+      "color": "#3aa356",
+      "action": "attack_lowest_hp"
+    },
+    "volva": {
+      "name": "Вёльва",
+      "role": "Лечение и магия",
+      "row": "back",
+      "color": "#8a4fd0",
+      "action": "heal_or_attack",
+      "heal_below_hp_fraction": 0.6,
+      "heal_attack_multiplier": 1.0
+    },
+    "skald": {
+      "name": "Скальд",
+      "role": "Усиление отряда",
+      "row": "back",
+      "color": "#e0b51f",
+      "action": "attack_front_row"
+    }
+  },
+  "clans": {
+    "midgard": { "name": "Мидгард" },
+    "jotunheim": { "name": "Ётунхейм" }
+  },
+  "heroes": [
+    {
+      "id": "torvald",
+      "name": "Торвальд",
+      "class": "shieldbearer",
+      "clan": "midgard",
+      "hp": 1200,
+      "attack": 40,
+      "attack_interval": 1.2,
+      "unlock_after_stage": 0,
+      "ultimate": {
+        "name": "Стена щитов",
+        "description": "Отряд получает на 40% меньше урона 4 с",
+        "effects": [
+          { "type": "buff_allies", "stat": "damage_taken", "multiplier": 0.6, "duration": 4.0 }
+        ]
+      }
+    },
+    {
+      "id": "sigrid",
+      "name": "Сигрид",
+      "class": "berserker",
+      "clan": "midgard",
+      "hp": 800,
+      "attack": 75,
+      "attack_interval": 0.9,
+      "unlock_after_stage": 0,
+      "ultimate": {
+        "name": "Ярость",
+        "description": "3 быстрых удара по 150% атаки",
+        "effects": [
+          { "type": "hits", "target": "front_row_single", "count": 3, "attack_multiplier": 1.5 }
+        ]
+      },
+      "passive": {
+        "type": "attack_per_missing_hp",
+        "description": "+1% атаки за каждые 2% потерянного HP",
+        "attack_bonus_per_missing_hp": 0.5
+      }
+    },
+    {
+      "id": "eyvind",
+      "name": "Эйвинд",
+      "class": "skald",
+      "clan": "midgard",
+      "hp": 650,
+      "attack": 35,
+      "attack_interval": 1.3,
+      "unlock_after_stage": 0,
+      "ultimate": {
+        "name": "Песнь битвы",
+        "description": "Отряд +30% атаки на 5 с",
+        "effects": [
+          { "type": "buff_allies", "stat": "attack", "multiplier": 1.3, "duration": 5.0 }
+        ]
+      }
+    },
+    {
+      "id": "skadi",
+      "name": "Скади",
+      "class": "archer",
+      "clan": "jotunheim",
+      "hp": 600,
+      "attack": 70,
+      "attack_interval": 1.1,
+      "unlock_after_stage": 3,
+      "ultimate": {
+        "name": "Ледяной залп",
+        "description": "120% атаки по всем врагам, замедление 30% на 2 с",
+        "effects": [
+          {
+            "type": "damage",
+            "target": "all_enemies",
+            "attack_multiplier": 1.2,
+            "status": { "kind": "slow", "amount": 0.3, "duration": 2.0 }
+          }
+        ]
+      }
+    },
+    {
+      "id": "angrboda",
+      "name": "Ангрбода",
+      "class": "volva",
+      "clan": "jotunheim",
+      "hp": 620,
+      "attack": 45,
+      "attack_interval": 1.4,
+      "unlock_after_stage": 6,
+      "ultimate": {
+        "name": "Исцеление",
+        "description": "Лечит отряд на 25% макс. HP каждого",
+        "effects": [
+          { "type": "heal_allies", "max_hp_fraction": 0.25 }
+        ]
+      }
+    },
+    {
+      "id": "hrungnir",
+      "name": "Хрунгнир",
+      "class": "shieldbearer",
+      "clan": "jotunheim",
+      "hp": 1500,
+      "attack": 35,
+      "attack_interval": 1.4,
+      "unlock_after_stage": 9,
+      "ultimate": {
+        "name": "Каменный удар",
+        "description": "200% атаки по первому ряду врагов, оглушение 1.5 с",
+        "effects": [
+          {
+            "type": "damage",
+            "target": "front_row_all",
+            "attack_multiplier": 2.0,
+            "status": { "kind": "stun", "duration": 1.5 }
+          }
+        ]
+      }
+    }
+  ]
+}
