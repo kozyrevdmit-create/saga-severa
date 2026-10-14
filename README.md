@@ -40,6 +40,7 @@ godot --headless --path . --export-release "Web" build/web/index.html
 - `scripts/battle/` — правила боя без экрана (детерминированы: одинаковый seed — одинаковый бой).
 - `scripts/ui/`, `scenes/` — экраны.
 - `tests/` — тесты, запускаются без экрана.
+- `AGENTS.md` — правила для ИИ-агентов, в том числе для ревью Codex.
 
 ## Тесты
 

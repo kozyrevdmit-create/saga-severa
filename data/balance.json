@@ -4,5 +4,11 @@
     "per_attack": 10,
     "per_heal": 10,
     "per_hit_taken": 5
+  },
+  "target_weights": {
+    "by_class": {
+      "shieldbearer": 3
+    },
+    "default": 1
   }
 }

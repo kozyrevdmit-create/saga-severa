@@ -76,3 +76,11 @@ func test_energy_balance_present() -> void:
 	assert_true(energy["per_attack"] > 0, "energy per attack")
 	assert_true(energy["per_heal"] >= 0, "energy per heal")
 	assert_true(energy["per_hit_taken"] > 0, "energy per hit taken")
+
+
+func test_target_weights_present() -> void:
+	var weights: Dictionary = data.balance["target_weights"]
+	assert_true(weights["default"] > 0, "default target weight")
+	for class_id in weights["by_class"]:
+		assert_true(data.heroes["classes"].has(class_id), "weighted class %s exists" % class_id)
+		assert_true(weights["by_class"][class_id] > 0, "weight of %s positive" % class_id)

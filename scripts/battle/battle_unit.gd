@@ -6,6 +6,7 @@ enum Team { HEROES, ENEMIES }
 var id := -1  ## index in Battle.units
 var team: Team
 var def_id := ""  ## hero/enemy id from data
+var class_id := ""  ## hero class from data; empty for enemies
 var display_name := ""
 var row := "front"  ## "front" or "back"
 var color := Color.WHITE
@@ -32,6 +33,7 @@ static func from_hero(hero: Dictionary, hero_class: Dictionary) -> RefCounted:
 	var unit = new()
 	unit.team = Team.HEROES
 	unit.def_id = hero["id"]
+	unit.class_id = hero["class"]
 	unit.display_name = hero["name"]
 	unit.row = hero_class["row"]
 	unit.color = Color.html(hero_class["color"])

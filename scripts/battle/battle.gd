@@ -15,6 +15,7 @@ var finished := false
 var victory := false
 
 var _energy: Dictionary  ## balance.json "energy": max, per_attack, per_heal, per_hit_taken
+var _target_weights: Dictionary  ## balance.json "target_weights": by_class, default
 var _rng := RandomNumberGenerator.new()
 var _events: Array[Dictionary] = []
 var _time_accumulator := 0.0
@@ -22,6 +23,7 @@ var _time_accumulator := 0.0
 
 func _init(hero_units: Array, enemy_units: Array, balance: Dictionary, rng_seed: int) -> void:
 	_energy = balance["energy"]
+	_target_weights = balance["target_weights"]
 	_rng.seed = rng_seed
 	for unit in hero_units + enemy_units:
 		unit.id = units.size()
@@ -198,11 +200,19 @@ func _gain_energy(unit, amount: int) -> void:
 
 
 ## Everyone hits the opposing front row first; the back row only when the front row has fallen.
+## The target is random, weighted by class (a shieldbearer draws more hits, but not all of them).
 func _pick_front_row_target(unit):
 	var candidates := _front_row_or_rest(_alive(_opponents_of(unit)))
 	if candidates.is_empty():
 		return null
-	return candidates[_rng.randi_range(0, candidates.size() - 1)]
+	var weights := PackedFloat32Array()
+	for candidate in candidates:
+		weights.append(_target_weight(candidate))
+	return candidates[_rng.rand_weighted(weights)]
+
+
+func _target_weight(target) -> float:
+	return float(_target_weights["by_class"].get(target.class_id, _target_weights["default"]))
 
 
 func _pick_lowest_hp_target(unit):
