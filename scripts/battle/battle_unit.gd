@@ -31,8 +31,8 @@ var slow_amount := 0.0
 var slow_remaining := 0.0
 
 
-## stat_multiplier comes from the hero's level (see GameData.hero_stat_multiplier).
-static func from_hero(hero: Dictionary, hero_class: Dictionary, stat_multiplier := 1.0) -> RefCounted:
+## The multipliers come from the hero's level and the squad's clan bonuses (see StageBattle.from_data).
+static func from_hero(hero: Dictionary, hero_class: Dictionary, hp_multiplier := 1.0, attack_multiplier := 1.0) -> RefCounted:
 	var unit = new()
 	unit.team = Team.HEROES
 	unit.def_id = hero["id"]
@@ -40,9 +40,9 @@ static func from_hero(hero: Dictionary, hero_class: Dictionary, stat_multiplier 
 	unit.display_name = hero["name"]
 	unit.row = hero_class["row"]
 	unit.color = Color.html(hero_class["color"])
-	unit.max_hp = roundi(float(hero["hp"]) * stat_multiplier)
+	unit.max_hp = roundi(float(hero["hp"]) * hp_multiplier)
 	unit.hp = unit.max_hp
-	unit.base_attack = float(hero["attack"]) * stat_multiplier
+	unit.base_attack = float(hero["attack"]) * attack_multiplier
 	unit.attack_interval = float(hero["attack_interval"])
 	unit.action = hero_class["action"]
 	unit.action_params = hero_class

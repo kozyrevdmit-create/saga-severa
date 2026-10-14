@@ -22,11 +22,10 @@ func make_unit(team: BattleUnit.Team, row: String, hp: int, attack: float, inter
 	return unit
 
 
-func starting_levels(level: int) -> Dictionary:
-	var levels := {}
-	for hero_id in data.starting_hero_ids():
-		levels[hero_id] = level
-	return levels
+## A squad in the heroes' default rows: [{id, level, row}].
+func squad_at(level: int, hero_ids: Array = data.starting_hero_ids()) -> Array:
+	return hero_ids.map(func(hero_id): return {
+		"id": hero_id, "level": level, "row": data.get_hero_class(data.get_hero(hero_id))["row"]})
 
 
 func events_of(events: Array, type: String) -> Array:
@@ -34,7 +33,7 @@ func events_of(events: Array, type: String) -> Array:
 
 
 func test_hero_level_scales_hp_and_attack() -> void:
-	var stage = StageBattle.from_data(data, 1, {"torvald": 5}, 1)
+	var stage = StageBattle.from_data(data, 1, squad_at(5, ["torvald"]), 1)
 	var torvald = stage.heroes()[0]
 	var hero: Dictionary = data.get_hero("torvald")
 	var multiplier: float = data.hero_stat_multiplier(5)
@@ -43,7 +42,7 @@ func test_hero_level_scales_hp_and_attack() -> void:
 
 
 func test_enemies_grow_with_stage() -> void:
-	var stage = StageBattle.from_data(data, 4, starting_levels(1), 1)
+	var stage = StageBattle.from_data(data, 4, squad_at(1), 1)
 	var power: float = data.enemy_power_multiplier(4)
 	for enemy in stage.enemies():
 		var definition: Dictionary = data.get_enemy(enemy.def_id)
@@ -99,7 +98,7 @@ func test_defeat_in_a_wave_ends_the_stage() -> void:
 func test_same_seed_gives_same_stage() -> void:
 	var results := []
 	for i in 2:
-		var stage = StageBattle.from_data(data, 3, starting_levels(4), 4242)
+		var stage = StageBattle.from_data(data, 3, squad_at(4), 4242)
 		stage.auto_ultimates = true
 		stage.run_to_end(600.0)
 		results.append({"events": stage.take_events(), "time": stage.time, "victory": stage.victory})
@@ -130,7 +129,58 @@ func test_boss_strikes_the_whole_squad_periodically() -> void:
 
 
 func test_stage_ten_ends_with_the_boss() -> void:
-	var stage = StageBattle.from_data(data, 10, starting_levels(1), 1)
+	var stage = StageBattle.from_data(data, 10, squad_at(1), 1)
 	assert_eq(stage.wave_count, 3, "three waves")
 	var last_wave: Array = data.get_stage(10)["waves"][2]
 	assert_eq(last_wave, ["draugr_king"], "third wave is the boss alone")
+
+
+func synergy_bonus(clan_id: String) -> float:
+	return float(data.heroes["clans"][clan_id]["synergy"]["bonus"])
+
+
+func test_three_midgard_heroes_get_more_hp() -> void:
+	var stage = StageBattle.from_data(data, 1, squad_at(1), 1)
+	var bonus := synergy_bonus("midgard")
+	for hero in stage.heroes():
+		var definition: Dictionary = data.get_hero(hero.def_id)
+		assert_eq(hero.max_hp, roundi(definition["hp"] * (1.0 + bonus)), "%s HP with the Midgard bonus" % hero.def_id)
+		assert_near(hero.base_attack, definition["attack"], 0.001, "%s attack unchanged" % hero.def_id)
+
+
+func test_three_jotunheim_heroes_get_more_attack() -> void:
+	var stage = StageBattle.from_data(data, 1, squad_at(1, ["hrungnir", "skadi", "angrboda"]), 1)
+	var bonus := synergy_bonus("jotunheim")
+	for hero in stage.heroes():
+		var definition: Dictionary = data.get_hero(hero.def_id)
+		assert_near(hero.base_attack, definition["attack"] * (1.0 + bonus), 0.001, "%s attack with the Jotunheim bonus" % hero.def_id)
+		assert_eq(hero.max_hp, int(definition["hp"]), "%s HP unchanged" % hero.def_id)
+
+
+func test_no_clan_bonus_below_three() -> void:
+	var stage = StageBattle.from_data(data, 1, squad_at(1, ["torvald", "sigrid", "skadi", "angrboda"]), 1)
+	for hero in stage.heroes():
+		var definition: Dictionary = data.get_hero(hero.def_id)
+		assert_eq(hero.max_hp, int(definition["hp"]), "%s HP without a bonus" % hero.def_id)
+		assert_near(hero.base_attack, definition["attack"], 0.001, "%s attack without a bonus" % hero.def_id)
+
+
+func test_formation_row_is_used_in_battle() -> void:
+	var squad := [{"id": "torvald", "level": 1, "row": "front"}, {"id": "sigrid", "level": 1, "row": "back"}]
+	var stage = StageBattle.from_data(data, 1, squad, 1)
+	var rows := {}
+	for hero in stage.heroes():
+		rows[hero.def_id] = hero.row
+	assert_eq(rows, {"torvald": "front", "sigrid": "back"}, "rows from the formation")
+
+
+func test_energy_carries_into_the_boss_wave() -> void:
+	var stage = StageBattle.from_data(data, 10, squad_at(25), 3)
+	stage.auto_ultimates = false
+	while stage.wave_index < 2 and not stage.finished:
+		stage.step()
+	assert_true(not stage.finished, "reached the boss wave")
+	var total_energy := 0
+	for hero in stage.heroes():
+		total_energy += hero.energy
+	assert_true(total_energy > 0, "energy from earlier waves is kept")

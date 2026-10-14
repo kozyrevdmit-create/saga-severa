@@ -1,0 +1,106 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/formation_screen.gd" id="1_formation"]
+
+[node name="Formation" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_formation")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.07, 0.09, 0.13, 1)
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 48
+
+[node name="Layout" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Отряд"
+
+[node name="Hint" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.65)
+theme_override_font_sizes/font_size = 22
+text = "Нажми на героя — он встанет в свободный слот. Нажми на героя в слоте — он уйдёт из отряда."
+autowrap_mode = 3
+
+[node name="FrontTitle" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Первый ряд — принимает удары"
+
+[node name="FrontRow" type="HBoxContainer" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackTitle" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Второй ряд"
+
+[node name="BackRow" type="HBoxContainer" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SynergyTitle" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Роды (3 героя одного рода — бонус всему отряду)"
+autowrap_mode = 3
+
+[node name="Synergies" type="VBoxContainer" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="BenchTitle" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "Не в отряде"
+
+[node name="Bench" type="HBoxContainer" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Message" type="Label" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(1, 0.75, 0.4, 1)
+theme_override_font_sizes/font_size = 24
+autowrap_mode = 3
+
+[node name="BackButton" type="Button" parent="Margin/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "Назад"

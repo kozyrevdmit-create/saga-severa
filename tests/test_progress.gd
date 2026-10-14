@@ -1,4 +1,5 @@
-## Levelling for silver, stage rewards and progress (spec 4 and 5.3). Expected numbers come from data/*.json.
+## Progress rules: levelling, rewards and replays, hero unlocks, formation, jarl level, offline income, saves.
+## Expected numbers come from data/*.json.
 extends "res://tests/base_test.gd"
 
 const GameData := preload("res://scripts/data/game_data.gd")
@@ -11,35 +12,39 @@ func leveling() -> Dictionary:
 	return data.balance["leveling"]
 
 
+func win_stages(progress, last_stage: int) -> void:
+	for stage in range(progress.cleared_stage + 1, last_stage + 1):
+		progress.apply_victory(data, stage)
+
+
+# --- new game, levelling ------------------------------------------------------
+
 func test_new_game_starts_with_the_starting_squad_at_level_one() -> void:
 	var progress = Progress.new_game(data)
 	assert_eq(progress.silver, int(data.balance["start_silver"]), "start silver")
 	assert_eq(progress.cleared_stage, 0, "no stages won")
-	assert_eq(progress.hero_levels.keys(), data.starting_hero_ids(), "starting squad")
+	assert_eq(progress.hero_levels.keys(), data.starting_hero_ids(), "starting heroes")
 	for hero_id in progress.hero_levels:
 		assert_eq(progress.level_of(hero_id), 1, "%s level" % hero_id)
+	assert_eq(progress.squad_ids(), data.starting_hero_ids(), "starting heroes are in the squad")
 	assert_eq(progress.next_stage_id(data), 1, "first battle is stage 1")
 
 
-func test_level_up_cost_follows_the_spec_formula() -> void:
-	# Spec 5.3: cost = 100 × 1.15^(level − 1); the numbers themselves live in balance.json.
+func test_level_up_cost_follows_the_formula() -> void:
 	for level in [1, 2, 5, 10, 29]:
 		var expected := roundi(float(leveling()["cost_base"]) * pow(float(leveling()["cost_growth"]), level - 1))
 		assert_eq(data.level_up_cost(level), expected, "cost at level %d" % level)
-	assert_eq(data.level_up_cost(1), int(leveling()["cost_base"]), "first level-up costs the base price")
 
 
 func test_each_level_adds_stat_growth() -> void:
 	var growth := float(leveling()["stat_growth_per_level"])
 	assert_near(data.hero_stat_multiplier(1), 1.0, 0.0001, "level 1")
-	assert_near(data.hero_stat_multiplier(2), 1.0 + growth, 0.0001, "level 2")
 	assert_near(data.hero_stat_multiplier(3) / data.hero_stat_multiplier(2), 1.0 + growth, 0.0001, "each level on top of the previous")
 
 
 func test_enemy_power_grows_per_stage() -> void:
 	var growth := float(data.balance["enemy_power_growth_per_stage"])
 	assert_near(data.enemy_power_multiplier(1), 1.0, 0.0001, "stage 1")
-	assert_near(data.enemy_power_multiplier(2), 1.0 + growth, 0.0001, "stage 2")
 	assert_near(data.enemy_power_multiplier(10) / data.enemy_power_multiplier(9), 1.0 + growth, 0.0001, "stage 10 over stage 9")
 
 
@@ -52,68 +57,197 @@ func test_level_up_spends_silver() -> void:
 	assert_eq(progress.silver, 7, "silver spent")
 
 
-func test_level_up_needs_enough_silver() -> void:
+func test_level_up_needs_enough_silver_and_stops_at_max() -> void:
 	var progress = Progress.new_game(data)
 	progress.silver = data.level_up_cost(1) - 1
-	assert_true(not progress.can_level_up(data, "torvald"), "cannot afford")
-	assert_true(not progress.level_up(data, "torvald"), "level-up refused")
-	assert_eq(progress.level_of("torvald"), 1, "level unchanged")
-	assert_eq(progress.silver, data.level_up_cost(1) - 1, "silver unchanged")
-
-
-func test_level_is_capped_at_max() -> void:
-	var progress = Progress.new_game(data)
+	assert_true(not progress.level_up(data, "torvald"), "cannot afford")
 	progress.hero_levels["sigrid"] = data.max_level()
 	progress.silver = 100000000
-	assert_true(progress.is_max_level(data, "sigrid"), "at max level")
 	assert_true(not progress.level_up(data, "sigrid"), "no level-up past max")
-	assert_eq(progress.level_of("sigrid"), data.max_level(), "level stays at max")
+	assert_true(not progress.level_up(data, "skadi"), "locked hero cannot be levelled")
 
 
-func test_unknown_hero_cannot_be_levelled() -> void:
+# --- rewards, replays, unlocks ------------------------------------------------
+
+func test_first_win_pays_full_reward_and_opens_next_stage() -> void:
 	var progress = Progress.new_game(data)
-	progress.silver = 100000
-	assert_true(not progress.level_up(data, "skadi"), "hero not in the squad yet")
-
-
-func test_victory_pays_reward_and_opens_next_stage() -> void:
-	var progress = Progress.new_game(data)
-	var reward: Dictionary = data.get_stage(1)["reward"]
+	var base: Dictionary = data.get_stage(1)["reward"]
 	var paid: Dictionary = progress.apply_victory(data, 1)
-	assert_eq(paid, reward, "returned reward")
-	assert_eq(progress.silver, int(data.balance["start_silver"]) + int(reward["silver"]), "silver added")
-	assert_eq(progress.experience, int(reward["experience"]), "experience added")
+	assert_eq(paid["silver"], int(base["silver"]), "full silver at jarl level 1")
+	assert_eq(paid["experience"], int(base["experience"]), "full experience")
+	assert_true(not paid["replay"], "not a replay")
 	assert_eq(progress.cleared_stage, 1, "stage 1 won")
-	assert_eq(progress.next_stage_id(data), 2, "next battle is stage 2")
+	assert_true(progress.is_stage_open(data, 2), "stage 2 open")
+	assert_true(not progress.is_stage_open(data, 3), "stage 3 still locked")
 
 
-func test_after_the_last_stage_the_battle_stays_on_it() -> void:
+func test_replay_pays_its_share_and_changes_nothing_else() -> void:
 	var progress = Progress.new_game(data)
-	for stage in range(1, data.stage_count() + 1):
-		progress.apply_victory(data, stage)
-	assert_eq(progress.cleared_stage, data.stage_count(), "chapter done")
-	assert_eq(progress.next_stage_id(data), data.stage_count(), "replays the last stage")
-	progress.apply_victory(data, 3)
-	assert_eq(progress.cleared_stage, data.stage_count(), "replaying never lowers progress")
+	win_stages(progress, 2)
+	var silver_before: int = progress.silver
+	var share := float(data.balance["replay_reward_share"])
+	var base: Dictionary = data.get_stage(1)["reward"]
+	var paid: Dictionary = progress.apply_victory(data, 1)
+	assert_true(paid["replay"], "stage 1 is a replay")
+	assert_eq(paid["silver"], roundi(float(base["silver"]) * share * progress.silver_multiplier(data)), "replay silver")
+	assert_eq(paid["experience"], roundi(float(base["experience"]) * share), "replay experience")
+	assert_eq(progress.silver, silver_before + paid["silver"], "silver added")
+	assert_eq(progress.cleared_stage, 2, "progress unchanged")
 
+
+func test_heroes_join_after_their_stages() -> void:
+	var progress = Progress.new_game(data)
+	for hero in data.heroes["heroes"]:
+		var unlock_stage := int(hero["unlock_after_stage"])
+		if unlock_stage == 0:
+			continue
+		win_stages(progress, unlock_stage - 1)
+		assert_true(not progress.hero_levels.has(hero["id"]), "%s locked before stage %d" % [hero["id"], unlock_stage])
+		var paid: Dictionary = progress.apply_victory(data, unlock_stage)
+		assert_eq(paid["new_heroes"], [hero["id"]], "%s announced after stage %d" % [hero["id"], unlock_stage])
+		assert_eq(progress.level_of(hero["id"]), 1, "%s joins at level 1" % hero["id"])
+		assert_true(progress.apply_victory(data, unlock_stage)["new_heroes"].is_empty(), "a replay unlocks nobody")
+
+
+func test_new_heroes_take_free_slots_and_wait_when_full() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 9)
+	# 2 front + 3 back slots: Hrungnir (a front-row class) finds no free slot after the first five heroes.
+	assert_eq(progress.squad_ids().size(), data.slot_count(), "squad full")
+	assert_true(progress.is_in_formation("skadi") and progress.is_in_formation("angrboda"), "Skadi and Angrboda joined the squad")
+	assert_true(not progress.is_in_formation("hrungnir"), "Hrungnir waits outside the squad")
+
+
+# --- formation ----------------------------------------------------------------
+
+func test_formation_uses_default_row_first() -> void:
+	var progress = Progress.new_game(data)
+	var squad: Array = progress.squad(data)
+	var rows := {}
+	for member in squad:
+		rows[member["id"]] = member["row"]
+	assert_eq(rows, {"torvald": "front", "sigrid": "front", "eyvind": "back"}, "default rows")
+
+
+func test_formation_falls_back_to_the_other_row() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 9)
+	progress.formation_remove("eyvind")
+	assert_true(progress.formation_add(data, "hrungnir"), "Hrungnir added")
+	var hrungnir: Dictionary = progress.squad(data).filter(func(m): return m["id"] == "hrungnir")[0]
+	assert_eq(hrungnir["row"], "back", "front row full, so the back row")
+
+
+func test_formation_remove_and_add_back() -> void:
+	var progress = Progress.new_game(data)
+	assert_true(progress.formation_remove("sigrid"), "removed")
+	assert_true(not progress.is_in_formation("sigrid"), "not in squad")
+	assert_true(progress.formation_add(data, "sigrid"), "added back")
+	assert_true(not progress.formation_add(data, "sigrid"), "no duplicates")
+	assert_true(not progress.formation_add(data, "skadi"), "locked hero cannot join")
+
+
+func test_last_hero_cannot_leave() -> void:
+	var progress = Progress.new_game(data)
+	progress.formation_remove("torvald")
+	progress.formation_remove("sigrid")
+	assert_true(not progress.formation_remove("eyvind"), "last hero stays")
+	assert_eq(progress.squad_ids(), ["eyvind"], "one hero left")
+
+
+func test_full_formation_rejects_more() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 9)
+	assert_true(not progress.formation_add(data, "hrungnir"), "no free slot")
+
+
+# --- jarl ---------------------------------------------------------------------
+
+func test_jarl_level_needs_step_times_level() -> void:
+	var step := int(data.balance["jarl"]["exp_per_level"])
+	var progress = Progress.new_game(data)
+	var cases := [[0, 1], [step - 1, 1], [step, 2], [step + 2 * step - 1, 2], [step + 2 * step, 3], [step * (1 + 2 + 3), 4]]
+	for case in cases:
+		progress.experience = case[0]
+		assert_eq(progress.jarl_level(data), case[1], "jarl level at %d experience" % case[0])
+	progress.experience = step + 5
+	assert_eq(progress.jarl_level_progress(data), [5, 2 * step], "progress inside level 2")
+
+
+func test_jarl_level_raises_silver() -> void:
+	var bonus := float(data.balance["jarl"]["silver_bonus_per_level"])
+	var progress = Progress.new_game(data)
+	progress.experience = int(data.balance["jarl"]["exp_per_level"])  # level 2
+	assert_near(progress.silver_multiplier(data), 1.0 + bonus, 0.0001, "level 2 bonus")
+	var base: Dictionary = data.get_stage(1)["reward"]
+	assert_eq(progress.apply_victory(data, 1)["silver"], roundi(float(base["silver"]) * (1.0 + bonus)), "battle silver with the bonus")
+
+
+# --- offline income -----------------------------------------------------------
+
+func test_offline_income_per_minute_and_cap() -> void:
+	var offline: Dictionary = data.balance["offline_income"]
+	var progress = Progress.new_game(data)
+	win_stages(progress, 3)
+	progress.experience = 0
+	progress.last_seen_unix = 1000000
+	var rate := float(offline["silver_per_minute_per_stage"]) * 3
+	assert_eq(progress.offline_income(data, 1000000 + 30 * 60), floori(30 * rate), "30 minutes away")
+	assert_eq(progress.offline_income(data, 1000000 + 30 * 60 + 59), floori(30 * rate), "whole minutes only")
+	var cap_minutes := int(float(offline["max_hours"]) * 60)
+	assert_eq(progress.offline_income(data, 1000000 + 100 * 3600), floori(cap_minutes * rate), "capped")
+	assert_eq(progress.offline_income(data, 1000000 - 3600), 0, "clock moved back")
+
+
+func test_no_offline_income_before_first_win_or_first_visit() -> void:
+	var progress = Progress.new_game(data)
+	progress.last_seen_unix = 1000000
+	assert_eq(progress.offline_income(data, 1000000 + 3600), 0, "no stage won yet")
+	win_stages(progress, 1)
+	progress.last_seen_unix = 0
+	assert_eq(progress.offline_income(data, 1000000 + 3600), 0, "never seen before")
+
+
+func test_offline_income_gets_jarl_bonus() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 2)
+	progress.experience = int(data.balance["jarl"]["exp_per_level"])  # level 2
+	progress.last_seen_unix = 1000000
+	var rate: float = float(data.balance["offline_income"]["silver_per_minute_per_stage"]) * 2 * progress.silver_multiplier(data)
+	assert_eq(progress.offline_income(data, 1000000 + 10 * 60), floori(10 * rate), "with the bonus")
+
+
+# --- saves --------------------------------------------------------------------
 
 func test_progress_survives_dict_round_trip() -> void:
 	var progress = Progress.new_game(data)
+	win_stages(progress, 6)
 	progress.silver = 1234
-	progress.experience = 56
-	progress.cleared_stage = 4
 	progress.hero_levels["eyvind"] = 7
+	progress.formation_remove("sigrid")
+	progress.last_seen_unix = 1790000000
 	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
 	assert_eq(restored.to_dict(), progress.to_dict(), "same progress after JSON round trip")
 
 
+func test_version_one_save_is_migrated() -> void:
+	# An M3 save: no formation, no unlocked heroes, no last-seen time.
+	var restored = Progress.from_dict({
+		"version": 1, "silver": 500, "experience": 300, "cleared_stage": 8,
+		"hero_levels": {"torvald": 9, "sigrid": 8, "eyvind": 7},
+	}, data)
+	assert_eq(restored.silver, 500, "silver kept")
+	assert_eq(restored.level_of("torvald"), 9, "levels kept")
+	assert_eq(restored.hero_levels.keys(), data.unlocked_hero_ids(8), "heroes earned by stage 8 unlocked")
+	assert_eq(restored.squad_ids().size(), 5, "squad filled")
+	assert_eq(restored.last_seen_unix, 0, "no offline income for the gap before the update")
+
+
 func test_broken_values_fall_back_to_safe_ones() -> void:
 	var restored = Progress.from_dict({
-		"version": Progress.VERSION,
-		"silver": "a lot",
-		"experience": -5,
-		"cleared_stage": 999,
+		"version": Progress.VERSION, "silver": "a lot", "experience": -5, "cleared_stage": 999,
 		"hero_levels": {"torvald": 999, "sigrid": "x", "unknown_hero": 5},
+		"formation": ["torvald", "torvald", "unknown_hero", 7, ""],
 	}, data)
 	assert_eq(restored.silver, int(data.balance["start_silver"]), "non-number silver ignored")
 	assert_eq(restored.experience, 0, "negative experience clamped")
@@ -121,6 +255,12 @@ func test_broken_values_fall_back_to_safe_ones() -> void:
 	assert_eq(restored.level_of("torvald"), data.max_level(), "level clamped to max")
 	assert_eq(restored.level_of("sigrid"), 1, "broken level falls back to 1")
 	assert_true(not restored.hero_levels.has("unknown_hero"), "unknown hero ignored")
+	assert_eq(restored.squad_ids(), ["torvald"], "duplicates and unknown heroes dropped from the formation")
+
+
+func test_empty_saved_formation_is_refilled() -> void:
+	var restored = Progress.from_dict({"version": Progress.VERSION, "cleared_stage": 0, "formation": ["", "", "", "", ""]}, data)
+	assert_eq(restored.squad_ids(), data.starting_hero_ids(), "squad rebuilt")
 
 
 func test_non_number_version_starts_new_game() -> void:

@@ -28,7 +28,8 @@ func _refresh() -> void:
 		var hero: Dictionary = data.get_hero(hero_id)
 		var level: int = progress.level_of(hero_id)
 		var multiplier: float = data.hero_stat_multiplier(level)
-		row["level"].text = "%s · Уровень %d" % [data.get_hero_class(hero)["name"], level]
+		var hero_class: Dictionary = data.get_hero_class(hero)
+		row["level"].text = "%s · %s · Уровень %d" % [hero_class["name"], hero_class["role_short"], level]
 		row["stats"].text = "HP %d · Атака %d" % [roundi(hero["hp"] * multiplier), roundi(hero["attack"] * multiplier)]
 		var button: Button = row["button"]
 		if progress.is_max_level(data, hero_id):
