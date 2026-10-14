@@ -73,11 +73,13 @@ func step() -> void:
 	if finished:
 		return
 	time += TICK
+	# Effects wear off for everyone before anyone acts, so a buff or stun lasts
+	# the same time no matter where its target stands in the turn order.
 	for unit in units:
-		if not unit.is_alive():
-			continue
-		unit.tick_effects(TICK)
-		if unit.is_stunned():
+		if unit.is_alive():
+			unit.tick_effects(TICK)
+	for unit in units:
+		if not unit.is_alive() or unit.is_stunned():
 			continue
 		unit.attack_timer += TICK * unit.action_speed()
 		if unit.attack_timer >= unit.attack_interval:
