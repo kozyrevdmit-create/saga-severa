@@ -20,11 +20,13 @@ const DAMAGE_TO_ENEMY_COLOR := Color.WHITE
 const DAMAGE_TO_HERO_COLOR := Color("#ff6b6b")
 const ULTIMATE_COLOR := Color("#ffd84a")
 const HEAL_COLOR := Color("#6bff8a")
+const POPUP_STACK_STEP := 36.0
 
 var _battle
 var _max_energy := 1
 var _speed := 1
 var _views := {}  ## unit id -> FighterView
+var _popups_this_frame := {}  ## unit id -> popups already shown this frame (stacked, not overlapped)
 var _cards := {}  ## unit id -> HeroCard
 
 
@@ -54,6 +56,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_popups_this_frame.clear()
 	_battle.advance(delta * _speed)
 	for event in _battle.take_events():
 		_show_event(event)
@@ -126,7 +129,10 @@ func _popup(unit_id: int, text_value: String, color: Color, font_size: int, dura
 	%Field.add_child(label)
 	label.reset_size()
 	var origin: Vector2 = _views[unit_id].popup_origin()
-	origin.x += randf_range(-30.0, 30.0)  # cosmetic jitter so numbers do not overlap
+	var stacked: int = _popups_this_frame.get(unit_id, 0)
+	_popups_this_frame[unit_id] = stacked + 1
+	origin.y -= stacked * POPUP_STACK_STEP  # e.g. three Fury strikes in one frame
+	origin.x += randf_range(-16.0, 16.0)  # cosmetic jitter for hits in consecutive frames
 	label.position = origin - label.size / 2.0
 	var tween := label.create_tween().set_parallel()
 	tween.tween_property(label, "position:y", label.position.y - 80.0, duration)

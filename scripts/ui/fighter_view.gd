@@ -3,8 +3,11 @@ extends VBoxContainer
 
 const StatBar := preload("res://scripts/ui/stat_bar.gd")
 
-const WIDTH := 170.0
+const WIDTH := 180.0
 const BODY_HEIGHT := 120.0
+const NAME_FONT_SIZE := 24
+const NAME_MIN_FONT_SIZE := 14
+const NAME_PADDING := 16.0
 const HP_COLOR := Color("#e04848")
 const ENERGY_COLOR := Color("#f2c230")
 
@@ -35,8 +38,8 @@ func _init(unit, show_energy: bool) -> void:
 	label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", 24)
+	# One line, shrunk to fit: the web build does not wrap at hyphens and would split a word.
+	label.add_theme_font_size_override("font_size", _fitting_font_size(label, unit.display_name))
 	label.add_theme_constant_override("outline_size", 6)
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	_body.add_child(label)
@@ -51,3 +54,11 @@ func refresh(unit, max_energy: int) -> void:
 ## Point above the body where floating numbers start (in parent coordinates).
 func popup_origin() -> Vector2:
 	return position + Vector2(WIDTH / 2.0, 30.0)
+
+
+func _fitting_font_size(label: Label, text_value: String) -> int:
+	var font := label.get_theme_font("font")
+	var font_size := NAME_FONT_SIZE
+	while font_size > NAME_MIN_FONT_SIZE and font.get_string_size(text_value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > WIDTH - NAME_PADDING:
+		font_size -= 1
+	return font_size
