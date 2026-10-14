@@ -59,6 +59,38 @@ func get_stage(stage_id: int) -> Dictionary:
 	return {}
 
 
+func stage_count() -> int:
+	return stages.get("stages", []).size()
+
+
+func get_chapter(chapter_id: int) -> Dictionary:
+	for chapter in stages.get("chapters", []):
+		if int(chapter["id"]) == chapter_id:
+			return chapter
+	push_error("Unknown chapter: %d" % chapter_id)
+	return {}
+
+
+func max_level() -> int:
+	return int(balance["leveling"]["max_level"])
+
+
+## Silver to raise a hero from `level` to `level + 1`: cost_base × cost_growth^(level − 1).
+func level_up_cost(level: int) -> int:
+	var leveling: Dictionary = balance["leveling"]
+	return roundi(float(leveling["cost_base"]) * pow(float(leveling["cost_growth"]), level - 1))
+
+
+## HP and attack multiplier at `level`: each level adds stat_growth_per_level on top of the previous one.
+func hero_stat_multiplier(level: int) -> float:
+	return pow(1.0 + float(balance["leveling"]["stat_growth_per_level"]), level - 1)
+
+
+## Enemy HP and attack multiplier on a stage: each stage adds enemy_power_growth_per_stage on top of the previous one.
+func enemy_power_multiplier(stage_id: int) -> float:
+	return pow(1.0 + float(balance["enemy_power_growth_per_stage"]), stage_id - 1)
+
+
 ## Heroes available from the very start (in data order).
 func starting_hero_ids() -> Array[String]:
 	var ids: Array[String] = []

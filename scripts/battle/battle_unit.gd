@@ -21,6 +21,8 @@ var action := "attack_front_row"
 var action_params: Dictionary = {}  ## extra numbers for the action (e.g. völva heal threshold)
 var ultimate: Dictionary = {}  ## empty for enemies
 var passive: Dictionary = {}
+var special: Dictionary = {}  ## periodic ability (boss), empty for most units
+var special_timer := 0.0
 var energy := 0
 
 var buffs: Array[Dictionary] = []  ## {stat, multiplier, remaining, source}
@@ -29,7 +31,8 @@ var slow_amount := 0.0
 var slow_remaining := 0.0
 
 
-static func from_hero(hero: Dictionary, hero_class: Dictionary) -> RefCounted:
+## stat_multiplier comes from the hero's level (see GameData.hero_stat_multiplier).
+static func from_hero(hero: Dictionary, hero_class: Dictionary, stat_multiplier := 1.0) -> RefCounted:
 	var unit = new()
 	unit.team = Team.HEROES
 	unit.def_id = hero["id"]
@@ -37,9 +40,9 @@ static func from_hero(hero: Dictionary, hero_class: Dictionary) -> RefCounted:
 	unit.display_name = hero["name"]
 	unit.row = hero_class["row"]
 	unit.color = Color.html(hero_class["color"])
-	unit.max_hp = int(hero["hp"])
+	unit.max_hp = roundi(float(hero["hp"]) * stat_multiplier)
 	unit.hp = unit.max_hp
-	unit.base_attack = float(hero["attack"])
+	unit.base_attack = float(hero["attack"]) * stat_multiplier
 	unit.attack_interval = float(hero["attack_interval"])
 	unit.action = hero_class["action"]
 	unit.action_params = hero_class
@@ -48,18 +51,20 @@ static func from_hero(hero: Dictionary, hero_class: Dictionary) -> RefCounted:
 	return unit
 
 
-static func from_enemy(enemy: Dictionary) -> RefCounted:
+## power_multiplier comes from the stage (see GameData.enemy_power_multiplier).
+static func from_enemy(enemy: Dictionary, power_multiplier := 1.0) -> RefCounted:
 	var unit = new()
 	unit.team = Team.ENEMIES
 	unit.def_id = enemy["id"]
 	unit.display_name = enemy["name"]
 	unit.row = enemy["row"]
 	unit.color = Color.html(enemy["color"])
-	unit.max_hp = int(enemy["hp"])
+	unit.max_hp = roundi(float(enemy["hp"]) * power_multiplier)
 	unit.hp = unit.max_hp
-	unit.base_attack = float(enemy["attack"])
+	unit.base_attack = float(enemy["attack"]) * power_multiplier
 	unit.attack_interval = float(enemy["attack_interval"])
 	unit.action = enemy["action"]
+	unit.special = enemy.get("special", {})
 	return unit
 
 
@@ -73,6 +78,15 @@ func hp_fraction() -> float:
 
 func has_ultimate() -> bool:
 	return not ultimate.is_empty()
+
+
+## Energy needed to use the ultimate (heroes.json ultimate.energy_cost, per hero).
+func ultimate_cost() -> int:
+	return int(ultimate["energy_cost"])
+
+
+func has_special() -> bool:
+	return not special.is_empty()
 
 
 func is_stunned() -> bool:

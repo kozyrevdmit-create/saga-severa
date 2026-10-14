@@ -14,7 +14,7 @@ var auto_ultimates := false  ## "Авто": heroes use ultimates as soon as they
 var finished := false
 var victory := false
 
-var _energy: Dictionary  ## balance.json "energy": max, per_attack, per_heal, per_hit_taken
+var _energy: Dictionary  ## balance.json "energy": per_attack, per_heal, per_hit_taken
 var _target_weights: Dictionary  ## balance.json "target_weights": by_class, default
 var _rng := RandomNumberGenerator.new()
 var _events: Array[Dictionary] = []
@@ -64,7 +64,7 @@ func run_to_end(max_seconds: float) -> void:
 		step()
 
 
-## Events since the last call: damage, heal, death, ultimate, end. Used by the screen for effects.
+## Events since the last call: damage, heal, death, ultimate, special, end. Used by the screen for effects.
 func take_events() -> Array[Dictionary]:
 	var events := _events
 	_events = []
@@ -89,6 +89,14 @@ func step() -> void:
 			_perform_action(unit)
 			if _check_end():
 				return
+		if unit.has_special():
+			# A periodic ability on its own timer (the boss's blow at the whole squad).
+			unit.special_timer += TICK * unit.action_speed()
+			if unit.special_timer >= float(unit.special["interval"]):
+				unit.special_timer -= float(unit.special["interval"])
+				_perform_special(unit)
+				if _check_end():
+					return
 	if auto_ultimates:
 		for unit in units:
 			if can_use_ultimate(unit.id):
@@ -99,7 +107,7 @@ func step() -> void:
 
 func can_use_ultimate(unit_id: int) -> bool:
 	var unit = units[unit_id]
-	return not finished and unit.is_alive() and unit.has_ultimate() and unit.energy >= int(_energy["max"])
+	return not finished and unit.is_alive() and unit.has_ultimate() and unit.energy >= unit.ultimate_cost()
 
 
 func use_ultimate(unit_id: int) -> bool:
@@ -135,8 +143,18 @@ func _perform_action(unit) -> void:
 func _attack(unit, target) -> void:
 	if target == null:
 		return
-	_deal_damage(unit, target, 1.0, false)
+	_deal_damage(unit, target, 1.0, "attack")
 	_gain_energy(unit, int(_energy["per_attack"]))
+
+
+func _perform_special(unit) -> void:
+	match unit.special["type"]:
+		"hit_all":
+			_events.append({"type": "special", "unit": unit.id, "name": unit.special["name"]})
+			for target in _alive(_opponents_of(unit)):
+				_deal_damage(unit, target, float(unit.special["attack_multiplier"]), "special")
+		_:
+			push_error("Unknown special ability: %s" % unit.special["type"])
 
 
 func _apply_effect(unit, effect: Dictionary) -> void:
@@ -149,10 +167,10 @@ func _apply_effect(unit, effect: Dictionary) -> void:
 				var target = _pick_effect_targets(unit, effect["target"])
 				if target.is_empty():
 					break
-				_deal_damage(unit, target[0], float(effect["attack_multiplier"]), true)
+				_deal_damage(unit, target[0], float(effect["attack_multiplier"]), "ultimate")
 		"damage":
 			for target in _pick_effect_targets(unit, effect["target"]):
-				_deal_damage(unit, target, float(effect["attack_multiplier"]), true)
+				_deal_damage(unit, target, float(effect["attack_multiplier"]), "ultimate")
 				if effect.has("status") and target.is_alive():
 					target.apply_status(effect["status"])
 		"heal_allies":
@@ -176,10 +194,14 @@ func _pick_effect_targets(unit, target_kind: String) -> Array:
 	return []
 
 
-func _deal_damage(source, target, multiplier: float, is_ultimate: bool) -> void:
+## kind: "attack", "ultimate" or "special" (the screen styles the numbers by it).
+func _deal_damage(source, target, multiplier: float, kind: String) -> void:
 	var amount := maxi(1, roundi(source.attack_power() * multiplier * target.damage_taken_multiplier()))
 	target.hp = maxi(0, target.hp - amount)
-	_events.append({"type": "damage", "source": source.id, "target": target.id, "amount": amount, "ultimate": is_ultimate})
+	_events.append({
+		"type": "damage", "source": source.id, "target": target.id, "amount": amount,
+		"kind": kind, "target_is_hero": target.team == BattleUnit.Team.HEROES,
+	})
 	if target.is_alive():
 		_gain_energy(target, int(_energy["per_hit_taken"]))
 	else:
@@ -196,7 +218,7 @@ func _heal(source, target, amount: int) -> void:
 
 func _gain_energy(unit, amount: int) -> void:
 	if unit.has_ultimate():
-		unit.energy = mini(int(_energy["max"]), unit.energy + amount)
+		unit.energy = mini(unit.ultimate_cost(), unit.energy + amount)
 
 
 ## Everyone hits the opposing front row first; the back row only when the front row has fallen.

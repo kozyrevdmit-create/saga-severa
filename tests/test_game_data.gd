@@ -25,6 +25,7 @@ func test_heroes_have_valid_fields() -> void:
 		assert_true(data.heroes["classes"].has(hero["class"]), "%s class exists" % who)
 		assert_true(data.heroes["clans"].has(hero["clan"]), "%s clan exists" % who)
 		assert_true(hero["hp"] > 0 and hero["attack"] > 0 and hero["attack_interval"] > 0, "%s stats positive" % who)
+		assert_true(hero["ultimate"].get("energy_cost", 0) > 0, "%s ultimate has an energy cost" % who)
 		var effects: Array = hero["ultimate"]["effects"]
 		assert_true(not effects.is_empty(), "%s ultimate has effects" % who)
 		for effect in effects:
@@ -72,7 +73,6 @@ func test_stage_waves_reference_known_enemies() -> void:
 
 func test_energy_balance_present() -> void:
 	var energy: Dictionary = data.balance["energy"]
-	assert_true(energy["max"] > 0, "energy max")
 	assert_true(energy["per_attack"] > 0, "energy per attack")
 	assert_true(energy["per_heal"] >= 0, "energy per heal")
 	assert_true(energy["per_hit_taken"] > 0, "energy per hit taken")
