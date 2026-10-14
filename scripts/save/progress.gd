@@ -42,7 +42,8 @@ func is_replay(stage_id: int) -> bool:
 
 
 ## Pays the reward (a replay pays replay_reward_share of it; the jarl bonus adds silver),
-## marks the stage won and unlocks heroes. Returns {silver, experience, replay, new_heroes}.
+## marks the stage won and unlocks heroes (at the level of the weakest hero already in the warband).
+## Returns {silver, experience, replay, new_heroes}.
 func apply_victory(data, stage_id: int) -> Dictionary:
 	var replay := is_replay(stage_id)
 	var base: Dictionary = data.get_stage(stage_id)["reward"]
@@ -56,13 +57,23 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 		cleared_stage = maxi(cleared_stage, stage_id)
 		for hero_id in data.heroes_unlocked_at(stage_id):
 			if not hero_levels.has(hero_id):
-				hero_levels[hero_id] = 1
+				hero_levels[hero_id] = _join_level()
 				formation_add(data, hero_id)
 				new_heroes.append(hero_id)
 	return {"silver": silver_gain, "experience": experience_gain, "replay": replay, "new_heroes": new_heroes}
 
 
 # --- hero levels --------------------------------------------------------------
+
+## A new hero joins at the level of the weakest hero already unlocked, so they are useful at once
+## and a single reward does not buy them a pile of cheap low levels.
+func _join_level() -> int:
+	var lowest := 0
+	for hero_id in hero_levels:
+		if lowest == 0 or level_of(hero_id) < lowest:
+			lowest = level_of(hero_id)
+	return maxi(1, lowest)
+
 
 func level_of(hero_id: String) -> int:
 	return int(hero_levels.get(hero_id, 1))
@@ -232,12 +243,22 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.last_seen_unix = maxi(0, _to_int(saved.get("last_seen_unix"), 0))
 	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
 
-	# Unlocked heroes follow the won stages, so a version 1 save gets the heroes it has earned.
+	# Unlocked heroes follow the won stages, so a version 1 save gets the heroes it has earned;
+	# a hero without a saved level joins like a new hero (at the weakest saved level).
 	var levels = saved.get("hero_levels")
 	progress.hero_levels.clear()
+	var missing: Array[String] = []
 	for hero_id in data.unlocked_hero_ids(progress.cleared_stage):
-		var level := _to_int(levels.get(hero_id), 1) if levels is Dictionary else 1
+		var level := _to_int(levels.get(hero_id), 0) if levels is Dictionary else 0
+		if level <= 0:
+			missing.append(hero_id)
 		progress.hero_levels[hero_id] = clampi(level, 1, data.max_level())
+	var join_level := 1
+	var saved_levels: Array = progress.hero_levels.keys().filter(func(id): return not id in missing).map(func(id): return progress.hero_levels[id])
+	if not saved_levels.is_empty():
+		join_level = saved_levels.min()
+	for hero_id in missing:
+		progress.hero_levels[hero_id] = join_level
 
 	progress._reset_formation(data)
 	var saved_formation = saved.get("formation")

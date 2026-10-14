@@ -103,9 +103,12 @@ func test_heroes_join_after_their_stages() -> void:
 			continue
 		win_stages(progress, unlock_stage - 1)
 		assert_true(not progress.hero_levels.has(hero["id"]), "%s locked before stage %d" % [hero["id"], unlock_stage])
+		progress.hero_levels[progress.hero_levels.keys()[0]] = 7
+		for other in progress.hero_levels.keys().slice(1):
+			progress.hero_levels[other] = 9
 		var paid: Dictionary = progress.apply_victory(data, unlock_stage)
 		assert_eq(paid["new_heroes"], [hero["id"]], "%s announced after stage %d" % [hero["id"], unlock_stage])
-		assert_eq(progress.level_of(hero["id"]), 1, "%s joins at level 1" % hero["id"])
+		assert_eq(progress.level_of(hero["id"]), 7, "%s joins at the weakest hero's level" % hero["id"])
 		assert_true(progress.apply_victory(data, unlock_stage)["new_heroes"].is_empty(), "a replay unlocks nobody")
 
 
@@ -267,6 +270,7 @@ func test_version_one_save_is_migrated() -> void:
 	assert_eq(restored.silver, 500, "silver kept")
 	assert_eq(restored.level_of("torvald"), 9, "levels kept")
 	assert_eq(restored.hero_levels.keys(), data.unlocked_hero_ids(8), "heroes earned by stage 8 unlocked")
+	assert_eq(restored.level_of("skadi"), 7, "a hero earned before the update joins at the weakest saved level")
 	assert_eq(restored.squad_ids().size(), 5, "squad filled")
 	assert_eq(restored.last_seen_unix, 0, "no offline income for the gap before the update")
 
@@ -281,7 +285,7 @@ func test_broken_values_fall_back_to_safe_ones() -> void:
 	assert_eq(restored.experience, 0, "negative experience clamped")
 	assert_eq(restored.cleared_stage, data.stage_count(), "cleared stage clamped")
 	assert_eq(restored.level_of("torvald"), data.max_level(), "level clamped to max")
-	assert_eq(restored.level_of("sigrid"), 1, "broken level falls back to 1")
+	assert_eq(restored.level_of("sigrid"), restored.level_of("torvald"), "broken level: joins at the weakest valid saved level")
 	assert_true(not restored.hero_levels.has("unknown_hero"), "unknown hero ignored")
 	assert_eq(restored.squad_ids(), ["torvald"], "duplicates and unknown heroes dropped from the formation")
 
