@@ -6,8 +6,8 @@
       "description": "Ближний бой",
       "row": "front",
       "action": "attack_front_row",
-      "hp": 700,
-      "attack": 40,
+      "hp": 1680,
+      "attack": 48,
       "attack_interval": 1.5,
       "color": "#5f7466"
     },
@@ -17,8 +17,8 @@
       "description": "Быстрый, слабый",
       "row": "front",
       "action": "attack_front_row",
-      "hp": 350,
-      "attack": 16,
+      "hp": 840,
+      "attack": 19,
       "attack_interval": 0.7,
       "color": "#8a7a66"
     },
@@ -28,8 +28,8 @@
       "description": "Дальний бой",
       "row": "back",
       "action": "attack_front_row",
-      "hp": 450,
-      "attack": 45,
+      "hp": 1080,
+      "attack": 54,
       "attack_interval": 1.7,
       "color": "#4f6a7a"
     }
