@@ -57,6 +57,9 @@ jobs:
       - name: Run tests (headless)
         run: ~/godot/godot --headless --path . --script res://tests/run_tests.gd
 
+      - name: Balance simulation runs (smoke check)
+        run: ~/godot/godot --headless --path . --script res://tools/balance_sim.gd -- --runs=3
+
       - name: Export web version
         run: |
           mkdir -p build/web

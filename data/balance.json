@@ -9,5 +9,13 @@
       "shieldbearer": 3
     },
     "default": 1
-  }
+  },
+  "leveling": {
+    "max_level": 30,
+    "cost_base": 100,
+    "cost_growth": 1.15,
+    "stat_growth_per_level": 0.08
+  },
+  "enemy_power_growth_per_stage": 0.18,
+  "start_silver": 0
 }

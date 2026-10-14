@@ -45,8 +45,8 @@ func _init(unit) -> void:
 	box.add_child(_energy_bar)
 
 
-func refresh(unit, max_energy: int, can_use: bool) -> void:
-	_energy_bar.value = float(unit.energy) / max_energy
+func refresh(unit, can_use: bool) -> void:
+	_energy_bar.value = float(unit.energy) / unit.ultimate_cost()
 	disabled = not unit.is_alive()
 	modulate.a = 1.0 if unit.is_alive() else 0.35
 	if can_use != _ready_shown:

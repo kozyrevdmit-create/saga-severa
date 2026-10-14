@@ -1,16 +1,13 @@
-## Battle screen: shows the battle logic (scripts/battle) and passes taps to it.
-## M2: the starting squad fights the first wave of stage 1.
+## Battle screen: shows the stage battle (scripts/battle) and passes taps to it.
+## The squad fights the next stage's waves; a win pays the stage reward. Progress is saved after every stage.
 extends Control
 
-const GameData := preload("res://scripts/data/game_data.gd")
-const Battle := preload("res://scripts/battle/battle.gd")
+const StageBattle := preload("res://scripts/battle/stage_battle.gd")
 const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 const FighterView := preload("res://scripts/ui/fighter_view.gd")
 const HeroCard := preload("res://scripts/ui/hero_card.gd")
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
-const STAGE_ID := 1
-const WAVE_INDEX := 0
 
 ## Top of each battlefield row, as a share of the field height (top to bottom).
 const ROW_TOP := {"enemy_back": 0.03, "enemy_front": 0.27, "hero_front": 0.53, "hero_back": 0.77}
@@ -19,39 +16,36 @@ const ROW_GAP := 24.0
 const DAMAGE_TO_ENEMY_COLOR := Color.WHITE
 const DAMAGE_TO_HERO_COLOR := Color("#ff6b6b")
 const ULTIMATE_COLOR := Color("#ffd84a")
+const SPECIAL_COLOR := Color("#ff9a3c")
 const HEAL_COLOR := Color("#6bff8a")
 const POPUP_STACK_STEP := 36.0
 
 var _battle
-var _max_energy := 1
+var _stage_id := 1
 var _speed := 1
-var _views := {}  ## unit id -> FighterView
+var _views := {}  ## unit id -> FighterView (enemy ids are reused by every wave)
 var _popups_this_frame := {}  ## unit id -> popups already shown this frame (stacked, not overlapped)
 var _cards := {}  ## unit id -> HeroCard
 
 
 func _ready() -> void:
-	var data = GameData.load_all()
-	var stage: Dictionary = data.get_stage(STAGE_ID)
-	_battle = Battle.from_data(data, data.starting_hero_ids(), stage["waves"][WAVE_INDEX], randi())
-	_max_energy = int(data.balance["energy"]["max"])
-	%StageLabel.text = "Этап %d · Волна %d" % [STAGE_ID, WAVE_INDEX + 1]
+	var data = GameState.data
+	var progress = GameState.progress
+	_stage_id = progress.next_stage_id(data)
+	_battle = StageBattle.from_data(data, _stage_id, progress.hero_levels, randi())
 
-	for unit in _battle.units:
-		var view := FighterView.new(unit, unit.has_ultimate())
-		%Field.add_child(view)
-		_views[unit.id] = view
 	for hero in _battle.heroes():
+		_add_view(hero)
 		var card := HeroCard.new(hero)
 		card.pressed.connect(_on_card_pressed.bind(hero.id))
 		%Cards.add_child(card)
 		_cards[hero.id] = card
+	_show_wave()
 
 	%AutoButton.toggled.connect(_on_auto_toggled)
 	%SpeedButton.pressed.connect(_on_speed_pressed)
 	%MenuButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 	%Field.resized.connect(_layout_fighters)
-	_layout_fighters()
 	_refresh()
 
 
@@ -79,9 +73,27 @@ func _on_speed_pressed() -> void:
 
 func _refresh() -> void:
 	for unit in _battle.units:
-		_views[unit.id].refresh(unit, _max_energy)
+		_views[unit.id].refresh(unit)
 		if _cards.has(unit.id):
-			_cards[unit.id].refresh(unit, _max_energy, _battle.can_use_ultimate(unit.id))
+			_cards[unit.id].refresh(unit, _battle.can_use_ultimate(unit.id))
+
+
+func _add_view(unit) -> void:
+	var view := FighterView.new(unit)
+	%Field.add_child(view)
+	_views[unit.id] = view
+
+
+## Replaces the enemy views with the current wave's enemies.
+func _show_wave() -> void:
+	for unit_id in _views.keys():
+		if not _cards.has(unit_id):
+			_views[unit_id].queue_free()
+			_views.erase(unit_id)
+	for enemy in _battle.enemies():
+		_add_view(enemy)
+	%StageLabel.text = "Этап %d · Волна %d/%d" % [_stage_id, _battle.wave_index + 1, _battle.wave_count]
+	_layout_fighters()
 
 
 func _layout_fighters() -> void:
@@ -104,21 +116,51 @@ func _layout_fighters() -> void:
 func _show_event(event: Dictionary) -> void:
 	match event["type"]:
 		"damage":
-			var target = _battle.units[event["target"]]
-			var color := DAMAGE_TO_HERO_COLOR if target.team == BattleUnit.Team.HEROES else DAMAGE_TO_ENEMY_COLOR
-			if event["ultimate"]:
-				color = ULTIMATE_COLOR
-			_popup(event["target"], str(event["amount"]), color, 40 if event["ultimate"] else 32)
+			var color := DAMAGE_TO_HERO_COLOR if event["target_is_hero"] else DAMAGE_TO_ENEMY_COLOR
+			var font_size := 32
+			match event["kind"]:
+				"ultimate":
+					color = ULTIMATE_COLOR
+					font_size = 40
+				"special":
+					color = SPECIAL_COLOR
+					font_size = 40
+			_popup(event["target"], str(event["amount"]), color, font_size)
 		"heal":
 			_popup(event["target"], "+%d" % event["amount"], HEAL_COLOR, 32)
 		"ultimate":
 			_popup(event["unit"], event["name"], ULTIMATE_COLOR, 30, 1.4)
+		"special":
+			_popup(event["unit"], event["name"], SPECIAL_COLOR, 30, 1.4)
+		"wave":
+			_show_wave()
+			_banner("Волна %d" % (event["index"] + 1))
 		"end":
-			_show_result(event["victory"])
+			_finish_stage(event["victory"])
 
 
 ## Floating text that rises above a fighter and fades out.
 func _popup(unit_id: int, text_value: String, color: Color, font_size: int, duration := 0.9) -> void:
+	if not _views.has(unit_id):
+		return
+	var label := _make_floating_label(text_value, color, font_size)
+	var origin: Vector2 = _views[unit_id].popup_origin()
+	var stacked: int = _popups_this_frame.get(unit_id, 0)
+	_popups_this_frame[unit_id] = stacked + 1
+	origin.y -= stacked * POPUP_STACK_STEP  # e.g. three Fury strikes in one frame
+	origin.x += randf_range(-16.0, 16.0)  # cosmetic jitter for hits in consecutive frames
+	label.position = origin - label.size / 2.0
+	_float_away(label, duration)
+
+
+## Large text in the middle of the battlefield (e.g. "Волна 2").
+func _banner(text_value: String) -> void:
+	var label := _make_floating_label(text_value, Color.WHITE, 56)
+	label.position = %Field.size / 2.0 - label.size / 2.0
+	_float_away(label, 1.6)
+
+
+func _make_floating_label(text_value: String, color: Color, font_size: int) -> Label:
 	var label := Label.new()
 	label.text = text_value
 	label.add_theme_font_size_override("font_size", font_size)
@@ -128,20 +170,24 @@ func _popup(unit_id: int, text_value: String, color: Color, font_size: int, dura
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	%Field.add_child(label)
 	label.reset_size()
-	var origin: Vector2 = _views[unit_id].popup_origin()
-	var stacked: int = _popups_this_frame.get(unit_id, 0)
-	_popups_this_frame[unit_id] = stacked + 1
-	origin.y -= stacked * POPUP_STACK_STEP  # e.g. three Fury strikes in one frame
-	origin.x += randf_range(-16.0, 16.0)  # cosmetic jitter for hits in consecutive frames
-	label.position = origin - label.size / 2.0
+	return label
+
+
+func _float_away(label: Label, duration: float) -> void:
 	var tween := label.create_tween().set_parallel()
 	tween.tween_property(label, "position:y", label.position.y - 80.0, duration)
 	tween.tween_property(label, "modulate:a", 0.0, duration).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(label.queue_free)
 
 
-func _show_result(victory: bool) -> void:
-	%ResultTitle.text = "Победа!" if victory else "Дружина пала"
-	%ResultHint.text = "" if victory else "Подсказка: прокачай героев или поменяй расстановку отряда."
-	%ResultHint.visible = not victory
+func _finish_stage(victory: bool) -> void:
+	var progress = GameState.progress
+	if victory:
+		var reward: Dictionary = progress.apply_victory(GameState.data, _stage_id)
+		%ResultTitle.text = "Победа!"
+		%ResultHint.text = "+%d серебра · +%d опыта" % [int(reward["silver"]), int(reward["experience"])]
+	else:
+		%ResultTitle.text = "Дружина пала"
+		%ResultHint.text = "Подсказка: прокачай героев или поменяй расстановку отряда."
+	GameState.save()
 	%ResultOverlay.visible = true

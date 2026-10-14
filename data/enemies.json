@@ -6,8 +6,8 @@
       "description": "Ближний бой",
       "row": "front",
       "action": "attack_front_row",
-      "hp": 1680,
-      "attack": 48,
+      "hp": 900,
+      "attack": 40,
       "attack_interval": 1.5,
       "color": "#5f7466"
     },
@@ -17,8 +17,8 @@
       "description": "Быстрый, слабый",
       "row": "front",
       "action": "attack_front_row",
-      "hp": 840,
-      "attack": 19,
+      "hp": 450,
+      "attack": 16,
       "attack_interval": 0.7,
       "color": "#8a7a66"
     },
@@ -28,10 +28,28 @@
       "description": "Дальний бой",
       "row": "back",
       "action": "attack_front_row",
-      "hp": 1080,
-      "attack": 54,
+      "hp": 600,
+      "attack": 45,
       "attack_interval": 1.7,
       "color": "#4f6a7a"
+    },
+    {
+      "id": "draugr_king",
+      "name": "Драугр-конунг",
+      "description": "Босс: много HP, раз в 6 с бьёт по всему отряду",
+      "boss": true,
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 2200,
+      "attack": 34,
+      "attack_interval": 1.6,
+      "color": "#2f4a3c",
+      "special": {
+        "name": "Гнев конунга",
+        "type": "hit_all",
+        "interval": 6.0,
+        "attack_multiplier": 2.6
+      }
     }
   ]
 }
