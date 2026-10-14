@@ -2,6 +2,7 @@
 ##   godot --headless --path . --script res://tools/balance_sim.gd
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --campaigns=40 --runs=200
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --level=12
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --until=6   (campaigns stop after stage 6, table 1 only)
 ## 1. Campaign: a player goes through the chapter from a new game. Before every fight they spend all their
 ##    silver; when they lose a stage they replay the previous one (for the replay reward) and try again.
 ##    Two players: "разумный" buys the level-up with the best gain in squad power per silver,
@@ -27,12 +28,14 @@ var data
 var _hung := false
 var _seed := 1
 var _charges := {}  ## hero id -> [sum of charge times, count]
+var _last_stage := 0  ## campaigns stop after this stage
 
 
 func _initialize() -> void:
 	var runs := 100
 	var campaigns := 20
 	var forced_level := 0
+	var until := 0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			runs = int(arg.get_slice("=", 1))
@@ -40,7 +43,10 @@ func _initialize() -> void:
 			campaigns = int(arg.get_slice("=", 1))
 		elif arg.begins_with("--level="):
 			forced_level = int(arg.get_slice("=", 1))
+		elif arg.begins_with("--until="):
+			until = int(arg.get_slice("=", 1))
 	data = GameData.load_all()
+	_last_stage = until if until > 0 else data.stage_count()
 
 	# 1. Campaigns.
 	var results := {}
@@ -54,9 +60,9 @@ func _initialize() -> void:
 	print("1. Прохождение главы с нуля (%d прохождений на каждого игрока, ульты — «Авто»)" % campaigns)
 	print("Повторы = сколько раз пришлось перепройти предыдущий этап, чтобы взять этот.")
 	print("")
-	print("Этап | разумный: повторы ср./макс. | уровни | улучшений за 1-ю победу | неидеальный: повторы ср./макс. | застряли")
+	print("Этап | разумный: повторы ср./макс. | уровни | улучшений за 1-ю победу, ср. (мин–макс) | неидеальный: повторы ср./макс. | застряли")
 	print("-----+-----------------------------+--------+-------------------------+---------------------------------+---------")
-	for stage in range(1, data.stage_count() + 1):
+	for stage in range(1, _last_stage + 1):
 		var sensible := _stage_summary(results["sensible"], stage)
 		var uneven := _stage_summary(results["uneven"], stage)
 		print("%4d | %21s | %6s | %23s | %31s | %7s" % [
@@ -66,6 +72,9 @@ func _initialize() -> void:
 		var totals := _totals(results[policy])
 		print("Всего (%s): боёв %s, время боёв %s мин, дошли до конца %d%%" % [
 			POLICIES[policy], totals["fights"], totals["minutes"], totals["finished_share"]])
+	if until > 0:
+		quit()
+		return
 
 	# 2. Win rates per stage.
 	print("")
@@ -117,7 +126,7 @@ func _campaign(policy: String) -> Dictionary:
 	var stages := []
 	var fights := 0
 	var battle_time := 0.0
-	for stage in range(1, data.stage_count() + 1):
+	for stage in range(1, _last_stage + 1):
 		var replays := 0
 		var record := {"stage": stage, "stuck": false}
 		while true:
@@ -127,8 +136,10 @@ func _campaign(policy: String) -> Dictionary:
 			battle_time += fight["time"]
 			if fight["victory"]:
 				record["levels"] = progress.hero_levels.duplicate()
-				record["upgrades"] = _upgrades_bought_by(progress, data.get_stage(stage)["reward"]["silver"])
-				progress.apply_victory(data, stage)
+				var middle_level := _middle_squad_level(progress)
+				# Count with the silver actually paid (jarl bonus included), at the levels before the reward.
+				var paid: Dictionary = progress.apply_victory(data, stage)
+				record["upgrades"] = _upgrades_bought_by(middle_level, int(paid["silver"]))
 				break
 			if replays >= STUCK_AFTER_REPLAYS:
 				record["stuck"] = true
@@ -193,11 +204,14 @@ func _lowest_level_hero(progress) -> String:
 	return lowest
 
 
-## How many level-ups in a row of the squad's middle-level hero this much silver buys.
-func _upgrades_bought_by(progress, silver: int) -> int:
+func _middle_squad_level(progress) -> int:
 	var levels: Array = progress.squad_ids().map(func(hero_id): return progress.level_of(hero_id))
 	levels.sort()
-	var level: int = levels[levels.size() / 2]
+	return levels[levels.size() / 2]
+
+
+## How many level-ups in a row, starting at `level`, this much silver buys.
+func _upgrades_bought_by(level: int, silver: int) -> int:
 	var count := 0
 	while level < data.max_level() and silver >= data.level_up_cost(level):
 		silver -= data.level_up_cost(level)
@@ -250,8 +264,15 @@ func _stage_summary(campaigns: Array, stage: int) -> Dictionary:
 	return {
 		"replays": replays, "stuck_share": roundi(100.0 * stuck / maxi(1, campaigns.size())),
 		"reached": reached, "levels": _levels_text_of(levels),
-		"upgrades": "%d–%d" % [upgrades.min(), upgrades.max()] if not upgrades.is_empty() else "—",
+		"upgrades": "%.1f (%d–%d)" % [_average(upgrades), upgrades.min(), upgrades.max()] if not upgrades.is_empty() else "—",
 	}
+
+
+func _average(values: Array) -> float:
+	var total := 0.0
+	for value in values:
+		total += value
+	return total / maxi(1, values.size())
 
 
 func _replays_text(summary: Dictionary) -> String:
@@ -272,7 +293,7 @@ func _totals(campaigns: Array) -> Dictionary:
 		fights += campaign["fights"]
 		seconds += campaign["battle_time"]
 		var last: Dictionary = campaign["stages"].back()
-		if last["stage"] == data.stage_count() and not last["stuck"]:
+		if last["stage"] == _last_stage and not last["stuck"]:
 			finished += 1
 	return {
 		"fights": "%.0f" % (float(fights) / campaigns.size()),

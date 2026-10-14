@@ -62,24 +62,24 @@
       "id": 5,
       "chapter": 1,
       "reward": {
-        "silver": 590,
+        "silver": 480,
         "experience": 100
       },
       "waves": [
         ["draugr", "wolf"],
         ["draugr", "wolf"],
-        ["draugr", "wolf", "draugr_archer"]
+        ["draugr", "wolf", "wolf"]
       ]
     },
     {
       "id": 6,
       "chapter": 1,
       "reward": {
-        "silver": 720,
+        "silver": 620,
         "experience": 120
       },
       "waves": [
-        ["draugr", "wolf"],
+        ["wolf", "wolf"],
         ["draugr", "wolf"],
         ["draugr", "wolf", "draugr_archer"]
       ]
@@ -88,38 +88,38 @@
       "id": 7,
       "chapter": 1,
       "reward": {
-        "silver": 820,
+        "silver": 600,
         "experience": 140
       },
       "waves": [
         ["draugr", "draugr", "wolf"],
         ["draugr", "draugr", "draugr_archer"],
-        ["draugr", "draugr", "wolf", "draugr_archer"]
+        ["draugr", "draugr", "wolf"]
       ]
     },
     {
       "id": 8,
       "chapter": 1,
       "reward": {
-        "silver": 900,
+        "silver": 650,
         "experience": 160
       },
       "waves": [
-        ["draugr", "draugr", "wolf"],
-        ["draugr", "draugr", "draugr_archer"],
-        ["draugr", "wolf", "draugr_archer", "draugr_archer"]
+        ["draugr", "wolf", "draugr_archer"],
+        ["draugr", "wolf", "draugr_archer"],
+        ["draugr", "draugr", "wolf"]
       ]
     },
     {
       "id": 9,
       "chapter": 1,
       "reward": {
-        "silver": 1000,
+        "silver": 760,
         "experience": 180
       },
       "waves": [
+        ["draugr", "wolf"],
         ["draugr", "draugr", "wolf"],
-        ["draugr", "draugr", "draugr_archer"],
         ["draugr", "wolf", "draugr_archer"]
       ]
     },
@@ -127,12 +127,12 @@
       "id": 10,
       "chapter": 1,
       "reward": {
-        "silver": 1100,
+        "silver": 850,
         "experience": 200
       },
       "waves": [
+        ["draugr", "draugr"],
         ["draugr", "wolf", "draugr_archer"],
-        ["draugr", "draugr", "draugr_archer"],
         ["draugr_king"]
       ]
     }

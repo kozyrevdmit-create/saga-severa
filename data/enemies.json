@@ -40,7 +40,7 @@
       "boss": true,
       "row": "front",
       "action": "attack_front_row",
-      "hp": 2200,
+      "hp": 2000,
       "attack": 34,
       "attack_interval": 1.6,
       "color": "#2f4a3c",
