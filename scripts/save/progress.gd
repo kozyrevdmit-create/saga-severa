@@ -38,6 +38,26 @@ func reset(data, now_unix: int) -> void:
 	last_seen_unix = now_unix
 
 
+## Debug panel «Открыть всех героев»: every locked hero joins like a new hero (at the weakest level,
+## into a free slot if there is one). Returns the heroes that joined.
+func unlock_all_heroes(data) -> Array[String]:
+	var joined: Array[String] = []
+	for hero in data.heroes["heroes"]:
+		if not hero_levels.has(hero["id"]):
+			_join(data, hero["id"])
+			joined.append(hero["id"])
+	return joined
+
+
+## Debug panel «Перейти к этапу N»: stages before N count as won (without rewards), N is the next battle.
+## Heroes earned by those stages join; heroes already unlocked stay.
+func jump_to_stage(data, stage_id: int) -> void:
+	cleared_stage = clampi(stage_id, 1, data.stage_count()) - 1
+	for hero_id in data.unlocked_hero_ids(cleared_stage):
+		if not hero_levels.has(hero_id):
+			_join(data, hero_id)
+
+
 # --- stages and rewards -------------------------------------------------------
 
 ## The first stage not won yet, or the last one once the chapter is done.
@@ -70,8 +90,7 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 		cleared_stage = maxi(cleared_stage, stage_id)
 		for hero_id in data.heroes_unlocked_at(stage_id):
 			if not hero_levels.has(hero_id):
-				hero_levels[hero_id] = _join_level()
-				formation_add(data, hero_id)
+				_join(data, hero_id)
 				new_heroes.append(hero_id)
 	return {"silver": silver_gain, "experience": experience_gain, "replay": replay, "new_heroes": new_heroes}
 
@@ -80,6 +99,11 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 
 ## A new hero joins at the level of the weakest hero already unlocked, so they are useful at once
 ## and a single reward does not buy them a pile of cheap low levels.
+func _join(data, hero_id: String) -> void:
+	hero_levels[hero_id] = _join_level()
+	formation_add(data, hero_id)
+
+
 func _join_level() -> int:
 	var lowest := 0
 	for hero_id in hero_levels:
@@ -196,19 +220,27 @@ func _jarl_state(data) -> Array[int]:
 
 # --- offline income -----------------------------------------------------------
 
-## Silver per minute while the game is closed: rate × last won stage, with the jarl bonus.
-func offline_income_per_minute(data) -> float:
-	var offline: Dictionary = data.balance["offline_income"]
-	return float(offline["silver_per_minute_per_stage"]) * cleared_stage * silver_multiplier(data)
-
-
-## Silver earned since the game was last open, for at most max_hours.
-func offline_income(data, now_unix: int) -> int:
-	if last_seen_unix <= 0 or cleared_stage == 0:
+## Silver for a full absence (max_hours): full_time_in_first_wins × the first-win silver of the current stage
+## (the next one to win, or the last one once the chapter is done), with the jarl bonus. 0 before the first win.
+func offline_income_cap(data) -> int:
+	if cleared_stage == 0:
 		return 0
-	var max_minutes := int(float(data.balance["offline_income"]["max_hours"]) * 60.0)
+	var offline: Dictionary = data.balance["offline_income"]
+	var first_win_silver := float(data.get_stage(next_stage_id(data))["reward"]["silver"])
+	return roundi(float(offline["full_time_in_first_wins"]) * first_win_silver * silver_multiplier(data))
+
+
+func offline_max_minutes(data) -> int:
+	return int(float(data.balance["offline_income"]["max_hours"]) * 60.0)
+
+
+## Silver earned since the game was last open: the cap spread evenly over max_hours, whole minutes only.
+func offline_income(data, now_unix: int) -> int:
+	if last_seen_unix <= 0:
+		return 0
+	var max_minutes := offline_max_minutes(data)
 	var minutes := clampi((now_unix - last_seen_unix) / 60, 0, max_minutes)
-	return floori(minutes * offline_income_per_minute(data))
+	return offline_income_cap(data) * minutes / max_minutes
 
 
 ## Called when the game starts or comes back from the background: puts the income for the time away
@@ -256,13 +288,18 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.last_seen_unix = maxi(0, _to_int(saved.get("last_seen_unix"), 0))
 	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
 
-	# Unlocked heroes follow the won stages, so a version 1 save gets the heroes it has earned;
-	# a hero without a saved level joins like a new hero (at the weakest saved level).
+	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
+	# a hero without a saved level joins like a new hero (at the weakest saved level). Heroes saved with a level
+	# beyond that (opened by the debug panel, or kept after jumping back to an earlier stage) stay unlocked.
 	var levels = saved.get("hero_levels")
+	var earned: Array[String] = data.unlocked_hero_ids(progress.cleared_stage)
 	progress.hero_levels.clear()
 	var missing: Array[String] = []
-	for hero_id in data.unlocked_hero_ids(progress.cleared_stage):
+	for hero in data.heroes["heroes"]:
+		var hero_id: String = hero["id"]
 		var level := _to_int(levels.get(hero_id), 0) if levels is Dictionary else 0
+		if level <= 0 and not hero_id in earned:
+			continue
 		if level <= 0:
 			missing.append(hero_id)
 		progress.hero_levels[hero_id] = clampi(level, 1, data.max_level())
