@@ -43,6 +43,7 @@
   "balance_check": {
     "max_average_replays_per_stage": 5,
     "stuck_after_replays": 40,
+    "stall_after_seconds": 600,
     "variants": [
       { "name": "как есть", "heroes": 1.0, "rewards": 1.0 },
       { "name": "герои −10%", "heroes": 0.9, "rewards": 1.0 },

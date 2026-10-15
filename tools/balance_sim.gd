@@ -25,14 +25,14 @@ const GameData := preload("res://scripts/data/game_data.gd")
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
 const Progress := preload("res://scripts/save/progress.gd")
 
-## Stall guard of the simulation, not a game rule. A battle can stall: a lone völva against the boss heals
-## herself about as fast as he hits her and rarely attacks (found in M5.1, about 1 in 2000–4000 test fights).
-## A battle still running after this much battle time counts as a defeat and is reported as stalled.
-const STALL_SECONDS := 600.0
 const POLICY_NAMES := {"sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
 
 var data
 var _variant_failed := false  ## a sensitivity variant failed
+## A battle can stall: a lone völva against the boss heals herself about as fast as he hits her and rarely attacks
+## (found in M5.1, about 1 in 2000–4000 test fights). A battle still running after
+## balance.json → balance_check.stall_after_seconds of battle time counts as a defeat and is reported as stalled.
+var _stall_seconds := 0.0
 var _stalled := {"campaign": 0, "check": 0}  ## stalled battles: campaign fights / test fights and table 2
 var _seed := 1
 var _charges := {}  ## hero id -> [sum of charge times, count]
@@ -79,6 +79,7 @@ func _initialize() -> void:
 	if join_rule != "":
 		data.balance["new_hero"]["join_level"] = join_rule
 	_last_stage = until if until > 0 else data.stage_count()
+	_stall_seconds = float(data.balance["balance_check"]["stall_after_seconds"])
 
 	if sensitivity:
 		_print_sensitivity(campaigns)
@@ -285,7 +286,7 @@ func _write_summary(campaigns: int, path: String) -> void:
 ## «!» when a campaign fight stalled: a real player would be stuck in that battle.
 func _stalled_text(stalled: Dictionary) -> String:
 	return "затянувшихся боёв (дольше %d мин, засчитаны поражением) — в прохождениях %d%s, в пробных боях %d" % [
-		roundi(STALL_SECONDS / 60.0), int(stalled["campaign"]), " !" if int(stalled["campaign"]) > 0 else "", int(stalled["check"])]
+		roundi(_stall_seconds / 60.0), int(stalled["campaign"]), " !" if int(stalled["campaign"]) > 0 else "", int(stalled["check"])]
 
 
 # --- campaign ---------------------------------------------------------------
@@ -437,7 +438,7 @@ func _upgrades_bought_by(level: int, silver: int) -> int:
 ## Runs a test fight (or a table 2 fight) to the end; a stalled one stops as a defeat.
 func _run(battle) -> void:
 	while not battle.finished:
-		if battle.time > STALL_SECONDS:
+		if battle.time > _stall_seconds:
 			_stalled["check"] += 1
 			return
 		battle.step()
@@ -451,8 +452,8 @@ func _fight(stage: int, squad: Array, record_charges: bool) -> Dictionary:
 	for hero in battle.heroes():
 		charge_started[hero.def_id] = 0.0
 	while not battle.finished:
-		if battle.time > STALL_SECONDS:
-			push_warning("Stage %d stalled after %d s of battle time, counted as a defeat" % [stage, STALL_SECONDS])
+		if battle.time > _stall_seconds:
+			push_warning("Stage %d stalled after %d s of battle time, counted as a defeat" % [stage, _stall_seconds])
 			_stalled["campaign"] += 1
 			break
 		battle.step()
