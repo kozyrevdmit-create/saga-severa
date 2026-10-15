@@ -33,7 +33,7 @@ var _variant_failed := false  ## a sensitivity variant failed
 ## (found in M5.1, about 1 in 2000–4000 test fights). A battle still running after
 ## balance.json → balance_check.stall_after_seconds of battle time counts as a defeat and is reported as stalled.
 var _stall_seconds := 0.0
-var _stalled := {"campaign": 0, "check": 0}  ## stalled battles: campaign fights / test fights and table 2
+var _stalled := {"campaign": 0, "check": 0}  ## stalled battles: the players' fights / test fights and tables 2–3
 var _seed := 1
 var _charges := {}  ## hero id -> [sum of charge times, count]
 var _last_stage := 0  ## campaigns stop after this stage
@@ -113,8 +113,6 @@ func _initialize() -> void:
 		var totals := _totals(results[policy])
 		print("Всего (%s): боёв %s, время боёв %s мин, дошли до конца %d%%" % [
 			POLICY_NAMES[policy], totals["fights"], totals["minutes"], totals["finished_share"]])
-	var stalled_line := _stalled_text(_stalled)
-	print(stalled_line.left(1).to_upper() + stalled_line.substr(1))
 
 	print("")
 	print("Уровни героев при первой победе (медиана по прохождениям; «—» — героя ещё нет):")
@@ -131,6 +129,7 @@ func _initialize() -> void:
 			line += " | " + " ".join(hero_ids.map(func(id): return "%3s" % (str(levels[id]) if levels.has(id) else "—")))
 		print(line)
 	if until > 0:
+		_print_stalled()
 		quit()
 		return
 
@@ -164,7 +163,7 @@ func _initialize() -> void:
 					member["level"] = level
 					break
 			for run in maxi(1, runs / 10):
-				_fight(stage, squad, true)
+				_fight(stage, squad, true, "check")
 	print("")
 	print("3. Зарядка ульт (среднее время от нуля до готовности в боях разумного игрока):")
 	for hero in data.heroes["heroes"]:
@@ -184,6 +183,7 @@ func _initialize() -> void:
 		var cap: int = offline_progress.offline_income_cap(data)
 		var current: int = offline_progress.next_stage_id(data)
 		print("%15d | %12d | %5d | %.1f" % [stage, current, cap, float(cap) / float(data.get_stage(current)["reward"]["silver"])])
+	_print_stalled()
 	quit()
 
 
@@ -283,9 +283,16 @@ func _write_summary(campaigns: int, path: String) -> void:
 	file.close()
 
 
+## Printed last, so the fights of tables 2 and 3 are counted too.
+func _print_stalled() -> void:
+	var text := _stalled_text(_stalled)
+	print("")
+	print(text.left(1).to_upper() + text.substr(1))
+
+
 ## «!» when a campaign fight stalled: a real player would be stuck in that battle.
 func _stalled_text(stalled: Dictionary) -> String:
-	return "затянувшихся боёв (дольше %d мин, засчитаны поражением) — в прохождениях %d%s, в пробных боях %d" % [
+	return "затянувшихся боёв (дольше %d мин, засчитаны поражением) — в прохождениях %d%s, в пробных боях бота и таблицах 2–3 %d" % [
 		roundi(_stall_seconds / 60.0), int(stalled["campaign"]), " !" if int(stalled["campaign"]) > 0 else "", int(stalled["check"])]
 
 
@@ -444,7 +451,8 @@ func _run(battle) -> void:
 		battle.step()
 
 
-func _fight(stage: int, squad: Array, record_charges: bool) -> Dictionary:
+## `stall_key`: where a stalled fight is counted ("campaign" for the players' fights, "check" for measurements).
+func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campaign") -> Dictionary:
 	_seed += 1
 	var battle = StageBattle.from_data(data, stage, squad, _seed * 7919)
 	battle.auto_ultimates = true
@@ -454,7 +462,7 @@ func _fight(stage: int, squad: Array, record_charges: bool) -> Dictionary:
 	while not battle.finished:
 		if battle.time > _stall_seconds:
 			push_warning("Stage %d stalled after %d s of battle time, counted as a defeat" % [stage, _stall_seconds])
-			_stalled["campaign"] += 1
+			_stalled[stall_key] += 1
 			break
 		battle.step()
 		for event in battle.take_events():
