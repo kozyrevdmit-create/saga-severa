@@ -288,13 +288,18 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.last_seen_unix = maxi(0, _to_int(saved.get("last_seen_unix"), 0))
 	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
 
-	# Unlocked heroes follow the won stages, so a version 1 save gets the heroes it has earned;
-	# a hero without a saved level joins like a new hero (at the weakest saved level).
+	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
+	# a hero without a saved level joins like a new hero (at the weakest saved level). Heroes saved with a level
+	# beyond that (opened by the debug panel, or kept after jumping back to an earlier stage) stay unlocked.
 	var levels = saved.get("hero_levels")
+	var earned: Array[String] = data.unlocked_hero_ids(progress.cleared_stage)
 	progress.hero_levels.clear()
 	var missing: Array[String] = []
-	for hero_id in data.unlocked_hero_ids(progress.cleared_stage):
+	for hero in data.heroes["heroes"]:
+		var hero_id: String = hero["id"]
 		var level := _to_int(levels.get(hero_id), 0) if levels is Dictionary else 0
+		if level <= 0 and not hero_id in earned:
+			continue
 		if level <= 0:
 			missing.append(hero_id)
 		progress.hero_levels[hero_id] = clampi(level, 1, data.max_level())

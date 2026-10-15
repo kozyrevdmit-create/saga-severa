@@ -322,6 +322,19 @@ func test_progress_survives_dict_round_trip() -> void:
 	assert_eq(restored.to_dict(), progress.to_dict(), "same progress after JSON round trip")
 
 
+func test_heroes_opened_beyond_won_stages_survive_a_reload() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 1)
+	progress.unlock_all_heroes(data)
+	progress.hero_levels["hrungnir"] = 4
+	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
+	assert_eq(restored.to_dict(), progress.to_dict(), "debug-opened heroes, their levels and slots kept")
+	progress.jump_to_stage(data, 10)
+	progress.jump_to_stage(data, 2)
+	restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
+	assert_eq(restored.hero_levels.keys(), progress.hero_levels.keys(), "heroes kept after jumping back")
+
+
 func test_version_one_save_is_migrated() -> void:
 	# An M3 save: no formation, no unlocked heroes, no last-seen time.
 	var restored = Progress.from_dict({
