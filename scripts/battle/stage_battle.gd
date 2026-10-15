@@ -123,6 +123,17 @@ func step() -> void:
 	_collect_battle_events()
 
 
+## «Отступить»: the squad leaves the battle and the stage ends as a defeat ({"type": "end", "victory": false,
+## "retreat": true}). Returns false once the stage has already ended.
+func retreat() -> bool:
+	if finished:
+		return false
+	finished = true
+	victory = false
+	_events.append({"type": "end", "victory": false, "retreat": true})
+	return true
+
+
 func can_use_ultimate(unit_id: int) -> bool:
 	return not finished and battle.can_use_ultimate(unit_id)
 
@@ -136,7 +147,7 @@ func use_ultimate(unit_id: int) -> bool:
 
 
 ## Battle events plus: {"type": "wave", "index"} when the next wave arrives,
-## {"type": "end", "victory"} once for the whole stage.
+## {"type": "end", "victory"} once for the whole stage ("retreat": true added when the squad retreated).
 func take_events() -> Array[Dictionary]:
 	var events := _events
 	_events = []

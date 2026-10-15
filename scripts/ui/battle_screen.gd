@@ -1,6 +1,7 @@
 ## Battle screen: shows the stage battle (scripts/battle) and passes taps to it.
 ## The squad from the formation fights the stage picked on the chapter map; a win pays the reward
-## (less for a replay) and may bring a new hero. Progress is saved after every stage.
+## (less for a replay) and may bring a new hero; «Отступить» ends the battle as a defeat.
+## Progress is saved after every stage.
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -52,6 +53,7 @@ func _ready() -> void:
 
 	%AutoButton.toggled.connect(_on_auto_toggled)
 	%SpeedButton.pressed.connect(_on_speed_pressed)
+	%RetreatButton.pressed.connect(_battle.retreat)
 	%MenuButton.pressed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
 	%NewHeroButton.pressed.connect(_show_next_new_hero)
 	%Field.resized.connect(_layout_fighters)
@@ -81,6 +83,7 @@ func _on_speed_pressed() -> void:
 
 
 func _refresh() -> void:
+	%RetreatButton.disabled = _battle.finished
 	for unit in _battle.units:
 		_views[unit.id].refresh(unit)
 		if _cards.has(unit.id):
@@ -147,7 +150,7 @@ func _show_event(event: Dictionary) -> void:
 			_show_wave()
 			_banner("Волна %d" % (event["index"] + 1))
 		"end":
-			_finish_stage(event["victory"])
+			_finish_stage(event["victory"], event.get("retreat", false))
 
 
 ## Floating text that rises above a fighter and fades out.
@@ -191,7 +194,8 @@ func _float_away(label: Label, duration: float) -> void:
 	tween.chain().tween_callback(label.queue_free)
 
 
-func _finish_stage(victory: bool) -> void:
+## A retreat counts as a defeat; only the title and the hint's first line differ.
+func _finish_stage(victory: bool, retreat: bool) -> void:
 	var progress = GameState.progress
 	if victory:
 		var reward: Dictionary = progress.apply_victory(GameState.data, _stage_id)
@@ -201,8 +205,10 @@ func _finish_stage(victory: bool) -> void:
 			%ResultHint.text += "\nПовтор: %d%% награды" % roundi(float(GameState.data.balance["replay_reward_share"]) * 100)
 		_new_heroes = reward["new_heroes"]
 	else:
-		%ResultTitle.text = "Дружина пала"
+		%ResultTitle.text = "Дружина отступила" if retreat else "Дружина пала"
 		%ResultHint.text = "Подсказка: прокачай героев или поменяй расстановку отряда."
+		if retreat:
+			%ResultHint.text = "Бой засчитан поражением.\n" + %ResultHint.text
 	GameState.save()
 	%ResultOverlay.visible = true
 	_show_next_new_hero()

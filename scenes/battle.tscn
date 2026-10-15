@@ -37,19 +37,31 @@ theme_override_constants/margin_bottom = 32
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="TopBar" type="HBoxContainer" parent="Margin/Layout"]
-layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="StageLabel" type="Label" parent="Margin/Layout/TopBar"]
+[node name="StageLabel" type="Label" parent="Margin/Layout"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(1, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 30
 text = "Этап 1 · Волна 1"
 vertical_alignment = 1
 autowrap_mode = 3
+
+[node name="TopBar" type="HBoxContainer" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="RetreatButton" type="Button" parent="Margin/Layout/TopBar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 96)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 30
+text = "Отступить"
+
+[node name="TopBarSpacer" type="Control" parent="Margin/Layout/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
 
 [node name="AutoButton" type="Button" parent="Margin/Layout/TopBar"]
 unique_name_in_owner = true
