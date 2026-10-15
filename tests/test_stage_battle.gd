@@ -95,6 +95,23 @@ func test_defeat_in_a_wave_ends_the_stage() -> void:
 	assert_eq(stage.wave_index, 0, "never reached wave 2")
 
 
+func test_retreat_ends_the_stage_as_a_defeat() -> void:
+	var stage = StageBattle.from_data(data, 10, squad_at(1), 1)
+	stage.auto_ultimates = true
+	stage.run_to_end(3.0)
+	assert_true(not stage.finished, "the battle is still going")
+	stage.take_events()
+	assert_true(stage.retreat(), "retreated")
+	assert_true(stage.finished and not stage.victory, "stage lost")
+	assert_eq(stage.take_events(), [{"type": "end", "victory": false, "retreat": true}], "one end event, marked as a retreat")
+	var time_at_retreat: float = stage.time
+	stage.advance(5.0)
+	assert_eq(stage.time, time_at_retreat, "nothing happens after the retreat")
+	assert_true(not stage.can_use_ultimate(0) and not stage.use_ultimate(0), "no ultimates after the retreat")
+	assert_true(not stage.retreat(), "a finished stage cannot retreat again")
+	assert_true(stage.take_events().is_empty(), "no second end event")
+
+
 func test_same_seed_gives_same_stage() -> void:
 	var results := []
 	for i in 2:
