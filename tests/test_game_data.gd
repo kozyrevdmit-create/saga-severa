@@ -138,6 +138,14 @@ func test_debug_panel_settings_present() -> void:
 	assert_true(debug["add_silver"] > 0 and debug["skip_time_hours"] > 0, "debug panel amounts")
 
 
+func test_balance_check_settings_present() -> void:
+	var check: Dictionary = data.balance["balance_check"]
+	assert_true(check["max_average_replays_per_stage"] > 0 and check["stuck_after_replays"] > 0, "thresholds")
+	assert_true(check["variants"].size() > 1, "several variants")
+	for variant in check["variants"]:
+		assert_true(variant["name"] is String and variant["heroes"] > 0 and variant["rewards"] > 0, "variant %s" % str(variant))
+
+
 func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:
 	for hero in data.heroes["heroes"]:
 		var stage := int(hero["unlock_after_stage"])

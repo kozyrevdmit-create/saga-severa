@@ -27,16 +27,7 @@ const Progress := preload("res://scripts/save/progress.gd")
 ## Hang guard only, not a game rule: battles always end (enemies never heal, heroes always deal damage).
 ## A battle still running after this long means a bug, and the simulation stops with an error.
 const HANG_GUARD_SECONDS := 3600.0
-## A player who needs more replays than this for one stage counts as stuck there.
-const STUCK_AFTER_REPLAYS := 40
 const POLICY_NAMES := {"sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
-## Sensitivity variants: [name, hero HP and attack multiplier, stage silver multiplier].
-const VARIANTS := [
-	["как есть", 1.0, 1.0], ["герои −10%", 0.9, 1.0], ["герои +10%", 1.1, 1.0],
-	["награды −10%", 1.0, 0.9], ["награды +10%", 1.0, 1.1],
-]
-## Warning marks of table 5: a stage this hard, or a chapter this easy, means the balance breaks.
-const TOO_MANY_REPLAYS := 5.0
 
 var data
 var _hung := false
@@ -216,12 +207,15 @@ func _run_campaigns(campaigns: int) -> Dictionary:
 ## Each variant runs as a separate copy of this tool (in parallel, --summary=...), then the results are joined.
 func _print_sensitivity(campaigns: int) -> void:
 	var jobs := []
-	for i in VARIANTS.size():
+	var check: Dictionary = data.balance["balance_check"]
+	var variants: Array = check["variants"]
+	var too_many := float(check["max_average_replays_per_stage"])
+	for i in variants.size():
 		var path := ProjectSettings.globalize_path("user://balance_sim_variant_%d.json" % i)
 		DirAccess.remove_absolute(path)
 		var args := ["--headless", "--path", ProjectSettings.globalize_path("res://"), "--script", "res://tools/balance_sim.gd", "--",
 			"--campaigns=%d" % campaigns, "--until=%d" % _last_stage, "--score-fights=%d" % _score_fights,
-			"--heroes=%s" % VARIANTS[i][1], "--rewards=%s" % VARIANTS[i][2], "--summary=%s" % path]
+			"--heroes=%s" % variants[i]["heroes"], "--rewards=%s" % variants[i]["rewards"], "--summary=%s" % path]
 		if "power" in _policies:
 			args.append("--old-bot")
 		jobs.append({"pid": OS.create_process(OS.get_executable_path(), args), "path": path})
@@ -237,16 +231,17 @@ func _print_sensitivity(campaigns: int) -> void:
 		per_variant.append(parsed)
 		DirAccess.remove_absolute(job["path"])
 	print("5. Устойчивость баланса (%d прохождений на игрока и вариант): повторы в среднем по этапам" % campaigns)
-	print("Меняются HP и атака всех героев или серебро за все этапы. «!» — 5+ повторов на этапе или кто-то застрял.")
+	print("Меняются HP и атака всех героев или серебро за все этапы. «!» — %s+ повторов на этапе или кто-то застрял;" % _number(too_many))
+	print("«!» у суммы — глава проходится совсем без повторов. Пороги и варианты — data/balance.json → balance_check.")
 	for policy in _policies:
 		print("")
 		print("Игрок: %s" % POLICY_NAMES[policy])
-		print("Этап | " + " | ".join(VARIANTS.map(func(v): return "%12s" % v[0])))
+		print("Этап | " + " | ".join(variants.map(func(v): return "%12s" % v["name"])))
 		for stage in range(1, _last_stage + 1):
 			var cells := []
 			for results in per_variant:
 				var average: float = results[policy]["replays"][stage - 1]
-				var mark := "!" if average >= TOO_MANY_REPLAYS or results[policy]["stuck"][stage - 1] > 0 else " "
+				var mark := "!" if average >= too_many or results[policy]["stuck"][stage - 1] > 0 else " "
 				cells.append("%11.1f%s" % [average, mark])
 			print("%4d | " % stage + " | ".join(cells))
 		var replays_line := []
@@ -255,7 +250,7 @@ func _print_sensitivity(campaigns: int) -> void:
 			var total := 0.0
 			for value in results[policy]["replays"]:
 				total += value
-			replays_line.append("%12.1f" % total)
+			replays_line.append("%11.1f%s" % [total, "!" if total <= 0.0 else " "])
 			fights_line.append("%12s" % ("%s / %s мин" % [results[policy]["fights"], results[policy]["minutes"]]))
 		print("Всего повторов | " + " | ".join(replays_line))
 		print("Боёв / минут   | " + " | ".join(fights_line))
@@ -303,7 +298,7 @@ func _campaign(policy: String) -> Dictionary:
 				var paid: Dictionary = progress.apply_victory(data, stage)
 				record["upgrades"] = _upgrades_bought_by(middle_level, int(paid["silver"]))
 				break
-			if replays >= STUCK_AFTER_REPLAYS:
+			if replays >= int(data.balance["balance_check"]["stuck_after_replays"]):
 				record["stuck"] = true
 				break
 			replays += 1
@@ -568,3 +563,7 @@ func _levels_text_of(levels: Dictionary) -> String:
 	var low: int = values.min()
 	var high: int = values.max()
 	return str(low) if low == high else "%d–%d" % [low, high]
+
+
+func _number(value: float) -> String:
+	return str(int(value)) if is_equal_approx(value, roundf(value)) else str(value)

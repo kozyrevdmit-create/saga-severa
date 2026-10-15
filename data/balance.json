@@ -36,5 +36,16 @@
     "long_press_seconds": 0.8,
     "add_silver": 10000,
     "skip_time_hours": 1
+  },
+  "balance_check": {
+    "max_average_replays_per_stage": 5,
+    "stuck_after_replays": 40,
+    "variants": [
+      { "name": "как есть", "heroes": 1.0, "rewards": 1.0 },
+      { "name": "герои −10%", "heroes": 0.9, "rewards": 1.0 },
+      { "name": "герои +10%", "heroes": 1.1, "rewards": 1.0 },
+      { "name": "награды −10%", "heroes": 1.0, "rewards": 0.9 },
+      { "name": "награды +10%", "heroes": 1.0, "rewards": 1.1 }
+    ]
   }
 }
