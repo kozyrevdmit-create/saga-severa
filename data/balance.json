@@ -23,6 +23,9 @@
     "back_slots": 3
   },
   "replay_reward_share": 0.5,
+  "new_hero": {
+    "join_level": "squad_average"
+  },
   "jarl": {
     "exp_per_level": 100,
     "silver_bonus_per_level": 0.05

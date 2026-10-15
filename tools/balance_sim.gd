@@ -5,6 +5,7 @@
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --until=6   (campaigns stop after stage 6, table 1 only)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --sensitivity   (table 5 only, variants run in parallel)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --heroes=0.9 --rewards=1.1   (changed numbers)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --join=weakest   (another new_hero.join_level rule)
 ## 1. Campaign: a player goes through the chapter from a new game. Before every fight they spend all their
 ##    silver; when they lose a stage they replay the previous one (for the replay reward) and try again.
 ##    Two players: "разумный" buys, one level-up at a time, the one that raises the chance to win the stage
@@ -24,13 +25,15 @@ const GameData := preload("res://scripts/data/game_data.gd")
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
 const Progress := preload("res://scripts/save/progress.gd")
 
-## Hang guard only, not a game rule: battles always end (enemies never heal, heroes always deal damage).
-## A battle still running after this long means a bug, and the simulation stops with an error.
-const HANG_GUARD_SECONDS := 3600.0
+## Stall guard of the simulation, not a game rule. A battle can stall: a lone völva against the boss heals
+## herself about as fast as he hits her and rarely attacks (found in M5.1, about 1 in 2000–4000 test fights).
+## A battle still running after this much battle time counts as a defeat and is reported as stalled.
+const STALL_SECONDS := 600.0
 const POLICY_NAMES := {"sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
 
 var data
-var _hung := false
+var _variant_failed := false  ## a sensitivity variant failed
+var _stalled := {"campaign": 0, "check": 0}  ## stalled battles: campaign fights / test fights and table 2
 var _seed := 1
 var _charges := {}  ## hero id -> [sum of charge times, count]
 var _last_stage := 0  ## campaigns stop after this stage
@@ -48,6 +51,7 @@ func _initialize() -> void:
 	var reward_scale := 1.0
 	var sensitivity := false
 	var summary_path := ""
+	var join_rule := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			runs = int(arg.get_slice("=", 1))
@@ -69,25 +73,27 @@ func _initialize() -> void:
 			summary_path = arg.get_slice("=", 1)
 		elif arg == "--old-bot":
 			_policies.append("power")
+		elif arg.begins_with("--join="):
+			join_rule = arg.get_slice("=", 1)
 	_load_data(hero_scale, reward_scale)
+	if join_rule != "":
+		data.balance["new_hero"]["join_level"] = join_rule
 	_last_stage = until if until > 0 else data.stage_count()
 
 	if sensitivity:
 		_print_sensitivity(campaigns)
-		quit(1 if _hung else 0)
+		quit(1 if _variant_failed else 0)
 		return
 	if summary_path != "":
 		_write_summary(campaigns, summary_path)
-		quit(1 if _hung else 0)
+		quit()
 		return
 
 	# 1. Campaigns.
 	var results := _run_campaigns(campaigns)
-	if _hung:
-		quit(1)
-		return
 	if hero_scale != 1.0 or reward_scale != 1.0:
 		print("Изменённые цифры: HP и атака героев ×%.2f, серебро за этапы ×%.2f" % [hero_scale, reward_scale])
+	print("Новый герой приходит по правилу new_hero.join_level = %s" % data.balance["new_hero"]["join_level"])
 	print("1. Прохождение главы с нуля (%d прохождений на каждого игрока, ульты — «Авто»)" % campaigns)
 	print("Повторы = сколько раз пришлось перепройти предыдущий этап, чтобы взять этот.")
 	print("")
@@ -106,6 +112,8 @@ func _initialize() -> void:
 		var totals := _totals(results[policy])
 		print("Всего (%s): боёв %s, время боёв %s мин, дошли до конца %d%%" % [
 			POLICY_NAMES[policy], totals["fights"], totals["minutes"], totals["finished_share"]])
+	var stalled_line := _stalled_text(_stalled)
+	print(stalled_line.left(1).to_upper() + stalled_line.substr(1))
 
 	print("")
 	print("Уровни героев при первой победе (медиана по прохождениям; «—» — героя ещё нет):")
@@ -140,9 +148,6 @@ func _initialize() -> void:
 		var leveled := _win_rate(stage, squad_leveled, true, runs)
 		var no_ults := _win_rate(stage, squad_leveled, false, runs)
 		print("%4d | %10d%% | %23s | %4d%% | %14d%%" % [stage, base, _levels_text(squad_leveled), leveled, no_ults])
-		if _hung:
-			quit(1)
-			return
 
 	# 3. Ultimate charge times. Heroes that never fought in the campaigns (e.g. waiting outside a full squad)
 	# are measured by swapping them in for the squad hero of the same class.
@@ -197,8 +202,6 @@ func _run_campaigns(campaigns: int) -> Dictionary:
 		results[policy] = []
 		for i in campaigns:
 			results[policy].append(_campaign(policy))
-			if _hung:
-				return results
 	return results
 
 
@@ -218,6 +221,7 @@ func _print_sensitivity(campaigns: int) -> void:
 			"--heroes=%s" % variants[i]["heroes"], "--rewards=%s" % variants[i]["rewards"], "--summary=%s" % path]
 		if "power" in _policies:
 			args.append("--old-bot")
+		args.append("--join=%s" % data.balance["new_hero"]["join_level"])
 		jobs.append({"pid": OS.create_process(OS.get_executable_path(), args), "path": path})
 	var per_variant := []
 	for job in jobs:
@@ -226,7 +230,7 @@ func _print_sensitivity(campaigns: int) -> void:
 		var parsed = JSON.parse_string(FileAccess.get_file_as_string(job["path"])) if FileAccess.file_exists(job["path"]) else null
 		if not parsed is Dictionary:
 			push_error("A sensitivity variant failed: no results in %s" % job["path"])
-			_hung = true
+			_variant_failed = true
 			return
 		per_variant.append(parsed)
 		DirAccess.remove_absolute(job["path"])
@@ -254,13 +258,14 @@ func _print_sensitivity(campaigns: int) -> void:
 			fights_line.append("%12s" % ("%s / %s мин" % [results[policy]["fights"], results[policy]["minutes"]]))
 		print("Всего повторов | " + " | ".join(replays_line))
 		print("Боёв / минут   | " + " | ".join(fights_line))
+	print("")
+	for i in variants.size():
+		print("%s: %s" % [variants[i]["name"], _stalled_text(per_variant[i]["stalled"])])
 
 
 ## A sensitivity variant: campaigns only, the per-stage averages written as JSON for _print_sensitivity.
 func _write_summary(campaigns: int, path: String) -> void:
 	var results := _run_campaigns(campaigns)
-	if _hung:
-		return
 	var summary := {}
 	for policy in _policies:
 		var replays := []
@@ -271,9 +276,16 @@ func _write_summary(campaigns: int, path: String) -> void:
 			stuck.append(stage_summary["stuck_share"])
 		var totals := _totals(results[policy])
 		summary[policy] = {"replays": replays, "stuck": stuck, "fights": totals["fights"], "minutes": totals["minutes"]}
+	summary["stalled"] = _stalled
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	file.store_string(JSON.stringify(summary))
 	file.close()
+
+
+## «!» when a campaign fight stalled: a real player would be stuck in that battle.
+func _stalled_text(stalled: Dictionary) -> String:
+	return "затянувшихся боёв (дольше %d мин, засчитаны поражением) — в прохождениях %d%s, в пробных боях %d" % [
+		roundi(STALL_SECONDS / 60.0), int(stalled["campaign"]), " !" if int(stalled["campaign"]) > 0 else "", int(stalled["check"])]
 
 
 # --- campaign ---------------------------------------------------------------
@@ -422,11 +434,11 @@ func _upgrades_bought_by(level: int, silver: int) -> int:
 	return count
 
 
+## Runs a test fight (or a table 2 fight) to the end; a stalled one stops as a defeat.
 func _run(battle) -> void:
 	while not battle.finished:
-		if battle.time > HANG_GUARD_SECONDS:
-			push_error("Stage %d did not end after %d s of battle time: a bug in the battle rules" % [battle.stage_id, HANG_GUARD_SECONDS])
-			_hung = true
+		if battle.time > STALL_SECONDS:
+			_stalled["check"] += 1
 			return
 		battle.step()
 
@@ -439,9 +451,9 @@ func _fight(stage: int, squad: Array, record_charges: bool) -> Dictionary:
 	for hero in battle.heroes():
 		charge_started[hero.def_id] = 0.0
 	while not battle.finished:
-		if battle.time > HANG_GUARD_SECONDS:
-			push_error("Stage %d did not end after %d s of battle time: a bug in the battle rules" % [stage, HANG_GUARD_SECONDS])
-			_hung = true
+		if battle.time > STALL_SECONDS:
+			push_warning("Stage %d stalled after %d s of battle time, counted as a defeat" % [stage, STALL_SECONDS])
+			_stalled["campaign"] += 1
 			break
 		battle.step()
 		for event in battle.take_events():
@@ -542,8 +554,6 @@ func _win_rate(stage: int, squad: Array, auto: bool, runs: int) -> int:
 		var battle = StageBattle.from_data(data, stage, squad, run * 7919 + stage)
 		battle.auto_ultimates = auto
 		_run(battle)
-		if _hung:
-			return 0
 		if battle.victory:
 			wins += 1
 	return roundi(100.0 * wins / runs)
