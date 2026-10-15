@@ -38,13 +38,14 @@ func reset(data, now_unix: int) -> void:
 	last_seen_unix = now_unix
 
 
-## Debug panel «Открыть всех героев»: every locked hero joins like a new hero (at the weakest level,
+## Debug panel «Открыть всех героев»: every locked hero joins like a new hero (at the join level,
 ## into a free slot if there is one). Returns the heroes that joined.
 func unlock_all_heroes(data) -> Array[String]:
 	var joined: Array[String] = []
+	var level := _join_level(data)
 	for hero in data.heroes["heroes"]:
 		if not hero_levels.has(hero["id"]):
-			_join(data, hero["id"])
+			_join(data, hero["id"], level)
 			joined.append(hero["id"])
 	return joined
 
@@ -53,9 +54,10 @@ func unlock_all_heroes(data) -> Array[String]:
 ## Heroes earned by those stages join; heroes already unlocked stay.
 func jump_to_stage(data, stage_id: int) -> void:
 	cleared_stage = clampi(stage_id, 1, data.stage_count()) - 1
+	var level := _join_level(data)
 	for hero_id in data.unlocked_hero_ids(cleared_stage):
 		if not hero_levels.has(hero_id):
-			_join(data, hero_id)
+			_join(data, hero_id, level)
 
 
 # --- stages and rewards -------------------------------------------------------
@@ -75,7 +77,7 @@ func is_replay(stage_id: int) -> bool:
 
 
 ## Pays the reward (a replay pays replay_reward_share of it; the jarl bonus adds silver),
-## marks the stage won and unlocks heroes (at the level of the weakest hero already in the warband).
+## marks the stage won and unlocks heroes (at the join level, see _join_level).
 ## Returns {silver, experience, replay, new_heroes}.
 func apply_victory(data, stage_id: int) -> Dictionary:
 	var replay := is_replay(stage_id)
@@ -88,28 +90,45 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 	var new_heroes: Array[String] = []
 	if not replay:
 		cleared_stage = maxi(cleared_stage, stage_id)
+		var level := _join_level(data)
 		for hero_id in data.heroes_unlocked_at(stage_id):
 			if not hero_levels.has(hero_id):
-				_join(data, hero_id)
+				_join(data, hero_id, level)
 				new_heroes.append(hero_id)
 	return {"silver": silver_gain, "experience": experience_gain, "replay": replay, "new_heroes": new_heroes}
 
 
 # --- hero levels --------------------------------------------------------------
 
-## A new hero joins at the level of the weakest hero already unlocked, so they are useful at once
-## and a single reward does not buy them a pile of cheap low levels.
-func _join(data, hero_id: String) -> void:
-	hero_levels[hero_id] = _join_level()
+## A new hero joins at the join level, so they are useful at once and a single reward does not buy them
+## a pile of cheap low levels. Heroes joining together all get the level counted before the first of them joined.
+func _join(data, hero_id: String, level: int) -> void:
+	hero_levels[hero_id] = level
 	formation_add(data, hero_id)
 
 
-func _join_level() -> int:
-	var lowest := 0
-	for hero_id in hero_levels:
-		if lowest == 0 or level_of(hero_id) < lowest:
-			lowest = level_of(hero_id)
-	return maxi(1, lowest)
+## The level a new hero joins at, by balance.json → new_hero.join_level:
+## "squad_average" — the average level of the heroes in the squad, rounded down (a hero left on the bench
+## does not pull newcomers down); "weakest" — the level of the weakest unlocked hero (the rule before M5.1).
+## Heroes in `ignored` do not count (heroes of an old save that have no saved level yet).
+func _join_level(data, ignored: Array[String] = []) -> int:
+	var rule: String = data.balance["new_hero"]["join_level"]
+	var counted: Array = hero_levels.keys().filter(func(id): return not id in ignored)
+	match rule:
+		"squad_average":
+			var in_squad: Array = counted.filter(func(id): return is_in_formation(id))
+			if not in_squad.is_empty():
+				counted = in_squad
+			if counted.is_empty():
+				return 1
+			var total := 0
+			for hero_id in counted:
+				total += level_of(hero_id)
+			return maxi(1, total / counted.size())
+		"weakest":
+			return maxi(1, counted.map(func(id): return level_of(id)).min() if not counted.is_empty() else 1)
+	push_error("Unknown balance.json → new_hero.join_level: %s" % rule)
+	return 1
 
 
 func level_of(hero_id: String) -> int:
@@ -289,8 +308,9 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
 
 	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
-	# a hero without a saved level joins like a new hero (at the weakest saved level). Heroes saved with a level
-	# beyond that (opened by the debug panel, or kept after jumping back to an earlier stage) stay unlocked.
+	# a hero without a saved level joins like a new hero (at the join level counted over the heroes with a saved
+	# level, once the formation is restored). Heroes saved with a level beyond that (opened by the debug panel,
+	# or kept after jumping back to an earlier stage) stay unlocked.
 	var levels = saved.get("hero_levels")
 	var earned: Array[String] = data.unlocked_hero_ids(progress.cleared_stage)
 	progress.hero_levels.clear()
@@ -303,12 +323,6 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 		if level <= 0:
 			missing.append(hero_id)
 		progress.hero_levels[hero_id] = clampi(level, 1, data.max_level())
-	var join_level := 1
-	var saved_levels: Array = progress.hero_levels.keys().filter(func(id): return not id in missing).map(func(id): return progress.hero_levels[id])
-	if not saved_levels.is_empty():
-		join_level = saved_levels.min()
-	for hero_id in missing:
-		progress.hero_levels[hero_id] = join_level
 
 	progress._reset_formation(data)
 	var saved_formation = saved.get("formation")
@@ -320,6 +334,9 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	if progress.squad_ids().is_empty():
 		for hero_id in progress.hero_levels:
 			progress.formation_add(data, hero_id)
+	var join_level: int = progress._join_level(data, missing)
+	for hero_id in missing:
+		progress.hero_levels[hero_id] = join_level
 	return progress
 
 

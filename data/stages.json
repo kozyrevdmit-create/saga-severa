@@ -49,7 +49,7 @@
       "id": 4,
       "chapter": 1,
       "reward": {
-        "silver": 420,
+        "silver": 385,
         "experience": 80
       },
       "waves": [
@@ -62,7 +62,7 @@
       "id": 5,
       "chapter": 1,
       "reward": {
-        "silver": 480,
+        "silver": 455,
         "experience": 100
       },
       "waves": [
@@ -75,7 +75,7 @@
       "id": 6,
       "chapter": 1,
       "reward": {
-        "silver": 560,
+        "silver": 500,
         "experience": 120
       },
       "waves": [
@@ -88,7 +88,7 @@
       "id": 7,
       "chapter": 1,
       "reward": {
-        "silver": 580,
+        "silver": 510,
         "experience": 140
       },
       "waves": [
@@ -101,7 +101,7 @@
       "id": 8,
       "chapter": 1,
       "reward": {
-        "silver": 720,
+        "silver": 685,
         "experience": 160
       },
       "waves": [
@@ -114,7 +114,7 @@
       "id": 9,
       "chapter": 1,
       "reward": {
-        "silver": 760,
+        "silver": 720,
         "experience": 180
       },
       "waves": [

@@ -103,13 +103,54 @@ func test_heroes_join_after_their_stages() -> void:
 			continue
 		win_stages(progress, unlock_stage - 1)
 		assert_true(not progress.hero_levels.has(hero["id"]), "%s locked before stage %d" % [hero["id"], unlock_stage])
-		progress.hero_levels[progress.hero_levels.keys()[0]] = 7
+		# One hero at 6, the rest at 9: a squad of 3 → 8.0, of 4 → 8.25, of 5 → 8.4; rounded down, always 8.
+		progress.hero_levels[progress.hero_levels.keys()[0]] = 6
 		for other in progress.hero_levels.keys().slice(1):
 			progress.hero_levels[other] = 9
 		var paid: Dictionary = progress.apply_victory(data, unlock_stage)
 		assert_eq(paid["new_heroes"], [hero["id"]], "%s announced after stage %d" % [hero["id"], unlock_stage])
-		assert_eq(progress.level_of(hero["id"]), 7, "%s joins at the weakest hero's level" % hero["id"])
+		assert_eq(progress.level_of(hero["id"]), 8, "%s joins at the squad's average level, rounded down" % hero["id"])
 		assert_true(progress.apply_victory(data, unlock_stage)["new_heroes"].is_empty(), "a replay unlocks nobody")
+
+
+func test_join_level_is_the_squad_average_rounded_down() -> void:
+	assert_eq(data.balance["new_hero"]["join_level"], "squad_average", "rule in balance.json")
+	var progress = Progress.new_game(data)
+	win_stages(progress, 2)
+	progress.hero_levels["torvald"] = 10
+	progress.hero_levels["sigrid"] = 7
+	progress.hero_levels["eyvind"] = 1
+	progress.apply_victory(data, 3)
+	assert_eq(progress.level_of("skadi"), 6, "(10 + 7 + 1) / 3 = 6")
+	progress.hero_levels["skadi"] = 5
+	win_stages(progress, 5)
+	progress.apply_victory(data, 6)
+	assert_eq(progress.level_of("angrboda"), 5, "(10 + 7 + 1 + 5) / 4 = 5.75 → 5")
+
+
+func test_a_hero_on_the_bench_does_not_pull_newcomers_down() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 2)
+	progress.hero_levels["torvald"] = 8
+	progress.hero_levels["sigrid"] = 6
+	progress.hero_levels["eyvind"] = 1
+	progress.formation_remove("eyvind")
+	progress.apply_victory(data, 3)
+	assert_eq(progress.level_of("skadi"), 7, "only the squad counts: (8 + 6) / 2")
+
+
+func test_weakest_rule_from_balance_json() -> void:
+	var weakest_data = GameData.load_all()
+	weakest_data.balance["new_hero"]["join_level"] = "weakest"
+	var progress = Progress.new_game(weakest_data)
+	for stage in range(1, 3):
+		progress.apply_victory(weakest_data, stage)
+	progress.hero_levels["torvald"] = 8
+	progress.hero_levels["sigrid"] = 6
+	progress.hero_levels["eyvind"] = 2
+	progress.formation_remove("eyvind")
+	progress.apply_victory(weakest_data, 3)
+	assert_eq(progress.level_of("skadi"), 2, "the weakest unlocked hero, bench included")
 
 
 func test_new_heroes_take_free_slots_and_wait_when_full() -> void:
@@ -279,16 +320,19 @@ func test_reset_returns_everything_to_a_new_game() -> void:
 	assert_eq(progress.collect_offline_income(data, 2000000 + 8 * 3600), 0, "no offline income until the first win again")
 
 
-func test_unlock_all_heroes_joins_the_locked_ones_at_the_weakest_level() -> void:
+func test_unlock_all_heroes_joins_the_locked_ones_at_the_squad_average() -> void:
 	var progress = Progress.new_game(data)
 	win_stages(progress, 3)
-	progress.hero_levels["torvald"] = 5
+	progress.hero_levels["torvald"] = 9
+	progress.hero_levels["sigrid"] = 6
+	progress.hero_levels["eyvind"] = 4
+	progress.hero_levels["skadi"] = 4
 	var locked: Array = data.heroes["heroes"].map(func(h): return h["id"]).filter(func(id): return not progress.hero_levels.has(id))
 	var joined: Array[String] = progress.unlock_all_heroes(data)
 	assert_eq(Array(joined), locked, "the locked heroes joined, in data order")
 	assert_eq(progress.hero_levels.size(), data.heroes["heroes"].size(), "every hero unlocked")
 	for hero_id in joined:
-		assert_eq(progress.level_of(hero_id), 1, "%s joins at the weakest level" % hero_id)
+		assert_eq(progress.level_of(hero_id), 5, "%s joins at the squad average counted before the first newcomer: 23 / 4 → 5" % hero_id)
 	assert_eq(progress.squad_ids().size(), data.slot_count(), "free slots filled")
 	assert_true(progress.unlock_all_heroes(data).is_empty(), "nothing left to unlock")
 
@@ -344,7 +388,8 @@ func test_version_one_save_is_migrated() -> void:
 	assert_eq(restored.silver, 500, "silver kept")
 	assert_eq(restored.level_of("torvald"), 9, "levels kept")
 	assert_eq(restored.hero_levels.keys(), data.unlocked_hero_ids(8), "heroes earned by stage 8 unlocked")
-	assert_eq(restored.level_of("skadi"), 7, "a hero earned before the update joins at the weakest saved level")
+	assert_eq(restored.level_of("skadi"), 8, "a hero earned before the update joins at the squad average of the saved levels")
+	assert_eq(restored.level_of("angrboda"), 8, "every such hero gets the same level")
 	assert_eq(restored.squad_ids().size(), 5, "squad filled")
 	assert_eq(restored.last_seen_unix, 0, "no offline income for the gap before the update")
 
@@ -359,7 +404,7 @@ func test_broken_values_fall_back_to_safe_ones() -> void:
 	assert_eq(restored.experience, 0, "negative experience clamped")
 	assert_eq(restored.cleared_stage, data.stage_count(), "cleared stage clamped")
 	assert_eq(restored.level_of("torvald"), data.max_level(), "level clamped to max")
-	assert_eq(restored.level_of("sigrid"), restored.level_of("torvald"), "broken level: joins at the weakest valid saved level")
+	assert_eq(restored.level_of("sigrid"), restored.level_of("torvald"), "broken level: joins like a new hero (the squad is Torvald alone)")
 	assert_true(not restored.hero_levels.has("unknown_hero"), "unknown hero ignored")
 	assert_eq(restored.squad_ids(), ["torvald"], "duplicates and unknown heroes dropped from the formation")
 
