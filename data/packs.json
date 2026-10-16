@@ -1,0 +1,46 @@
+{
+  "packs": [
+    {
+      "id": "wolves",
+      "name": "Волчья стая",
+      "enemies": [
+        "wolf",
+        "wolf",
+        "wolf"
+      ],
+      "icon": "wolf",
+      "unlock_after_stage": 0,
+      "map_point": {
+        "x": 0.757,
+        "y": 0.658
+      }
+    },
+    {
+      "id": "boars",
+      "name": "Кабаны",
+      "enemies": [
+        "boar",
+        "boar"
+      ],
+      "icon": "boar",
+      "unlock_after_stage": 3,
+      "map_point": {
+        "x": 0.249,
+        "y": 0.456
+      }
+    },
+    {
+      "id": "bear",
+      "name": "Медведь",
+      "enemies": [
+        "bear"
+      ],
+      "icon": "bear",
+      "unlock_after_stage": 6,
+      "map_point": {
+        "x": 0.735,
+        "y": 0.273
+      }
+    }
+  ]
+}

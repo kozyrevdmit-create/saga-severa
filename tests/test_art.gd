@@ -40,10 +40,27 @@ func test_every_hero_has_a_portrait_inside_the_picture() -> void:
 		assert_true(portrait.region.position.y < picture_rect.size.y * 0.25, "%s: the portrait is the upper part of the picture" % hero["id"])
 
 
+## The boss is half as big again (M7), the bear 1.3 times, the boar a bit smaller than a draugr-sized picture (M9).
 func test_the_boss_is_drawn_half_as_big_again() -> void:
+	var scales := {"draugr_king": 1.5, "bear": 1.3, "boar": 0.9}
 	for enemy in _data.enemies["enemies"]:
-		var expected := 1.5 if enemy.get("boss", false) else 1.0
+		var expected: float = scales.get(enemy["id"], 1.0)
 		assert_near(float(enemy["art_scale"]), expected, 0.001, "%s: art_scale" % enemy["id"])
+
+
+func test_pack_beasts_have_a_head_portrait_inside_the_picture() -> void:
+	for pack in _data.packs["packs"]:
+		var portrait: AtlasTexture = Art.enemy_portrait(_data.get_enemy(pack["icon"]))
+		var picture_rect := Rect2(Vector2.ZERO, portrait.atlas.get_size())
+		assert_true(picture_rect.encloses(portrait.region), "%s: the portrait is inside the picture" % pack["icon"])
+		assert_near(portrait.region.size.x, portrait.region.size.y, 0.01, "%s: the portrait is square" % pack["icon"])
+
+
+func test_the_chapter_map_is_a_tall_picture() -> void:
+	var picture: Texture2D = Art.map_picture(_data.get_chapter(1)["map"])
+	assert_true(picture != null, "the map picture loads")
+	if picture != null:
+		assert_eq(picture.get_size(), Vector2(1024, 1536), "the map keeps its full 1024×1536 size (it fills the phone's height)")
 
 
 func test_five_heroes_and_four_enemies_fit_the_phone_field() -> void:

@@ -497,3 +497,27 @@ func test_same_seed_and_taps_give_same_battle() -> void:
 		battle.run_to_end(600.0)
 		results.append({"events": battle.take_events(), "time": battle.time})
 	assert_eq(results[1], results[0], "two runs with the same seed and the same tap")
+
+
+# --- boar's charge (M9) -----------------------------------------------------------
+
+func test_first_strike_hits_harder_once() -> void:
+	var boar = BattleUnit.from_enemy(data.get_enemy("boar"))
+	var hero = make_unit(HEROES, "front", 100000, 1, 1000.0)
+	var battle = make_battle([hero], [boar])
+	var multiplier := float(data.get_enemy("boar")["first_strike"]["attack_multiplier"])
+	var hits := []
+	var specials := []
+	while hits.size() < 2:
+		battle.step()
+		for event in battle.take_events():
+			if event["type"] == "damage" and event["source"] == boar.id:
+				hits.append(event)
+			elif event["type"] == "special":
+				specials.append(event)
+	assert_eq(hits[0]["amount"], roundi(boar.base_attack * multiplier), "the first attack is the charge")
+	assert_eq(hits[0]["kind"], "special", "the charge shows as a special hit")
+	assert_eq(specials.size(), 1, "one «Рывок» announcement")
+	assert_eq(specials[0]["name"], data.get_enemy("boar")["first_strike"]["name"], "named from enemies.json")
+	assert_eq(hits[1]["amount"], roundi(boar.base_attack), "the next attack is a normal one")
+	assert_eq(hits[1]["kind"], "attack", "a normal attack")

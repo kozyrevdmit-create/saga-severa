@@ -1,4 +1,4 @@
-## Loads game content (heroes, enemies, stages, balance, visual) from JSON files in res://data/.
+## Loads game content (heroes, enemies, stages, beast packs, balance, visual) from JSON files in res://data/.
 ## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback.
 extends RefCounted
 
@@ -6,7 +6,8 @@ const DATA_DIR := "res://data/"
 
 var heroes: Dictionary  ## heroes.json: classes, clans, heroes
 var enemies: Dictionary  ## enemies.json
-var stages: Dictionary  ## stages.json
+var stages: Dictionary  ## stages.json: chapters (with their map picture), stages (with their point on the map)
+var packs: Dictionary  ## packs.json: beast packs on the chapter map (enemies, unlock, point on the map)
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
 
@@ -16,6 +17,7 @@ static func load_all() -> RefCounted:
 	data.heroes = load_json("heroes.json")
 	data.enemies = load_json("enemies.json")
 	data.stages = load_json("stages.json")
+	data.packs = load_json("packs.json")
 	data.balance = load_json("balance.json")
 	data.visual = load_json("visual.json")
 	return data
@@ -59,6 +61,27 @@ func get_stage(stage_id: int) -> Dictionary:
 			return stage
 	push_error("Unknown stage: %d" % stage_id)
 	return {}
+
+
+func get_pack(pack_id: String) -> Dictionary:
+	for pack in packs.get("packs", []):
+		if pack["id"] == pack_id:
+			return pack
+	push_error("Unknown beast pack: %s" % pack_id)
+	return {}
+
+
+## Beast pack ids in data order.
+func pack_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for pack in packs.get("packs", []):
+		ids.append(pack["id"])
+	return ids
+
+
+## Seconds before a beaten pack comes back (balance.json → beast_packs.respawn_hours).
+func pack_respawn_seconds() -> int:
+	return roundi(float(balance["beast_packs"]["respawn_hours"]) * 3600.0)
 
 
 func stage_count() -> int:

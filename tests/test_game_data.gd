@@ -85,7 +85,7 @@ func test_three_enemy_types_and_the_boss() -> void:
 		assert_true(enemy["action"] in KNOWN_ACTIONS, "%s action" % enemy["id"])
 		assert_true(enemy["hp"] > 0 and enemy["attack"] > 0 and enemy["attack_interval"] > 0, "%s stats positive" % enemy["id"])
 		assert_true(Color.html_is_valid(enemy["color"]), "%s color" % enemy["id"])
-	assert_eq(regular, ["draugr", "wolf", "draugr_archer"], "regular enemy ids")
+	assert_eq(regular, ["draugr", "wolf", "draugr_archer", "boar", "bear"], "regular enemy ids (boar and bear: beast packs, M9)")
 	assert_eq(bosses, ["draugr_king"], "boss ids")
 	var special: Dictionary = data.get_enemy("draugr_king")["special"]
 	assert_eq(special["type"], "hit_all", "boss strikes the whole squad")
@@ -191,3 +191,52 @@ func test_hit_feedback_is_short_and_spaced() -> void:
 	assert_near(float(visual["hit_shake"]["seconds"]), 0.15, 0.05, "the shake is short")
 	assert_true(float(visual["hit_min_gap_seconds"]) > maxf(flash_seconds, float(visual["hit_shake"]["seconds"])),
 			"the next flash of one fighter waits until the last one is over")
+
+
+# --- chapter map and beast packs (M9) -------------------------------------------
+
+func test_every_stage_has_a_point_on_the_map_from_the_bottom_up() -> void:
+	var chapter: Dictionary = data.get_chapter(1)
+	assert_true(ResourceLoader.exists("res://assets/art/maps/%s.png" % chapter.get("map", "")), "chapter 1 has a map picture")
+	var previous_y := 1.0
+	for stage in data.stages["stages"]:
+		var point: Dictionary = stage["map_point"]
+		var where := "stage %d" % int(stage["id"])
+		assert_true(point["x"] > 0.0 and point["x"] < 1.0 and point["y"] > 0.0 and point["y"] < 1.0, "%s: point inside the map" % where)
+		assert_true(point["label"] in ["left", "right"], "%s: caption side" % where)
+		assert_true(float(point["y"]) < previous_y, "%s: higher on the map than the stage before" % where)
+		previous_y = float(point["y"])
+
+
+func test_three_beast_packs() -> void:
+	assert_eq(data.pack_ids(), ["wolves", "boars", "bear"], "pack ids")
+	var unlocks: Array = data.packs["packs"].map(func(pack): return int(pack["unlock_after_stage"]))
+	assert_eq(unlocks, [0, 3, 6], "wolves from the start, boars after stage 3, the bear after stage 6")
+	assert_eq(data.get_pack("wolves")["enemies"].all(func(id): return id == "wolf"), true, "the wolf pack is wolves")
+	assert_eq(data.get_pack("boars")["enemies"].all(func(id): return id == "boar"), true, "the boar pack is boars")
+	assert_eq(data.get_pack("bear")["enemies"], ["bear"], "the bear is alone")
+	for pack in data.packs["packs"]:
+		var who: String = pack["id"]
+		assert_true(not str(pack["name"]).is_empty(), "%s has a name" % who)
+		assert_true(pack["enemies"].size() >= 1 and pack["enemies"].size() <= 3, "%s: one wave that fits the enemy front row" % who)
+		for enemy_id in pack["enemies"]:
+			assert_eq(data.get_enemy(enemy_id)["row"], "front", "%s: %s stands in the front row" % [who, enemy_id])
+		assert_true(data.get_enemy(pack["icon"]).has("portrait"), "%s: the icon beast has a portrait" % who)
+		var point: Dictionary = pack["map_point"]
+		assert_true(point["x"] > 0.0 and point["x"] < 1.0 and point["y"] > 0.0 and point["y"] < 1.0, "%s: point inside the map" % who)
+	var packs: Dictionary = data.balance["beast_packs"]
+	assert_eq(data.pack_respawn_seconds(), roundi(float(packs["respawn_hours"]) * 3600.0), "respawn time from balance.json")
+	assert_true(float(packs["reward_share_of_first_win"]) > 0.0 and float(packs["reward_share_of_first_win"]) < 1.0,
+			"a pack pays less than a first win")
+
+
+func test_boar_and_bear() -> void:
+	var boar: Dictionary = data.get_enemy("boar")
+	var bear: Dictionary = data.get_enemy("bear")
+	var draugr: Dictionary = data.get_enemy("draugr")
+	assert_true(boar["attack_interval"] < draugr["attack_interval"], "the boar is fast")
+	assert_true(boar["hp"] < draugr["hp"] and boar["hp"] > data.get_enemy("wolf")["hp"], "the boar has medium HP")
+	assert_true(float(boar["first_strike"]["attack_multiplier"]) > 1.0, "the boar's first strike (charge) is strong")
+	assert_true(bear["hp"] > draugr["hp"] * 2, "the bear has a lot of HP")
+	assert_true(bear["attack_interval"] > draugr["attack_interval"], "the bear is slow")
+	assert_true(bear["attack"] > draugr["attack"] * 1.5, "the bear hits hard")

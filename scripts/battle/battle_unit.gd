@@ -23,6 +23,8 @@ var ultimate: Dictionary = {}  ## empty for enemies
 var passive: Dictionary = {}
 var special: Dictionary = {}  ## periodic ability (boss), empty for most units
 var special_timer := 0.0
+var first_strike: Dictionary = {}  ## the first attack hits harder (the boar's charge), empty for most units
+var first_strike_used := false
 var energy := 0
 
 var buffs: Array[Dictionary] = []  ## {stat, multiplier, remaining, source}
@@ -65,6 +67,7 @@ static func from_enemy(enemy: Dictionary, power_multiplier := 1.0) -> RefCounted
 	unit.attack_interval = float(enemy["attack_interval"])
 	unit.action = enemy["action"]
 	unit.special = enemy.get("special", {})
+	unit.first_strike = enemy.get("first_strike", {})
 	return unit
 
 
@@ -83,6 +86,11 @@ func has_ultimate() -> bool:
 ## Energy needed to use the ultimate (heroes.json ultimate.energy_cost, per hero).
 func ultimate_cost() -> int:
 	return int(ultimate["energy_cost"])
+
+
+## The first attack is still the strong one (enemies.json first_strike).
+func has_first_strike() -> bool:
+	return not first_strike.is_empty() and not first_strike_used
 
 
 func has_special() -> bool:

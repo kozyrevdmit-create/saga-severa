@@ -158,10 +158,17 @@ func _perform_action(unit) -> void:
 			push_error("Unknown action: %s" % unit.action)
 
 
+## A unit with a first strike (the boar's charge) makes its first attack attack_multiplier times stronger:
+## a "special" event with the strike's name, then the damage of kind "special".
 func _attack(unit, target) -> void:
 	if target == null:
 		return
-	_deal_damage(unit, target, 1.0, "attack")
+	if unit.has_first_strike():
+		unit.first_strike_used = true
+		_events.append({"type": "special", "unit": unit.id, "name": unit.first_strike["name"]})
+		_deal_damage(unit, target, float(unit.first_strike["attack_multiplier"]), "special")
+	else:
+		_deal_damage(unit, target, 1.0, "attack")
 	_gain_energy(unit, int(_energy["per_attack"]))
 
 

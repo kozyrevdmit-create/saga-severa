@@ -9,6 +9,8 @@
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --recommend   (recommended power per stage only)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --uneven   (add the "неидеальный" player of M5)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --players=human   (only these players: human, sensible, uneven, power)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --packs   (beast packs only, table 7)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --packs --visit-fights=2,4,6 --pack-share=0.5
 ## 1. Campaign: a player goes through the chapter from a new game. Before every fight they spend all their
 ##    silver; when they lose a stage they replay the previous one (for the replay reward) and try again.
 ##    Two players: "человек" (M6, like a real first-time player) spreads silver evenly over all heroes
@@ -28,6 +30,11 @@
 ## 5. (--sensitivity) The campaign again with all heroes' HP and attack and all stage silver rewards at −10% and +10%.
 ## 6. (--recommend) «Рекомендуемая сила» per stage: the squad power at which the human player wins
 ##    simulation.recommended_power_win_share of the fights (for stages.json → recommended_power).
+## 7. (--packs) Beast packs (M9). Tables 1–5 leave the packs out: the worst case, a player who never fights them.
+##    Here the human player comes back every respawn time (balance.json → beast_packs.respawn_hours) and first beats
+##    every pack on the map, then fights stages as in table 1 (an attempt at the next stage, a replay of the previous
+##    one after a defeat, …) until the visit's stage fights (--visit-fights, several lengths) are used up.
+##    Prints the replays per stage with and without packs, and how often the human beats each pack.
 extends SceneTree
 
 const GameData := preload("res://scripts/data/game_data.gd")
@@ -70,6 +77,9 @@ func _initialize() -> void:
 	var summary_path := ""
 	var join_rule := ""
 	var recommend := false
+	var packs := false
+	var visit_fights: Array = [2, 4, 6]
+	var pack_share := -1.0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			runs = int(arg.get_slice("=", 1))
@@ -97,6 +107,12 @@ func _initialize() -> void:
 			_policies = Array(arg.get_slice("=", 1).split(","))
 		elif arg == "--recommend":
 			recommend = true
+		elif arg == "--packs":
+			packs = true
+		elif arg.begins_with("--pack-share="):
+			pack_share = float(arg.get_slice("=", 1))
+		elif arg.begins_with("--visit-fights="):
+			visit_fights = Array(arg.get_slice("=", 1).split(",")).map(func(v): return int(v))
 		elif arg.begins_with("--join="):
 			join_rule = arg.get_slice("=", 1)
 	_load_data(hero_scale, reward_scale)
@@ -107,6 +123,13 @@ func _initialize() -> void:
 	_human_delay = float(data.balance["simulation"]["human_ultimate_delay_seconds"])
 	_table2_policy = "human" if "human" in _policies else _policies[0]
 	_charges_policy = "sensible" if "sensible" in _policies else _policies[0]
+
+	if pack_share >= 0.0:
+		data.balance["beast_packs"]["reward_share_of_first_win"] = pack_share
+	if packs:
+		_print_packs(campaigns, runs, visit_fights)
+		quit()
+		return
 
 	if recommend:
 		_print_recommended()
@@ -336,15 +359,23 @@ func _stalled_text(stalled: Dictionary) -> String:
 
 # --- campaign ---------------------------------------------------------------
 
-func _campaign(policy: String) -> Dictionary:
+## visit_fights > 0: the player comes back every pack respawn time, beats every pack on the map, then fights up to
+## visit_fights stage fights before leaving until the next visit (table 7). 0: no packs (tables 1–5).
+func _campaign(policy: String, visit_fights := 0) -> Dictionary:
 	var progress = Progress.new_game(data)
 	var stages := []
 	var fights := 0
 	var battle_time := 0.0
+	var packs := {"visits": 0, "fights": 0, "wins": 0, "silver": 0, "stage_silver": 0}
+	var visit_left := 0
 	for stage in range(1, _last_stage + 1):
 		var replays := 0
 		var record := {"stage": stage, "stuck": false}
 		while true:
+			if visit_fights > 0 and visit_left == 0:
+				_pack_visit(progress, policy, packs)
+				visit_left = visit_fights
+			visit_left -= 1
 			_spend(progress, policy, stage)
 			var fight := _fight(stage, progress.squad(data), policy == _charges_policy, "campaign", policy)
 			fights += 1
@@ -355,6 +386,7 @@ func _campaign(policy: String) -> Dictionary:
 				var middle_level := _middle_squad_level(progress)
 				# Count with the silver actually paid (jarl bonus included), at the levels before the reward.
 				var paid: Dictionary = progress.apply_victory(data, stage)
+				packs["stage_silver"] += int(paid["silver"])
 				record["upgrades"] = _upgrades_bought_by(middle_level, int(paid["silver"]))
 				break
 			if replays >= int(data.balance["balance_check"]["stuck_after_replays"]):
@@ -362,17 +394,37 @@ func _campaign(policy: String) -> Dictionary:
 				break
 			replays += 1
 			if stage > 1:
+				if visit_fights > 0 and visit_left == 0:
+					_pack_visit(progress, policy, packs)
+					visit_left = visit_fights
+				visit_left -= 1
 				_spend(progress, policy, stage)
 				var replay := _fight(stage - 1, progress.squad(data), policy == _charges_policy, "campaign", policy)
 				fights += 1
 				battle_time += replay["time"]
 				if replay["victory"]:
-					progress.apply_victory(data, stage - 1)
+					packs["stage_silver"] += int(progress.apply_victory(data, stage - 1)["silver"])
 		record["replays"] = replays
 		stages.append(record)
 		if record["stuck"]:
 			break
-	return {"stages": stages, "fights": fights, "battle_time": battle_time}
+	return {"stages": stages, "fights": fights, "battle_time": battle_time, "packs": packs}
+
+
+## A visit (table 7): the clock moves on by the respawn time, so every pack beaten on the last visit is back;
+## the player fights each pack on the map once (spending silver before each fight, like before a stage).
+func _pack_visit(progress, policy: String, packs: Dictionary) -> void:
+	packs["visits"] += 1
+	var now: int = packs["visits"] * data.pack_respawn_seconds()
+	for pack_id in data.pack_ids():
+		if not progress.is_pack_available(data, pack_id, now):
+			continue
+		_spend(progress, policy, progress.next_stage_id(data))
+		var fight := _fight(progress.pack_stage(), progress.squad(data), false, "campaign", policy, pack_id)
+		packs["fights"] += 1
+		if fight["victory"]:
+			packs["wins"] += 1
+			packs["silver"] += int(progress.apply_pack_victory(data, pack_id, now)["silver"])
 
 
 ## Spends silver before a fight; `goal` is the stage the player is trying to beat.
@@ -517,9 +569,11 @@ func _human_step(battle, ready_since: Dictionary) -> void:
 ## `stall_key`: where a stalled fight is counted ("campaign" for the players' fights, "check" for measurements).
 ## `policy`: the player whose fight it is — sets how ultimates are used ("human": with a delay, others: «Авто»)
 ## and whose won fights count in _deaths ("" = a measurement: «Авто», not counted).
-func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, policy: String) -> Dictionary:
+## `pack_id`: a beast pack at the strength of `stage` instead of the stage itself.
+func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, policy: String, pack_id := "") -> Dictionary:
 	_seed += 1
-	var battle = StageBattle.from_data(data, stage, squad, _seed * 7919)
+	var battle = StageBattle.from_data(data, stage, squad, _seed * 7919) if pack_id == "" \
+			else StageBattle.from_pack(data, pack_id, stage, squad, _seed * 7919)
 	battle.auto_ultimates = policy != "human"
 	var ready_since := {}
 	var charge_started := {}
@@ -554,7 +608,7 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, p
 					_record_charge(hero_id, battle.time - charge_started[hero_id])
 				charge_started[hero_id] = battle.time
 				charged.erase(hero_id)
-	if policy != "" and battle.victory:
+	if policy != "" and battle.victory and pack_id == "":
 		_count_deaths(policy, squad, fallen)
 	return {"victory": battle.victory, "time": battle.time}
 
@@ -714,6 +768,86 @@ func _median_power(campaigns: Array, stage: int) -> String:
 		return "—"
 	values.sort()
 	return str(values[values.size() / 2])
+
+
+# --- beast packs (table 7) ------------------------------------------------------
+
+func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
+	var policy := "human"
+	var packs: Dictionary = data.balance["beast_packs"]
+	print("7. Стаи зверей (игрок «%s», %d прохождений на вариант). В таблицах 1–5 стай нет — это худший случай." % [POLICY_NAMES[policy], campaigns])
+	print("Заход раз в %s ч: сначала все стаи на карте (по одному бою), потом бои этапов как в таблице 1 —" % _number(float(packs["respawn_hours"])))
+	print("попытка следующего этапа, после поражения повтор предыдущего, — пока не кончатся бои этапов захода.")
+	print("Награда стаи — %d%% первой победы последнего пройденного этапа (balance.json → beast_packs)." % roundi(float(packs["reward_share_of_first_win"]) * 100))
+	var variants := [0] + visit_fights
+	var results := {}
+	for fights in variants:
+		results[fights] = []
+		for i in campaigns:
+			results[fights].append(_campaign(policy, fights))
+	print("")
+	var header := "Этап |   без стай"
+	for fights in visit_fights:
+		header += " | заход = %d боя" % fights if fights < 5 else " | заход = %d боёв" % fights
+	print(header + "   (повторы: в среднем / максимум)")
+	for stage in range(1, _last_stage + 1):
+		var line := "%4d" % stage
+		for fights in variants:
+			line += " | %12s" % _replays_text(_stage_summary(results[fights], stage))
+		print(line)
+	var totals := {}
+	for fights in variants:
+		var total := 0.0
+		for stage in range(1, _last_stage + 1):
+			total += _average(_stage_summary(results[fights], stage)["replays"])
+		totals[fights] = total
+	var line := "Всего повторов за главу | %.1f" % totals[0]
+	for fights in visit_fights:
+		line += " | %.1f (−%d%%)" % [totals[fights], roundi(100.0 * (1.0 - totals[fights] / maxf(0.01, totals[0])))]
+	print(line)
+	for fights in visit_fights:
+		var visits := []
+		var pack_fights := 0.0
+		var pack_wins := 0.0
+		var pack_silver := 0.0
+		var stage_silver := 0.0
+		var finished := 0
+		for campaign in results[fights]:
+			visits.append(campaign["packs"]["visits"])
+			pack_fights += campaign["packs"]["fights"]
+			pack_wins += campaign["packs"]["wins"]
+			pack_silver += campaign["packs"]["silver"]
+			stage_silver += campaign["packs"]["stage_silver"]
+			var last: Dictionary = campaign["stages"].back()
+			if last["stage"] == _last_stage and not last["stuck"]:
+				finished += 1
+		print("Заход = %d боя(ёв) этапов: заходов %.0f (≈ %.0f ч), боёв со стаями %.0f, побед в них %d%%, серебро от стай %d%% всего, дошли до конца %d%%" % [
+			fights, _average(visits), _average(visits) * float(packs["respawn_hours"]), pack_fights / campaigns,
+			roundi(100.0 * pack_wins / maxf(1.0, pack_fights)), roundi(100.0 * pack_silver / maxf(1.0, pack_silver + stage_silver)),
+			roundi(100.0 * finished / campaigns)])
+
+	print("")
+	print("Победы над стаями (%d боёв) и средняя длина боя: отряд и уровни — как у человека при первой победе этапа" % runs)
+	print("(медиана, без стай), стая — на силе этого этапа. «—» — стая ещё закрыта.")
+	print("Этап | " + " | ".join(data.pack_ids().map(func(id): return "%12s" % data.get_pack(id)["name"])))
+	for stage in range(1, _last_stage + 1):
+		var squad := _squad_for(stage + 1, _median_levels(results[0], stage), 1)
+		var cells := []
+		for pack_id in data.pack_ids():
+			if int(data.get_pack(pack_id)["unlock_after_stage"]) > stage:
+				cells.append("%12s" % "—")
+				continue
+			var wins := 0
+			var seconds := 0.0
+			for run in runs:
+				var battle = StageBattle.from_pack(data, pack_id, stage, squad, run * 7919 + stage)
+				_run(battle, "human")
+				seconds += battle.time
+				if battle.victory:
+					wins += 1
+			cells.append("%12s" % ("%d%%, %d с" % [roundi(100.0 * wins / runs), roundi(seconds / runs)]))
+		print("%4d | " % stage + " | ".join(cells))
+	_print_stalled()
 
 
 # --- recommended power ----------------------------------------------------------

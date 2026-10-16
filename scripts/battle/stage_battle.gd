@@ -43,6 +43,16 @@ func _init(stage: int, hero_units: Array, waves: Array, balance: Dictionary, rng
 ## Builds a stage from game data. squad: [{id, level, row}] from the formation (Progress.squad).
 ## Heroes get their level multiplier and the squad's clan bonuses; enemies are scaled by the stage's power.
 static func from_data(data, stage: int, squad: Array, rng_seed: int) -> RefCounted:
+	return _build(data, stage, data.get_stage(stage)["waves"], squad, rng_seed)
+
+
+## A beast pack (packs.json): one wave of its beasts, scaled by the power of `power_stage`
+## (the last stage won, Progress.pack_stage).
+static func from_pack(data, pack_id: String, power_stage: int, squad: Array, rng_seed: int) -> RefCounted:
+	return _build(data, power_stage, [data.get_pack(pack_id)["enemies"]], squad, rng_seed)
+
+
+static func _build(data, stage: int, wave_ids: Array, squad: Array, rng_seed: int) -> RefCounted:
 	var squad_ids := squad.map(func(member): return member["id"])
 	var synergy: Dictionary = data.synergy_bonuses(squad_ids)
 	var hero_units: Array = []
@@ -55,7 +65,7 @@ static func from_data(data, stage: int, squad: Array, rng_seed: int) -> RefCount
 		hero_units.append(unit)
 	var power: float = data.enemy_power_multiplier(stage)
 	var waves: Array = []
-	for wave in data.get_stage(stage)["waves"]:
+	for wave in wave_ids:
 		var enemy_units: Array = []
 		for enemy_id in wave:
 			enemy_units.append(BattleUnit.from_enemy(data.get_enemy(enemy_id), power))
