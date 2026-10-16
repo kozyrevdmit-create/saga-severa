@@ -9,5 +9,11 @@
     "distance": 0.03,
     "seconds": 0.15
   },
-  "hit_min_gap_seconds": 0.4
+  "hit_min_gap_seconds": 0.4,
+  "list_scroll": {
+    "glide_seconds": 0.3,
+    "max_speed_screens_per_second": 5,
+    "stop_speed_screens_per_second": 0.03,
+    "speed_sample_seconds": 0.1
+  }
 }
