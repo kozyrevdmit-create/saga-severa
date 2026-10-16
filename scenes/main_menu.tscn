@@ -69,6 +69,12 @@ theme_override_colors/font_color = Color(1, 1, 1, 0.7)
 theme_override_font_sizes/font_size = 26
 text = "0 / 100 опыта · +0% серебра"
 
+[node name="PowerLabel" type="Label" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "Сила отряда: 0"
+
 [node name="TitleLabel" type="Label" parent="Margin/Layout"]
 layout_mode = 2
 size_flags_vertical = 3

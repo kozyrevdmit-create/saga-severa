@@ -42,6 +42,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "Отряд"
 
+[node name="PowerLabel" type="Label" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "Сила отряда: 0"
+
 [node name="Hint" type="Label" parent="Margin/Layout"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 0.65)

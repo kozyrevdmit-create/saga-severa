@@ -1,4 +1,4 @@
-## Main screen: silver, jarl level, the four sections and the "while you were away" window.
+## Main screen: silver, jarl level, the squad's «Сила», the four sections and the "while you were away" window.
 ## A long press on the silver counter opens the debug panel (spec 5.6).
 extends Control
 
@@ -68,6 +68,7 @@ func _refresh() -> void:
 	var progress = GameState.progress
 	%SilverLabel.text = "Серебро: %d" % progress.silver
 	%JarlLabel.text = "Ярл, уровень %d" % progress.jarl_level(data)
+	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
 	var level_progress: Array[int] = progress.jarl_level_progress(data)
 	%JarlBar.value = float(level_progress[0]) / level_progress[1]
 	%JarlExpLabel.text = "%d / %d опыта · +%d%% серебра" % [

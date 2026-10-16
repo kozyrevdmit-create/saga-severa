@@ -1,13 +1,13 @@
 ## Chapter map: a vertical path of the chapter's stages from the bottom up.
 ## Won stages are marked and can be replayed, the next stage is highlighted, later ones are locked.
-## The last stage shows the boss. Placeholder shapes only.
+## The last stage shows the boss. Every stage shows its «Рекомендуемая сила». Placeholder shapes only.
 extends Control
 
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 
-const NODE_SIZE := Vector2(240, 96)
-const BOSS_NODE_SIZE := Vector2(340, 120)
+const NODE_SIZE := Vector2(320, 96)  ## spec: buttons at least 96 px tall
+const BOSS_NODE_SIZE := Vector2(360, 100)
 const ZIGZAG := [0.3, 0.7]  ## node centre x as a share of the path width, alternating
 const CLEARED_COLOR := Color("#2f7d4a")
 const CURRENT_COLOR := Color("#c99a2e")
@@ -69,7 +69,7 @@ func _make_node(stage_id: int, data, progress) -> Button:
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
 	button.size = BOSS_NODE_SIZE if is_boss else NODE_SIZE
-	button.add_theme_font_size_override("font_size", 28)
+	button.add_theme_font_size_override("font_size", 22)
 	var color := LOCKED_COLOR
 	var state := ""
 	if progress.is_replay(stage_id):
@@ -78,13 +78,12 @@ func _make_node(stage_id: int, data, progress) -> Button:
 	elif progress.is_stage_open(data, stage_id):
 		color = CURRENT_COLOR
 		state = "в бой!"
+	button.text = "Этап %d · %s" % [stage_id, state] if state != "" else "Этап %d" % stage_id
 	if is_boss:
-		var boss_name: String = data.get_enemy(data.get_stage(stage_id)["waves"].back()[0])["name"]
-		button.text = "Этап %d · %s\n%s" % [stage_id, state, boss_name] if state != "" else "Этап %d\n%s" % [stage_id, boss_name]
+		button.text += "\n" + data.get_enemy(data.get_stage(stage_id)["waves"].back()[0])["name"]
 		if not progress.is_replay(stage_id) and not progress.is_stage_open(data, stage_id):
 			color = BOSS_COLOR.darkened(0.4)
-	else:
-		button.text = "Этап %d\n%s" % [stage_id, state] if state != "" else "Этап %d" % stage_id
+	button.text += "\nРекомендуемая сила %d" % data.recommended_power(stage_id)
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_corner_radius_all(48)

@@ -1,5 +1,5 @@
 ## Squad formation (spec 5.4): tap a hero to put them into the next free slot, tap a hero in a slot to take
-## them out. Shows each hero's role and which clan bonuses are active. Saves after every change.
+## them out. Shows the squad's «Сила», each hero's role and which clan bonuses are active. Saves after every change.
 extends Control
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -39,6 +39,7 @@ func _changed() -> void:
 func _refresh() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
+	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
 	for row in [%FrontRow, %BackRow, %Bench, %Synergies]:
 		for child in row.get_children():
 			child.queue_free()

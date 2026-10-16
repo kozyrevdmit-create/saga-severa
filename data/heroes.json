@@ -57,6 +57,7 @@
     {
       "id": "torvald",
       "name": "Торвальд",
+      "role_detail": "Танк · защита отряда",
       "class": "shieldbearer",
       "clan": "midgard",
       "hp": 1200,
@@ -80,6 +81,7 @@
     {
       "id": "sigrid",
       "name": "Сигрид",
+      "role_detail": "Урон · ярость",
       "class": "berserker",
       "clan": "midgard",
       "hp": 800,
@@ -103,6 +105,7 @@
     {
       "id": "eyvind",
       "name": "Эйвинд",
+      "role_detail": "Поддержка · усиление атаки",
       "class": "skald",
       "clan": "midgard",
       "hp": 650,
@@ -121,6 +124,7 @@
     {
       "id": "angrboda",
       "name": "Ангрбода",
+      "role_detail": "Лекарь · лечение отряда",
       "class": "volva",
       "clan": "jotunheim",
       "hp": 620,
@@ -139,6 +143,7 @@
     {
       "id": "skadi",
       "name": "Скади",
+      "role_detail": "Урон · по всем врагам",
       "class": "archer",
       "clan": "jotunheim",
       "hp": 600,
@@ -162,6 +167,7 @@
     {
       "id": "hrungnir",
       "name": "Хрунгнир",
+      "role_detail": "Танк · оглушение",
       "class": "shieldbearer",
       "clan": "jotunheim",
       "hp": 1500,

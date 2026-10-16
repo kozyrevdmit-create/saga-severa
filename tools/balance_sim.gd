@@ -6,29 +6,39 @@
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --sensitivity   (table 5 only, variants run in parallel)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --heroes=0.9 --rewards=1.1   (changed numbers)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --join=weakest   (another new_hero.join_level rule)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --recommend   (recommended power per stage only)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --uneven   (add the "неидеальный" player of M5)
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --players=human   (only these players: human, sensible, uneven, power)
 ## 1. Campaign: a player goes through the chapter from a new game. Before every fight they spend all their
 ##    silver; when they lose a stage they replay the previous one (for the replay reward) and try again.
-##    Two players: "разумный" buys, one level-up at a time, the one that raises the chance to win the stage
-##    they are trying to beat the most per silver (measured by test fights, see _best_upgrade);
-##    "неидеальный" spreads silver evenly over all heroes (lowest level first, bench included).
+##    Two players: "человек" (M6, like a real first-time player) spreads silver evenly over all heroes
+##    (lowest level first, bench included), taps each ultimate balance.json → simulation.human_ultimate_delay_seconds
+##    after it is ready, never marks a target and never uses the debug panel; "разумный" (auto ultimates) buys,
+##    one level-up at a time, the one that raises the chance to win the stage they are trying to beat the most
+##    per silver (measured by test fights, see _best_upgrade). With --uneven the "неидеальный" player of M5 is added:
+##    silver like the human, ultimates on auto.
 ##    With --old-bot a third player is added: the sensible player of M4 (best gain in total HP × damage per silver).
 ##    Prints replays needed per stage, where players get stuck, how many level-ups a first win buys,
 ##    each player's hero levels at the first win and who falls first in the won fights.
-## 2. Per stage: win rate at level 1 and at the levels the sensible player had when they first won it
-##    (with and without ultimates). With --level=N all heroes are at level N instead.
-## 3. Average time for each hero's ultimate to charge (auto mode, sensible player's fights).
+## 2. Per stage: win rate at level 1 and at the levels the human player had when they first won it
+##    (with the human's ultimates and without ultimates), the stage's recommended power (stages.json) and
+##    the human's squad power at the first win. With --level=N all heroes are at level N instead.
+## 3. Average time for each hero's ultimate to charge (the sensible player's fights, or the first --players one).
 ## 4. Offline income for a full absence on every stage, in first wins of the current stage.
 ## 5. (--sensitivity) The campaign again with all heroes' HP and attack and all stage silver rewards at −10% and +10%.
+## 6. (--recommend) «Рекомендуемая сила» per stage: the squad power at which the human player wins
+##    simulation.recommended_power_win_share of the fights (for stages.json → recommended_power).
 extends SceneTree
 
 const GameData := preload("res://scripts/data/game_data.gd")
+const Battle := preload("res://scripts/battle/battle.gd")
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
 const Progress := preload("res://scripts/save/progress.gd")
 
-const POLICY_NAMES := {"sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
+const POLICY_NAMES := {"human": "человек", "sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
 
 var data
-var _variant_failed := false  ## a sensitivity variant failed
+var _variant_failed := false  ## a sensitivity variant failed, or --recommend found a stage it cannot reach (exit code 1)
 ## A battle can stall: a lone völva against the boss heals herself about as fast as he hits her and rarely attacks
 ## (found in M5.1, about 1 in 2000–4000 test fights). A battle still running after
 ## balance.json → balance_check.stall_after_seconds of battle time counts as a defeat and is reported as stalled.
@@ -40,7 +50,11 @@ var _charges := {}  ## hero id -> [sum of charge times, count]
 ## "last": every shieldbearer that fell, fell after every other hero that fell.
 var _deaths := {}
 var _last_stage := 0  ## campaigns stop after this stage
-var _policies: Array = ["sensible", "uneven"]
+var _policies: Array = ["human", "sensible"]
+var _human_delay := 0.0  ## balance.json → simulation.human_ultimate_delay_seconds
+## Whose fights tables 2 and 3 use: the human and the sensible player, or the first player chosen with --players.
+var _table2_policy := ""
+var _charges_policy := ""
 var _score_fights := 12  ## test fights per squad when the sensible player picks a level-up
 var _score_cache := {}  ## "stage|hero:level,..." -> score; test fights use fixed seeds, so a score never changes
 
@@ -55,6 +69,7 @@ func _initialize() -> void:
 	var sensitivity := false
 	var summary_path := ""
 	var join_rule := ""
+	var recommend := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			runs = int(arg.get_slice("=", 1))
@@ -76,6 +91,12 @@ func _initialize() -> void:
 			summary_path = arg.get_slice("=", 1)
 		elif arg == "--old-bot":
 			_policies.append("power")
+		elif arg == "--uneven":
+			_policies.append("uneven")
+		elif arg.begins_with("--players="):
+			_policies = Array(arg.get_slice("=", 1).split(","))
+		elif arg == "--recommend":
+			recommend = true
 		elif arg.begins_with("--join="):
 			join_rule = arg.get_slice("=", 1)
 	_load_data(hero_scale, reward_scale)
@@ -83,6 +104,14 @@ func _initialize() -> void:
 		data.balance["new_hero"]["join_level"] = join_rule
 	_last_stage = until if until > 0 else data.stage_count()
 	_stall_seconds = float(data.balance["balance_check"]["stall_after_seconds"])
+	_human_delay = float(data.balance["simulation"]["human_ultimate_delay_seconds"])
+	_table2_policy = "human" if "human" in _policies else _policies[0]
+	_charges_policy = "sensible" if "sensible" in _policies else _policies[0]
+
+	if recommend:
+		_print_recommended()
+		quit(1 if _variant_failed else 0)
+		return
 
 	if sensitivity:
 		_print_sensitivity(campaigns)
@@ -98,7 +127,7 @@ func _initialize() -> void:
 	if hero_scale != 1.0 or reward_scale != 1.0:
 		print("Изменённые цифры: HP и атака героев ×%.2f, серебро за этапы ×%.2f" % [hero_scale, reward_scale])
 	print("Новый герой приходит по правилу new_hero.join_level = %s" % data.balance["new_hero"]["join_level"])
-	print("1. Прохождение главы с нуля (%d прохождений на каждого игрока, ульты — «Авто»)" % campaigns)
+	print("1. Прохождение главы с нуля (%d прохождений на каждого игрока; ульты: человек — сам, через %s с после готовности, остальные — «Авто»)" % [campaigns, _number(_human_delay)])
 	print("Повторы = сколько раз пришлось перепройти предыдущий этап, чтобы взять этот.")
 	print("")
 	print("Улучшения = сколько улучшений одного героя (среднего по уровню в отряде) покупает первая победа.")
@@ -139,19 +168,22 @@ func _initialize() -> void:
 
 	# 2. Win rates per stage.
 	print("")
-	print("2. Победы по этапам (%d боёв на ячейку, ульты — «Авто»)" % runs)
-	print("Этап | ур.1: побед | уровни разумного игрока | побед | без ульт: побед")
-	print("-----+-------------+-------------------------+-------+----------------")
+	var who: String = POLICY_NAMES[_table2_policy]
+	var table2_ults := _ults_of(_table2_policy)
+	print("2. Победы по этапам (%d боёв на ячейку; ульты — как у игрока «%s»)" % [runs, who])
+	print("Сила игрока — медиана силы отряда при первой победе; рек. сила — из stages.json (пересчёт: -- --recommend).")
+	print("Этап | ур.1: побед | уровни игрока «%s» | побед | без ульт: побед | рек. сила | сила игрока" % who)
 	for stage in range(1, data.stage_count() + 1):
 		var squad_base := _squad_for(stage, {}, 1)
-		var won_levels := _median_levels(results["sensible"], stage)
+		var won_levels := _median_levels(results[_table2_policy], stage)
 		if forced_level > 0:
 			won_levels = {}
 		var squad_leveled := _squad_for(stage, won_levels, forced_level if forced_level > 0 else 1)
-		var base := _win_rate(stage, squad_base, true, runs)
-		var leveled := _win_rate(stage, squad_leveled, true, runs)
-		var no_ults := _win_rate(stage, squad_leveled, false, runs)
-		print("%4d | %10d%% | %23s | %4d%% | %14d%%" % [stage, base, _levels_text(squad_leveled), leveled, no_ults])
+		var base := _win_rate(stage, squad_base, table2_ults, runs)
+		var leveled := _win_rate(stage, squad_leveled, table2_ults, runs)
+		var no_ults := _win_rate(stage, squad_leveled, "none", runs)
+		print("%4d | %10d%% | %15s | %4d%% | %14d%% | %9d | %10s" % [stage, base, _levels_text(squad_leveled), leveled, no_ults,
+				data.recommended_power(stage), _median_power(results[_table2_policy], stage)])
 
 	# 3. Ultimate charge times. Heroes that never fought in the campaigns (e.g. waiting outside a full squad)
 	# are measured by swapping them in for the squad hero of the same class.
@@ -159,7 +191,7 @@ func _initialize() -> void:
 		if _charges.has(hero["id"]):
 			continue
 		for stage in range(1, data.stage_count() + 1):
-			var squad := _squad_for(stage + 1, _median_levels(results["sensible"], stage), 1)
+			var squad := _squad_for(stage + 1, _median_levels(results[_charges_policy], stage), 1)
 			var level: int = squad.map(func(m): return m["level"]).max()
 			for member in squad:
 				if data.get_hero(member["id"])["class"] == hero["class"]:
@@ -167,9 +199,9 @@ func _initialize() -> void:
 					member["level"] = level
 					break
 			for run in maxi(1, runs / 10):
-				_fight(stage, squad, true, "check")
+				_fight(stage, squad, true, "check", "")
 	print("")
-	print("3. Зарядка ульт (среднее время от нуля до готовности в боях разумного игрока):")
+	print("3. Зарядка ульт (среднее время от нуля до готовности в боях игрока «%s»):" % POLICY_NAMES[_charges_policy])
 	for hero in data.heroes["heroes"]:
 		var entry: Array = _charges.get(hero["id"], [0.0, 0])
 		if entry[1] > 0:
@@ -226,6 +258,8 @@ func _print_sensitivity(campaigns: int) -> void:
 			"--heroes=%s" % variants[i]["heroes"], "--rewards=%s" % variants[i]["rewards"], "--summary=%s" % path]
 		if "power" in _policies:
 			args.append("--old-bot")
+		if "uneven" in _policies:
+			args.append("--uneven")
 		args.append("--join=%s" % data.balance["new_hero"]["join_level"])
 		jobs.append({"pid": OS.create_process(OS.get_executable_path(), args), "path": path})
 	var per_variant := []
@@ -312,11 +346,12 @@ func _campaign(policy: String) -> Dictionary:
 		var record := {"stage": stage, "stuck": false}
 		while true:
 			_spend(progress, policy, stage)
-			var fight := _fight(stage, progress.squad(data), policy == "sensible", "campaign", policy)
+			var fight := _fight(stage, progress.squad(data), policy == _charges_policy, "campaign", policy)
 			fights += 1
 			battle_time += fight["time"]
 			if fight["victory"]:
 				record["levels"] = progress.hero_levels.duplicate()
+				record["power"] = progress.squad_power(data)
 				var middle_level := _middle_squad_level(progress)
 				# Count with the silver actually paid (jarl bonus included), at the levels before the reward.
 				var paid: Dictionary = progress.apply_victory(data, stage)
@@ -328,7 +363,7 @@ func _campaign(policy: String) -> Dictionary:
 			replays += 1
 			if stage > 1:
 				_spend(progress, policy, stage)
-				var replay := _fight(stage - 1, progress.squad(data), policy == "sensible", "campaign", policy)
+				var replay := _fight(stage - 1, progress.squad(data), policy == _charges_policy, "campaign", policy)
 				fights += 1
 				battle_time += replay["time"]
 				if replay["victory"]:
@@ -349,6 +384,8 @@ func _spend(progress, policy: String, goal: int) -> void:
 				hero_id = _best_upgrade(progress, goal)
 			"power":
 				hero_id = _best_power_upgrade(progress)
+			"human", "uneven":
+				hero_id = _lowest_level_hero(progress)
 			_:
 				hero_id = _lowest_level_hero(progress)
 		if hero_id == "" or not progress.level_up(data, hero_id):
@@ -384,8 +421,7 @@ func _squad_score(stage: int, squad: Array) -> float:
 	var total := 0.0
 	for i in _score_fights:
 		var battle = StageBattle.from_data(data, stage, squad, 104729 * (i + 1) + stage)
-		battle.auto_ultimates = true
-		_run(battle)
+		_run(battle, "auto")
 		total += (1.0 + battle.hero_hp_share_left()) if battle.victory else battle.enemy_hp_share_taken()
 	var score := total / _score_fights
 	_score_cache[key] = score
@@ -447,21 +483,50 @@ func _upgrades_bought_by(level: int, silver: int) -> int:
 
 
 ## Runs a test fight (or a table 2 fight) to the end; a stalled one stops as a defeat.
-func _run(battle) -> void:
+## ults: "auto" («Авто»), "human" (see _human_step) or "none".
+func _run(battle, ults: String) -> void:
+	battle.auto_ultimates = ults == "auto"
+	var ready_since := {}
 	while not battle.finished:
 		if battle.time > _stall_seconds:
 			_stalled["check"] += 1
 			return
 		battle.step()
+		if ults == "human":
+			_human_step(battle, ready_since)
+
+
+## How a player uses ultimates: "human" — with a delay (see _human_step), everyone else — «Авто».
+func _ults_of(policy: String) -> String:
+	return "human" if policy == "human" else "auto"
+
+
+## The human player taps an ultimate card human_ultimate_delay_seconds of battle time after the ultimate is ready.
+## ready_since: hero unit id -> battle time the ultimate became ready (hero ids are the same in every wave).
+func _human_step(battle, ready_since: Dictionary) -> void:
+	for hero in battle.heroes():
+		if not battle.can_use_ultimate(hero.id):
+			ready_since.erase(hero.id)
+		elif not ready_since.has(hero.id):
+			ready_since[hero.id] = battle.time
+		elif battle.time - ready_since[hero.id] >= _human_delay - Battle.TICK / 2.0:
+			battle.use_ultimate(hero.id)
+			ready_since.erase(hero.id)
 
 
 ## `stall_key`: where a stalled fight is counted ("campaign" for the players' fights, "check" for measurements).
-## `deaths_policy`: a player's fight whose fallen heroes are counted in _deaths ("" = not counted).
-func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campaign", deaths_policy := "") -> Dictionary:
+## `policy`: the player whose fight it is — sets how ultimates are used ("human": with a delay, others: «Авто»)
+## and whose won fights count in _deaths ("" = a measurement: «Авто», not counted).
+func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, policy: String) -> Dictionary:
 	_seed += 1
 	var battle = StageBattle.from_data(data, stage, squad, _seed * 7919)
-	battle.auto_ultimates = true
+	battle.auto_ultimates = policy != "human"
+	var ready_since := {}
 	var charge_started := {}
+	## Heroes whose ultimate is charged and already counted: the charge ends when it is ready, not when the human
+	## taps it later, and it counts even if the battle ends first («Авто» uses it in the same step, so it is never
+	## seen ready and the ultimate's time counts).
+	var charged := {}
 	for hero in battle.heroes():
 		charge_started[hero.def_id] = 0.0
 	var fallen: Array[String] = []  ## heroes in the order they fell
@@ -471,6 +536,13 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campai
 			_stalled[stall_key] += 1
 			break
 		battle.step()
+		if record_charges:
+			for hero in battle.heroes():
+				if battle.can_use_ultimate(hero.id) and not charged.has(hero.def_id):
+					_record_charge(hero.def_id, battle.time - charge_started[hero.def_id])
+					charged[hero.def_id] = true
+		if policy == "human":
+			_human_step(battle, ready_since)
 		for event in battle.take_events():
 			# Heroes come first in every wave's units, so a hero's id is the same in every wave
 			# (an enemy's id may point past the next wave's units).
@@ -478,14 +550,20 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campai
 				fallen.append(battle.units[event["unit"]].def_id)
 			if record_charges and event["type"] == "ultimate":
 				var hero_id: String = battle.units[event["unit"]].def_id
-				var entry: Array = _charges.get(hero_id, [0.0, 0])
-				entry[0] += battle.time - charge_started[hero_id]
-				entry[1] += 1
-				_charges[hero_id] = entry
+				if not charged.has(hero_id):
+					_record_charge(hero_id, battle.time - charge_started[hero_id])
 				charge_started[hero_id] = battle.time
-	if deaths_policy != "" and battle.victory:
-		_count_deaths(deaths_policy, squad, fallen)
+				charged.erase(hero_id)
+	if policy != "" and battle.victory:
+		_count_deaths(policy, squad, fallen)
 	return {"victory": battle.victory, "time": battle.time}
+
+
+func _record_charge(hero_id: String, seconds: float) -> void:
+	var entry: Array = _charges.get(hero_id, [0.0, 0])
+	entry[0] += seconds
+	entry[1] += 1
+	_charges[hero_id] = entry
 
 
 func _count_deaths(policy: String, squad: Array, fallen: Array[String]) -> void:
@@ -615,15 +693,83 @@ func _squad_for(stage: int, levels: Dictionary, default_level: int) -> Array:
 	return progress.squad(data)
 
 
-func _win_rate(stage: int, squad: Array, auto: bool, runs: int) -> int:
+func _win_rate(stage: int, squad: Array, ults: String, runs: int) -> int:
 	var wins := 0
 	for run in runs:
 		var battle = StageBattle.from_data(data, stage, squad, run * 7919 + stage)
-		battle.auto_ultimates = auto
-		_run(battle)
+		_run(battle, ults)
 		if battle.victory:
 			wins += 1
 	return roundi(100.0 * wins / runs)
+
+
+## The human player's squad power when first winning the stage (median over campaigns).
+func _median_power(campaigns: Array, stage: int) -> String:
+	var values := []
+	for campaign in campaigns:
+		for record in campaign["stages"]:
+			if record["stage"] == stage and not record["stuck"]:
+				values.append(record["power"])
+	if values.is_empty():
+		return "—"
+	values.sort()
+	return str(values[values.size() / 2])
+
+
+# --- recommended power ----------------------------------------------------------
+
+## For every stage: the squad of the heroes unlocked before it, levelled the human way (evenly, one level at a time
+## in unlock order), from all at level 1 upwards until the human wins recommended_power_win_share of the fights.
+## Prints the squad power there, rounded down to recommended_power_round_to, next to the value in stages.json.
+func _print_recommended() -> void:
+	var settings: Dictionary = data.balance["simulation"]
+	var share := float(settings["recommended_power_win_share"])
+	var fights := int(settings["recommended_power_fights"])
+	var round_to := float(settings["recommended_power_round_to"])
+	print("6. Рекомендуемая сила: сила отряда, при которой человек побеждает в %d%% боёв (%d боёв на точку)" % [roundi(share * 100), fights])
+	print("Этап | уровни | побед | сила | округлено | сейчас в stages.json")
+	var found := []
+	var unreachable := []
+	for stage in range(1, data.stage_count() + 1):
+		var progress = Progress.new_game(data)
+		for won in range(1, stage):
+			progress.apply_victory(data, won)
+		var ids: Array = progress.squad_ids()
+		# Step i: every squad hero at level 1 + i / n, the first i % n of them (in unlock order) one level higher.
+		var rate_at := func(step: int) -> float:
+			for k in ids.size():
+				progress.hero_levels[ids[k]] = mini(data.max_level(), 1 + step / ids.size() + (1 if k < step % ids.size() else 0))
+			return _win_rate(stage, progress.squad(data), "human", fights) / 100.0
+		var max_step: int = ids.size() * (data.max_level() - 1)  # every squad hero at the max level
+		var low := 0
+		var high := 0
+		if rate_at.call(0) < share:
+			high = 1
+			while high < max_step and rate_at.call(high) < share:
+				low = high
+				high = mini(high * 2, max_step)
+			if rate_at.call(high) < share:
+				unreachable.append(stage)
+				print("%4d | недостижимо: даже на %d уровне побед %d%%" % [stage, data.max_level(), roundi(rate_at.call(high) * 100)])
+				continue
+			while high - low > 1:
+				var middle := (low + high) / 2
+				if rate_at.call(middle) >= share:
+					high = middle
+				else:
+					low = middle
+		var rate: float = rate_at.call(high)
+		var power: int = progress.squad_power(data)
+		var rounded := roundi(floorf(power / round_to) * round_to)  # down: a squad at the measured power always qualifies
+		found.append(rounded)
+		print("%4d | %6s | %4d%% | %4d | %9d | %d" % [stage, _levels_text(progress.squad(data)), roundi(rate * 100), power, rounded,
+				data.recommended_power(stage)])
+	if not unreachable.is_empty():
+		print("Числа для stages.json не выводятся: этапы %s не набирают %d%% побед даже на максимальном уровне — поправьте баланс." % [
+				", ".join(unreachable.map(func(v): return str(v))), roundi(share * 100)])
+		_variant_failed = true
+		return
+	print("Для stages.json: " + ", ".join(found.map(func(v): return str(v))))
 
 
 func _levels_text(squad: Array) -> String:
