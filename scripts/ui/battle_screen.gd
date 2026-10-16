@@ -10,12 +10,16 @@ const StageBattle := preload("res://scripts/battle/stage_battle.gd")
 const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 const FighterView := preload("res://scripts/ui/fighter_view.gd")
 const HeroCard := preload("res://scripts/ui/hero_card.gd")
+const Art := preload("res://scripts/ui/art.gd")
 
 const MAP_SCENE := "res://scenes/map.tscn"
 
 ## Top of each battlefield row, as a share of the field height (top to bottom).
 const ROW_TOP := {"enemy_back": 0.03, "enemy_front": 0.27, "hero_front": 0.53, "hero_back": 0.77}
 const ROW_GAP := 24.0
+const MAX_ART_SIZE := 190.0  ## picture side of a normal fighter on a tall phone screen
+const ROW_PADDING := 6.0  ## free space between a row's fighters and the next row
+const MAX_ROW_SIZE := 3  ## most fighters in one row (enemy front row; the hero back row)
 
 const DAMAGE_TO_ENEMY_COLOR := Color.WHITE
 const DAMAGE_TO_HERO_COLOR := Color("#ff6b6b")
@@ -97,8 +101,12 @@ func _refresh() -> void:
 
 
 func _add_view(unit) -> void:
-	var view := FighterView.new(unit)
-	if unit.team == BattleUnit.Team.ENEMIES:
+	var view: FighterView
+	if unit.team == BattleUnit.Team.HEROES:
+		view = FighterView.new(unit, Art.hero_picture(unit.def_id), 1.0)
+	else:
+		var enemy: Dictionary = GameState.data.get_enemy(unit.def_id)
+		view = FighterView.new(unit, Art.enemy_picture(unit.def_id), float(enemy["art_scale"]))
 		view.tapped.connect(_battle.toggle_mark.bind(unit.id))
 	%Field.add_child(view)
 	_views[unit.id] = view
@@ -118,8 +126,20 @@ func _show_wave() -> void:
 	_layout_fighters()
 
 
+## Pictures as big as the field allows: a normal fighter fits between its row's top and the next row,
+## and a full row fits across. A bigger fighter (the boss) stands on the same ground line and grows upwards.
 func _layout_fighters() -> void:
 	var field_size: Vector2 = %Field.size
+	var tops: Array = ROW_TOP.values()
+	tops.sort()
+	tops.append(1.0)
+	var row_height := INF
+	for i in tops.size() - 1:
+		row_height = minf(row_height, (tops[i + 1] - tops[i]) * field_size.y - ROW_PADDING)
+	var art_size := minf(FighterView.art_size_for(row_height), (field_size.x - (MAX_ROW_SIZE - 1) * ROW_GAP) / MAX_ROW_SIZE)
+	art_size = minf(art_size, MAX_ART_SIZE)
+	for view in _views.values():
+		view.set_art_size(art_size)
 	var rows := {}
 	for unit in _battle.units:
 		var key: String = ("hero_" if unit.team == BattleUnit.Team.HEROES else "enemy_") + unit.row
@@ -128,16 +148,21 @@ func _layout_fighters() -> void:
 		rows[key].append(_views[unit.id])
 	for key in rows:
 		var views: Array = rows[key]
-		var total_width := views.size() * FighterView.WIDTH + (views.size() - 1) * ROW_GAP
-		var x := (field_size.x - total_width) / 2.0
+		var total_width := (views.size() - 1) * ROW_GAP
 		for view in views:
-			view.position = Vector2(x, field_size.y * ROW_TOP[key])
-			x += FighterView.WIDTH + ROW_GAP
+			total_width += view.size.x
+		var x := (field_size.x - total_width) / 2.0
+		var ground: float = field_size.y * ROW_TOP[key] + FighterView.height_for(art_size)
+		for view in views:
+			view.position = Vector2(x, ground - view.size.y)
+			x += view.size.x + ROW_GAP
 
 
 func _show_event(event: Dictionary) -> void:
 	match event["type"]:
 		"damage":
+			_animate(event["source"], "lunge")
+			_animate(event["target"], "flash")
 			var color := DAMAGE_TO_HERO_COLOR if event["target_is_hero"] else DAMAGE_TO_ENEMY_COLOR
 			var font_size := 32
 			match event["kind"]:
@@ -151,8 +176,10 @@ func _show_event(event: Dictionary) -> void:
 		"heal":
 			_popup(event["target"], "+%d" % event["amount"], HEAL_COLOR, 32)
 		"ultimate":
+			_animate(event["unit"], "lunge")
 			_popup(event["unit"], event["name"], ULTIMATE_COLOR, 30, 1.4)
 		"special":
+			_animate(event["unit"], "lunge")
 			_popup(event["unit"], event["name"], SPECIAL_COLOR, 30, 1.4)
 		"mark":
 			if event["unit"] >= 0:
@@ -162,6 +189,12 @@ func _show_event(event: Dictionary) -> void:
 			_banner("Волна %d" % (event["index"] + 1))
 		"end":
 			_finish_stage(event["victory"], event.get("retreat", false))
+
+
+## Calls the fighter view's animation ("lunge" or "flash") if the fighter is on screen.
+func _animate(unit_id: int, animation: String) -> void:
+	if _views.has(unit_id):
+		_views[unit_id].call(animation)
 
 
 ## Floating text that rises above a fighter and fades out.

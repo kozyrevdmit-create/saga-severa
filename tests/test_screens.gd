@@ -79,9 +79,17 @@ func _check_reachable(screen: Control, buttons: Array, where: String) -> void:
 		scroll.ensure_control_visible(button)
 		await tree.process_frame
 		assert_true(scroll.get_global_rect().grow(1).encloses(button.get_global_rect()),
-				"%s: «%s» can be scrolled into view" % [where, button.text.replace("\n", " ")])
+				"%s: «%s» can be scrolled into view" % [where, _caption(button)])
 	for blocker in _touch_blockers(scroll):
 		failures.append("%s: %s stops a finger drag (mouse_filter STOP inside the scroll area)" % [where, blocker.get_path()])
+
+
+## The button's text, or the text of its labels (hero cards on «Отряд» show a portrait and a label).
+func _caption(button: Button) -> String:
+	var parts := PackedStringArray([button.text])
+	for label in button.find_children("*", "Label", true, false):
+		parts.append(label.text)
+	return " ".join(parts).replace("\n", " ").strip_edges()
 
 
 func _find_scroll(node: Node) -> ScrollContainer:

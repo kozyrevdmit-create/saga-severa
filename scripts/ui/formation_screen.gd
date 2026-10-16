@@ -3,7 +3,11 @@
 ## The screen scrolls (a finger dragged over the hero cards scrolls it too); the bench wraps onto new lines.
 extends Control
 
+const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
+
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
+const CARD_HEIGHT := 210.0
+const PORTRAIT_SIZE := 84.0
 
 const EMPTY_SLOT_COLOR := Color(1, 1, 1, 0.06)
 const ACTIVE_SYNERGY_COLOR := Color("#7be08f")
@@ -79,14 +83,14 @@ func _refresh() -> void:
 		%Synergies.add_child(_make_label(text + (" — активен" if synergy["active"] else ""), 24, color))
 
 
-## A hero card: name, role and level on the class colour; an empty slot when hero_id is "".
+## A hero card: portrait, name, role and level on the class colour; an empty slot when hero_id is "".
 func _make_hero_button(hero_id: String) -> Button:
 	var data = GameState.data
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
 	# The drag passes on to the ScrollContainer; once the screen starts scrolling, the tap is cancelled.
 	button.mouse_filter = Control.MOUSE_FILTER_PASS
-	button.custom_minimum_size = Vector2(0, 150)
+	button.custom_minimum_size = Vector2(0, CARD_HEIGHT)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 24)
 	var style := StyleBoxFlat.new()
@@ -97,8 +101,22 @@ func _make_hero_button(hero_id: String) -> Button:
 	else:
 		var hero: Dictionary = data.get_hero(hero_id)
 		var hero_class: Dictionary = data.get_hero_class(hero)
-		button.text = "%s\n%s\nур. %d" % [hero["name"], hero_class["role_short"], GameState.progress.level_of(hero_id)]
 		style.bg_color = Color.html(hero_class["color"]).darkened(0.35)
+		var box := VBoxContainer.new()
+		box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		box.alignment = BoxContainer.ALIGNMENT_CENTER
+		box.add_theme_constant_override("separation", 4)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(box)
+		var portrait := HeroesScreen.make_portrait(hero, PORTRAIT_SIZE)
+		portrait.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		box.add_child(portrait)
+		var label := Label.new()
+		label.text = "%s\n%s\nур. %d" % [hero["name"], hero_class["role_short"], GameState.progress.level_of(hero_id)]
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 22)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(label)
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		button.add_theme_stylebox_override(state, style)
 	return button

@@ -9,6 +9,7 @@
       "hp": 1440,
       "attack": 64,
       "attack_interval": 1.5,
+      "art_scale": 1.0,
       "color": "#5f7466"
     },
     {
@@ -20,6 +21,7 @@
       "hp": 720,
       "attack": 26,
       "attack_interval": 0.7,
+      "art_scale": 1.0,
       "color": "#8a7a66"
     },
     {
@@ -31,6 +33,7 @@
       "hp": 960,
       "attack": 72,
       "attack_interval": 1.7,
+      "art_scale": 1.0,
       "color": "#4f6a7a"
     },
     {
@@ -43,6 +46,7 @@
       "hp": 2000,
       "attack": 34,
       "attack_interval": 1.6,
+      "art_scale": 1.5,
       "color": "#2f4a3c",
       "special": {
         "name": "Гнев конунга",
