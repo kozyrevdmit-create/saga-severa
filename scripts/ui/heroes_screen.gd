@@ -1,8 +1,12 @@
-## Heroes screen: every unlocked hero's role, level, stats, «Сила», ultimate and passive; level-up for silver
+## Heroes screen: every unlocked hero's portrait, role, level, stats, «Сила», ultimate and passive; level-up for silver
 ## (the button shows the power the level adds). Saves after every level-up.
 extends Control
 
+const Art := preload("res://scripts/ui/art.gd")
+
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
+const PORTRAIT_SIZE := 128.0
+const PORTRAIT_PAPER := Color("#efe3c8")
 
 const DESCRIPTION_COLOR := Color(1, 1, 1, 0.75)
 
@@ -67,11 +71,7 @@ func _add_row(hero_id: String) -> void:
 	line.add_theme_constant_override("separation", 16)
 	box.add_child(line)
 
-	var swatch := ColorRect.new()
-	swatch.color = Color.html(data.get_hero_class(hero)["color"])
-	swatch.custom_minimum_size = Vector2(24, 0)
-	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	line.add_child(swatch)
+	line.add_child(make_portrait(hero, PORTRAIT_SIZE))
 
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -98,6 +98,28 @@ func _add_row(hero_id: String) -> void:
 	box.add_child(_make_description("Пассивка: %s" % passive["description"] if not passive.is_empty() else "Пассивки нет"))
 
 	_rows[hero_id] = {"level": level_label, "stats": stats_label, "button": button}
+
+
+## Head and shoulders of the hero on old paper (the picture's own background colour, docs/ART_STYLE.md).
+## Also used by the formation screen.
+static func make_portrait(hero: Dictionary, side: float) -> Control:
+	var frame := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = PORTRAIT_PAPER
+	style.set_corner_radius_all(10)
+	style.set_border_width_all(2)
+	style.border_color = Color("#1a1a1a")
+	frame.add_theme_stylebox_override("panel", style)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var picture := TextureRect.new()
+	picture.texture = Art.hero_portrait(hero)
+	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	picture.custom_minimum_size = Vector2(side, side)
+	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(picture)
+	return frame
 
 
 func _make_description(text_value: String) -> Label:

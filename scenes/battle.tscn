@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/battle_screen.gd" id="1_battle"]
+[ext_resource type="Shader" path="res://assets/shaders/paper.gdshader" id="2_paper"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_paper"]
+shader = ExtResource("2_paper")
 
 [node name="Battle" type="Control"]
 layout_mode = 3
@@ -91,6 +95,19 @@ horizontal_alignment = 1
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Paper" type="ColorRect" parent="Margin/Layout/Field"]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_paper")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -24.0
+offset_right = 24.0
+grow_horizontal = 2
+grow_vertical = 2
 mouse_filter = 2
 
 [node name="Cards" type="HBoxContainer" parent="Margin/Layout"]

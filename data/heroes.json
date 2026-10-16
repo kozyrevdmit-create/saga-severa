@@ -57,6 +57,7 @@
     {
       "id": "torvald",
       "name": "Торвальд",
+      "portrait": { "x": 0.61, "y": 0.19, "size": 0.4 },
       "role_detail": "Танк · защита отряда",
       "class": "shieldbearer",
       "clan": "midgard",
@@ -81,6 +82,7 @@
     {
       "id": "sigrid",
       "name": "Сигрид",
+      "portrait": { "x": 0.57, "y": 0.2, "size": 0.4 },
       "role_detail": "Урон · ярость",
       "class": "berserker",
       "clan": "midgard",
@@ -105,6 +107,7 @@
     {
       "id": "eyvind",
       "name": "Эйвинд",
+      "portrait": { "x": 0.61, "y": 0.19, "size": 0.4 },
       "role_detail": "Поддержка · усиление атаки",
       "class": "skald",
       "clan": "midgard",
@@ -124,6 +127,7 @@
     {
       "id": "angrboda",
       "name": "Ангрбода",
+      "portrait": { "x": 0.55, "y": 0.21, "size": 0.4 },
       "role_detail": "Лекарь · лечение отряда",
       "class": "volva",
       "clan": "jotunheim",
@@ -143,6 +147,7 @@
     {
       "id": "skadi",
       "name": "Скади",
+      "portrait": { "x": 0.57, "y": 0.21, "size": 0.4 },
       "role_detail": "Урон · по всем врагам",
       "class": "archer",
       "clan": "jotunheim",
@@ -167,6 +172,7 @@
     {
       "id": "hrungnir",
       "name": "Хрунгнир",
+      "portrait": { "x": 0.68, "y": 0.21, "size": 0.4 },
       "role_detail": "Танк · оглушение",
       "class": "shieldbearer",
       "clan": "jotunheim",
