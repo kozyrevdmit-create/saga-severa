@@ -68,7 +68,7 @@ func test_the_boss_stands_bigger_on_the_field() -> void:
 		_close(screen)
 
 
-func test_fighters_lunge_flash_and_fade() -> void:
+func test_fighters_lunge_flash_shake_and_fade() -> void:
 	var screen = await _open_battle(1, PHONE_SIZE)
 	var tree := Engine.get_main_loop() as SceneTree
 	screen.set_process(false)  # the battle stands still: only the animations run
@@ -81,15 +81,66 @@ func test_fighters_lunge_flash_and_fade() -> void:
 	await tree.create_timer(FighterView.LUNGE_BACK_SECONDS + 0.1).timeout
 	assert_near(view._pose.position.distance_to(rest), 0.0, 0.5, "and steps back")
 
-	view.flash()
-	assert_true(float(view._art.material.get_shader_parameter("flash")) > 0.0, "a hit flashes the picture")
-	await tree.create_timer(FighterView.FLASH_SECONDS + 0.1).timeout
+	var visual: Dictionary = _data.visual
+	assert_true(view.hit(), "a hit shows")
+	assert_near(float(view._art.material.get_shader_parameter("flash")), float(visual["hit_flash"]["strength"]), 0.001,
+			"a hit flashes the picture at full strength (visual.json)")
+	assert_true(not view.hit(), "a second hit right after it does not flash again (no flicker at x2)")
+	await tree.create_timer(float(visual["hit_shake"]["seconds"]) / 4.0).timeout
+	assert_true(absf(view._art.position.x) > 0.5, "and shakes the picture")
+	var flash_seconds := float(visual["hit_flash"]["hold_seconds"]) + float(visual["hit_flash"]["fade_seconds"])
+	await tree.create_timer(maxf(flash_seconds, float(visual["hit_shake"]["seconds"])) + 0.1).timeout
 	assert_near(float(view._art.material.get_shader_parameter("flash")), 0.0, 0.01, "the flash is short")
+	assert_near(view._art.position.x, 0.0, 0.01, "the shake ends where it started")
+	await tree.create_timer(float(visual["hit_min_gap_seconds"])).timeout
+	assert_true(view.hit(), "a later hit flashes again")
 
 	hero.hp = 0
 	view.refresh(hero)
 	await tree.create_timer(FighterView.DEATH_SECONDS + 0.1).timeout
 	assert_near(view.modulate.a, FighterView.DEAD_ALPHA, 0.01, "a fallen hero fades out")
+	_close(screen)
+
+
+## M8: «Показывать имена в бою» off hides the names; the fighters keep their places.
+func test_names_under_fighters_follow_the_setting() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	var game_state = tree.root.get_node("GameState")
+	while game_state.data == null:
+		await tree.process_frame
+	var saved_names: bool = game_state.settings.show_names_in_battle
+	var places := {}
+	for show_names in [true, false]:
+		game_state.settings.show_names_in_battle = show_names
+		var screen = await _open_battle(7, PHONE_SIZE)
+		screen.set_process(false)
+		for unit in screen._battle.units:
+			var view = screen._views[unit.id]
+			assert_eq(view._name.visible, show_names, "%s: name shown = %s" % [unit.display_name, show_names])
+			if show_names:
+				places[unit.id] = view.position
+			else:
+				assert_eq(view.position, places.get(unit.id), "%s stands where it stood with names" % unit.display_name)
+		_close(screen)
+	game_state.settings.show_names_in_battle = saved_names
+
+
+## M8: the «Новый герой присоединился к дружине» window shows the hero's portrait.
+func test_new_hero_window_shows_the_portrait() -> void:
+	var screen = await _open_battle(1, PHONE_SIZE)
+	var tree := Engine.get_main_loop() as SceneTree
+	screen.set_process(false)
+	for hero_id in ["angrboda", "skadi"]:
+		screen._new_heroes = [hero_id] as Array[String]
+		screen._show_next_new_hero()
+		await tree.process_frame
+		var holder: Control = screen.get_node("%NewHeroPortrait")
+		var pictures := holder.find_children("*", "TextureRect", true, false)
+		assert_eq(pictures.size(), 1, "%s: one portrait in the window" % hero_id)
+		if pictures.size() == 1:
+			var portrait: AtlasTexture = pictures[0].texture
+			assert_eq(portrait.atlas, Art.hero_picture(hero_id), "%s: the portrait is cut from the hero's picture" % hero_id)
+			assert_true(pictures[0].size.x >= 200.0, "%s: the portrait is big" % hero_id)
 	_close(screen)
 
 

@@ -9,7 +9,8 @@
 Изменения ТЗ, утверждённые заказчиком, — [docs/SPEC_CHANGES.md](docs/SPEC_CHANGES.md); где они расходятся с ТЗ, действуют они.
 [docs/BACKLOG.md](docs/BACKLOG.md) — идеи на потом. Это **не требования**: их отсутствие в коде — не замечание.
 
-- `data/*.json` — все цифры игры (герои, враги, этапы, баланс).
+- `data/*.json` — все цифры игры (герои, враги, этапы, баланс); `data/visual.json` — сила отклика на удар (вспышка, тряска).
+- `scripts/save/` — прогресс (`user://save.json`) и отдельно настройки игрока (`user://settings.json`): «Сбросить прогресс» настройки не трогает.
 - `scripts/battle/` — правила боя без экрана.
 - `scripts/ui/`, `scenes/` — экраны.
 - `assets/art/` — картинки персонажей (делает `tools/prepare_art.gd`, стиль — [docs/ART_STYLE.md](docs/ART_STYLE.md)), `assets/shaders/` — шейдеры экрана.

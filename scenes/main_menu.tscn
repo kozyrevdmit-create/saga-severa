@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/main_menu.gd" id="1_menu"]
 [ext_resource type="Script" path="res://scripts/ui/stat_bar.gd" id="2_bar"]
 [ext_resource type="PackedScene" path="res://scenes/debug_panel.tscn" id="3_debug"]
+[ext_resource type="Texture2D" path="res://assets/ui/gear.svg" id="4_gear"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -39,12 +40,27 @@ theme_override_constants/margin_bottom = 64
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="SilverLabel" type="Label" parent="Margin/Layout"]
+[node name="TopRow" type="HBoxContainer" parent="Margin/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="SilverLabel" type="Label" parent="Margin/Layout/TopRow"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 mouse_filter = 0
 theme_override_font_sizes/font_size = 40
 text = "Серебро: 0"
+
+[node name="SettingsButton" type="Button" parent="Margin/Layout/TopRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+size_flags_vertical = 4
+focus_mode = 0
+icon = ExtResource("4_gear")
+icon_alignment = 1
+expand_icon = true
 
 [node name="JarlBox" type="VBoxContainer" parent="Margin/Layout"]
 layout_mode = 2

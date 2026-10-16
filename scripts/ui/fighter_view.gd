@@ -1,7 +1,9 @@
 ## Fighter on the battlefield: HP/energy bars above the character's picture, the name below it.
 ## The battle screen sets the picture size to fit the field (set_art_size); a fighter with art_scale (the boss)
 ## is that much bigger. Simple tweened animation, no extra drawings: breathing while alive, a lunge towards the
-## enemy on every attack (lunge), a short flash when hit (flash), fading out on death.
+## enemy on every attack (lunge), a bright flash and a small shake when hit (hit), fading out on death.
+## The hit feedback's colour, strength and timing come from data/visual.json; a fighter hit again soon after
+## (hit_min_gap_seconds, real time, so x2 does not double it) does not flash or shake again.
 extends Control
 
 const StatBar := preload("res://scripts/ui/stat_bar.gd")
@@ -26,8 +28,6 @@ const BREATH_SCALE := Vector2(0.992, 1.025)
 const LUNGE_DISTANCE := 0.14  ## share of the picture size
 const LUNGE_OUT_SECONDS := 0.08
 const LUNGE_BACK_SECONDS := 0.18
-const FLASH_STRENGTH := 0.6
-const FLASH_SECONDS := 0.14
 const DEATH_SECONDS := 0.6
 const DEAD_ALPHA := 0.25
 const DEATH_SINK := 0.05  ## share of the picture size the body sinks while fading
@@ -50,10 +50,14 @@ var _mark: Control  ## frame and «ЦЕЛЬ» on the enemy the player marked
 var _breath: Tween
 var _lunge: Tween
 var _flash: Tween
+var _shake: Tween
+var _visual: Dictionary  ## data/visual.json
+var _last_hit_msec := -1  ## real time of the last hit shown (flash and shake)
 
 
-func _init(unit, picture: Texture2D, picture_scale: float) -> void:
+func _init(unit, picture: Texture2D, picture_scale: float, visual: Dictionary, show_name := true) -> void:
 	art_scale = picture_scale
+	_visual = visual
 	_is_hero = unit.team == BattleUnit.Team.HEROES
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -67,6 +71,7 @@ func _init(unit, picture: Texture2D, picture_scale: float) -> void:
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var material := ShaderMaterial.new()
 	material.shader = HIT_FLASH_SHADER
+	material.set_shader_parameter("flash_color", Color.html(visual["hit_flash"]["color"]))
 	_art.material = material
 	_pose.add_child(_art)
 
@@ -83,6 +88,7 @@ func _init(unit, picture: Texture2D, picture_scale: float) -> void:
 	_name.add_theme_constant_override("outline_size", 6)
 	_name.add_theme_color_override("font_outline_color", Color.BLACK)
 	_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_name.visible = show_name  ## «Показывать имена в бою» (Settings); the space stays, so rows do not move
 	add_child(_name)
 
 	_mark = Control.new()
@@ -175,13 +181,41 @@ func lunge() -> void:
 	_lunge.tween_property(_pose, "position", _pose_rest, LUNGE_BACK_SECONDS).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 
-## Short bright flash of the picture.
-func flash() -> void:
+## The fighter was hit: a bright flash and a small sideways shake, unless the last hit was shown just now
+## (several fighters hitting one target at x2 would turn into flicker). Returns whether it was shown.
+func hit() -> bool:
+	var now := Time.get_ticks_msec()
+	if _last_hit_msec >= 0 and now - _last_hit_msec < float(_visual["hit_min_gap_seconds"]) * 1000.0:
+		return false
+	_last_hit_msec = now
+	_flash_picture()
+	if _alive_shown:
+		_shake_picture()
+	return true
+
+
+## Full strength for hold_seconds, then fades out in fade_seconds.
+func _flash_picture() -> void:
+	var settings: Dictionary = _visual["hit_flash"]
 	if _flash != null:
 		_flash.kill()
-	_art.material.set_shader_parameter("flash", FLASH_STRENGTH)
+	_art.material.set_shader_parameter("flash", float(settings["strength"]))
 	_flash = create_tween()
-	_flash.tween_property(_art.material, "shader_parameter/flash", 0.0, FLASH_SECONDS).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	_flash.tween_interval(float(settings["hold_seconds"]))
+	_flash.tween_property(_art.material, "shader_parameter/flash", 0.0, float(settings["fade_seconds"])).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+
+## Right, left, a little right and back to rest; distance is a share of the picture size.
+func _shake_picture() -> void:
+	var settings: Dictionary = _visual["hit_shake"]
+	var distance := float(settings["distance"]) * _art_size * art_scale
+	var step := float(settings["seconds"]) / 4.0
+	if _shake != null:
+		_shake.kill()
+	_art.position = Vector2.ZERO
+	_shake = create_tween()
+	for offset in [distance, -distance, distance / 2.0, 0.0]:
+		_shake.tween_property(_art, "position:x", offset, step).set_trans(Tween.TRANS_SINE)
 
 
 ## Point over the upper body where floating numbers start (in parent coordinates).
@@ -217,6 +251,9 @@ func _die() -> void:
 		_breath.kill()
 	if _lunge != null:
 		_lunge.kill()
+	if _shake != null:
+		_shake.kill()
+	_art.position = Vector2.ZERO
 	var tween := create_tween().set_parallel()
 	tween.tween_property(self, "modulate:a", DEAD_ALPHA, DEATH_SECONDS).set_ease(Tween.EASE_IN)
 	tween.tween_property(_art, "scale", Vector2.ONE, DEATH_SECONDS)

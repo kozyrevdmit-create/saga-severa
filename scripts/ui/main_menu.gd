@@ -1,4 +1,5 @@
-## Main screen: silver, jarl level, the squad's «Сила», the four sections and the "while you were away" window.
+## Main screen: silver, jarl level, the squad's «Сила», the four sections, the gear for «Настройки»
+## and the "while you were away" window.
 ## A long press on the silver counter opens the debug panel (spec 5.6).
 extends Control
 
@@ -6,6 +7,7 @@ const MAP_SCENE := "res://scenes/map.tscn"
 const HEROES_SCENE := "res://scenes/heroes.tscn"
 const FORMATION_SCENE := "res://scenes/formation.tscn"
 const SETTLEMENT_SCENE := "res://scenes/settlement.tscn"
+const SETTINGS_SCENE := "res://scenes/settings.tscn"
 
 const JARL_BAR_COLOR := Color("#8fb8ff")
 var _long_press: Timer  ## holding the silver counter this long opens the debug panel
@@ -16,6 +18,7 @@ func _ready() -> void:
 	%HeroesButton.pressed.connect(_open.bind(HEROES_SCENE))
 	%SquadButton.pressed.connect(_open.bind(FORMATION_SCENE))
 	%SettlementButton.pressed.connect(_open.bind(SETTLEMENT_SCENE))
+	%SettingsButton.pressed.connect(_open.bind(SETTINGS_SCENE))
 	%ClaimButton.pressed.connect(_on_claim_pressed)
 	%JarlBar.fill_color = JARL_BAR_COLOR
 	_long_press = Timer.new()

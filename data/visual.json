@@ -1,0 +1,13 @@
+{
+  "hit_flash": {
+    "color": "#ff2a14",
+    "strength": 0.7,
+    "hold_seconds": 0.05,
+    "fade_seconds": 0.1
+  },
+  "hit_shake": {
+    "distance": 0.03,
+    "seconds": 0.15
+  },
+  "hit_min_gap_seconds": 0.4
+}
