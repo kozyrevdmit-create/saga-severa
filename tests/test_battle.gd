@@ -238,6 +238,7 @@ func test_volva_attacks_when_nobody_is_wounded() -> void:
 
 func test_shield_wall_reduces_damage_taken() -> void:
 	var torvald = hero_from_data("torvald")
+	torvald.row = "back"  # the enemy hits only the ally, who has no passive of their own
 	var ally = make_unit(HEROES, "front", 100000, 1, 1000.0)
 	var enemy = make_unit(ENEMIES, "front", 100000, 100, 1.0)
 	var battle = make_battle([torvald, ally], [enemy])
@@ -276,6 +277,35 @@ func test_fury_strikes_three_times() -> void:
 	for hit in hits:
 		assert_eq(hit["amount"], roundi(sigrid.attack_power() * float(effect["attack_multiplier"])), "strike damage")
 		assert_eq(hit["kind"], "ultimate", "strike marked as ultimate")
+
+
+func test_shieldbearers_take_less_damage() -> void:
+	for hero_id in ["torvald", "hrungnir"]:
+		var passive: Dictionary = data.get_hero(hero_id)["passive"]
+		assert_eq(passive["type"], "damage_taken_reduction", "%s has the tank passive" % hero_id)
+		var tank = hero_from_data(hero_id)
+		var enemy = make_unit(ENEMIES, "front", 100000, 100, 1.0)
+		var battle = make_battle([tank], [enemy])
+		battle.run_to_end(1.5)  # one enemy hit
+		var hits := events_of(battle.take_events(), "damage").filter(func(e): return e["source"] == enemy.id)
+		assert_eq(hits.size(), 1, "one enemy hit on %s" % hero_id)
+		assert_eq(hits[0]["amount"], roundi(100 * float(passive["damage_taken_multiplier"])), "%s takes less damage" % hero_id)
+
+
+func test_tank_passive_stacks_with_shield_wall() -> void:
+	var torvald = hero_from_data("torvald")
+	var enemy = make_unit(ENEMIES, "front", 100000, 100, 1.0)
+	var battle = make_battle([torvald], [enemy])
+	torvald.energy = torvald.ultimate_cost()
+	battle.use_ultimate(torvald.id)
+	var wall := float(ultimate_effect("torvald")["multiplier"])
+	var passive := float(data.get_hero("torvald")["passive"]["damage_taken_multiplier"])
+	assert_near(torvald.damage_taken_multiplier(), wall * passive, 0.0001, "wall and passive multiply")
+
+
+func test_other_classes_take_full_damage() -> void:
+	for hero_id in ["sigrid", "eyvind", "angrboda", "skadi"]:
+		assert_near(hero_from_data(hero_id).damage_taken_multiplier(), 1.0, 0.0001, "%s has no damage reduction" % hero_id)
 
 
 func test_berserker_gets_stronger_when_wounded() -> void:
@@ -341,3 +371,129 @@ func test_healing_restores_share_of_max_hp() -> void:
 	var share := float(ultimate_effect("angrboda")["max_hp_fraction"])
 	assert_eq(ally.hp, 100 + roundi(ally.max_hp * share), "ally healed")
 	assert_eq(angrboda.hp, 100 + roundi(angrboda.max_hp * share), "völva healed herself")
+
+
+# --- target mark (tap on an enemy) --------------------------------------------
+
+func test_mark_toggles_on_a_living_enemy_only() -> void:
+	var hero = make_unit(HEROES, "front", 100000, 1, 1000.0)
+	var enemy_a = make_dummy()
+	var enemy_b = make_dummy()
+	var battle = make_battle([hero], [enemy_a, enemy_b])
+	assert_eq(battle.marked_target_id, -1, "no mark at the start")
+	assert_true(not battle.toggle_mark(hero.id), "a hero cannot be marked")
+	assert_true(battle.toggle_mark(enemy_a.id), "enemy marked")
+	assert_eq(battle.marked_target_id, enemy_a.id, "mark on the tapped enemy")
+	assert_true(battle.toggle_mark(enemy_b.id), "mark moved")
+	assert_eq(battle.marked_target_id, enemy_b.id, "only one mark at a time")
+	assert_true(battle.toggle_mark(enemy_b.id), "second tap")
+	assert_eq(battle.marked_target_id, -1, "second tap on the marked enemy removes the mark")
+	var marks := events_of(battle.take_events(), "mark").map(func(e): return e["unit"])
+	assert_eq(marks, [enemy_a.id, enemy_b.id, -1], "mark events")
+	enemy_a.hp = 0
+	assert_true(not battle.toggle_mark(enemy_a.id), "a dead enemy cannot be marked")
+	assert_true(not battle.toggle_mark(99), "unknown unit")
+
+
+func test_melee_heroes_hit_the_marked_front_enemy() -> void:
+	var heroes := []
+	for hero_id in ["torvald", "sigrid", "eyvind"]:
+		var hero = hero_from_data(hero_id)
+		hero.max_hp = 10000000
+		hero.hp = hero.max_hp
+		heroes.append(hero)
+	var enemies := [make_dummy(), make_dummy(), make_dummy()]
+	var battle = make_battle(heroes, enemies)
+	battle.toggle_mark(enemies[1].id)
+	battle.run_to_end(20.0)
+	var hero_hits := events_of(battle.take_events(), "damage").filter(func(e): return not e["target_is_hero"])
+	assert_true(hero_hits.size() > 30, "enough hits")
+	for hit in hero_hits:
+		assert_eq(hit["target"], enemies[1].id, "every hero attack goes to the marked enemy")
+
+
+func test_mark_on_back_row_enemy_only_draws_the_archer_while_the_front_stands() -> void:
+	var sigrid = hero_from_data("sigrid")
+	var skadi = hero_from_data("skadi")
+	var front = make_dummy("front", 100000)
+	var back = make_dummy("back", 100000)
+	var battle = make_battle([sigrid, skadi], [front, back])
+	battle.toggle_mark(back.id)
+	battle.run_to_end(10.0)
+	var hits := events_of(battle.take_events(), "damage")
+	var sigrid_targets := hits.filter(func(e): return e["source"] == sigrid.id).map(func(e): return e["target"])
+	var skadi_targets := hits.filter(func(e): return e["source"] == skadi.id).map(func(e): return e["target"])
+	assert_true(not sigrid_targets.is_empty() and not skadi_targets.is_empty(), "both attacked")
+	assert_true(sigrid_targets.all(func(t): return t == front.id), "melee still hits the front row it can reach")
+	assert_true(skadi_targets.all(func(t): return t == back.id), "the archer shoots the marked enemy, not the lowest HP one")
+
+
+func test_volva_still_heals_with_a_mark() -> void:
+	var volva = hero_from_data("angrboda")
+	var ally = make_unit(HEROES, "front", 1000, 1, 1000.0)
+	ally.hp = int(ally.max_hp * float(volva.action_params["heal_below_hp_fraction"])) - 1
+	var hp_before: int = ally.hp
+	var marked = make_dummy()
+	var battle = make_battle([ally, volva], [make_dummy(), marked])
+	battle.toggle_mark(marked.id)
+	battle.run_to_end(volva.attack_interval + 0.1)  # one action
+	assert_true(ally.hp > hp_before, "a wounded ally is healed first")
+	assert_eq(marked.hp, marked.max_hp, "no attack on the mark while healing")
+	ally.hp = ally.max_hp
+	battle.run_to_end(volva.attack_interval * 2 + 0.1)  # the next action
+	assert_eq(marked.hp, marked.max_hp - roundi(volva.attack_power()), "with nobody to heal the völva attacks the mark")
+
+
+func test_fury_strikes_the_marked_enemy() -> void:
+	var sigrid = hero_from_data("sigrid")
+	var enemies := [make_dummy(), make_dummy(), make_dummy()]
+	var battle = make_battle([sigrid], enemies)
+	battle.toggle_mark(enemies[2].id)
+	sigrid.energy = sigrid.ultimate_cost()
+	battle.use_ultimate(sigrid.id)
+	var hits := events_of(battle.take_events(), "damage")
+	assert_eq(hits.size(), int(ultimate_effect("sigrid")["count"]), "three strikes")
+	assert_true(hits.all(func(e): return e["target"] == enemies[2].id), "all on the marked enemy")
+
+
+func test_mark_clears_when_the_enemy_dies_and_attacks_go_back_to_normal() -> void:
+	var hero = make_unit(HEROES, "front", 100000, 100, 0.5)
+	var weak = make_dummy("front", 150)
+	var strong = make_dummy("front", 100000)
+	var battle = make_battle([hero], [strong, weak])
+	battle.toggle_mark(weak.id)
+	battle.run_to_end(1.1)  # two attacks: the marked enemy falls
+	assert_true(not weak.is_alive(), "marked enemy killed first")
+	assert_eq(battle.marked_target_id, -1, "mark gone with the enemy")
+	var marks := events_of(battle.take_events(), "mark").map(func(e): return e["unit"])
+	assert_eq(marks, [weak.id, -1], "mark set, then cleared on death")
+	battle.run_to_end(3.0)
+	assert_true(strong.hp < strong.max_hp, "the squad moves on to the next enemy")
+
+
+func test_enemies_ignore_the_mark_and_auto_sets_none() -> void:
+	var tank = hero_from_data("torvald")
+	var other = make_unit(HEROES, "front", 100000, 1, 1000.0)
+	tank.max_hp = 10000000
+	tank.hp = tank.max_hp
+	var enemy = make_unit(ENEMIES, "front", 10000000, 1, 0.1)
+	var battle = make_battle([tank, other], [enemy])
+	battle.auto_ultimates = true
+	battle.run_to_end(30.0)
+	assert_eq(battle.marked_target_id, -1, "«Авто» never marks a target")
+	assert_true(events_of(battle.take_events(), "mark").is_empty(), "no mark events")
+	battle.toggle_mark(enemy.id)
+	battle.run_to_end(60.0)
+	var on_other := events_of(battle.take_events(), "damage").filter(func(e): return e["target"] == other.id)
+	assert_true(not on_other.is_empty(), "enemies keep picking their own targets")
+
+
+func test_same_seed_and_taps_give_same_battle() -> void:
+	var results := []
+	for i in 2:
+		var battle = Battle.from_data(data, data.starting_hero_ids(), data.get_stage(1)["waves"][1], 4242)
+		battle.run_to_end(2.0)
+		battle.toggle_mark(battle.enemies()[1].id)
+		battle.run_to_end(600.0)
+		results.append({"events": battle.take_events(), "time": battle.time})
+	assert_eq(results[1], results[0], "two runs with the same seed and the same tap")

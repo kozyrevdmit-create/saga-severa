@@ -121,11 +121,11 @@ func test_join_level_is_the_squad_average_rounded_down() -> void:
 	progress.hero_levels["sigrid"] = 7
 	progress.hero_levels["eyvind"] = 1
 	progress.apply_victory(data, 3)
-	assert_eq(progress.level_of("skadi"), 6, "(10 + 7 + 1) / 3 = 6")
-	progress.hero_levels["skadi"] = 5
+	assert_eq(progress.level_of("angrboda"), 6, "(10 + 7 + 1) / 3 = 6")
+	progress.hero_levels["angrboda"] = 5
 	win_stages(progress, 5)
 	progress.apply_victory(data, 6)
-	assert_eq(progress.level_of("angrboda"), 5, "(10 + 7 + 1 + 5) / 4 = 5.75 → 5")
+	assert_eq(progress.level_of("skadi"), 5, "(10 + 7 + 1 + 5) / 4 = 5.75 → 5")
 
 
 func test_a_hero_on_the_bench_does_not_pull_newcomers_down() -> void:
@@ -136,7 +136,7 @@ func test_a_hero_on_the_bench_does_not_pull_newcomers_down() -> void:
 	progress.hero_levels["eyvind"] = 1
 	progress.formation_remove("eyvind")
 	progress.apply_victory(data, 3)
-	assert_eq(progress.level_of("skadi"), 7, "only the squad counts: (8 + 6) / 2")
+	assert_eq(progress.level_of("angrboda"), 7, "only the squad counts: (8 + 6) / 2")
 
 
 func test_weakest_rule_from_balance_json() -> void:
@@ -150,7 +150,7 @@ func test_weakest_rule_from_balance_json() -> void:
 	progress.hero_levels["eyvind"] = 2
 	progress.formation_remove("eyvind")
 	progress.apply_victory(weakest_data, 3)
-	assert_eq(progress.level_of("skadi"), 2, "the weakest unlocked hero, bench included")
+	assert_eq(progress.level_of("angrboda"), 2, "the weakest unlocked hero, bench included")
 
 
 func test_new_heroes_take_free_slots_and_wait_when_full() -> void:
@@ -326,7 +326,7 @@ func test_unlock_all_heroes_joins_the_locked_ones_at_the_squad_average() -> void
 	progress.hero_levels["torvald"] = 9
 	progress.hero_levels["sigrid"] = 6
 	progress.hero_levels["eyvind"] = 4
-	progress.hero_levels["skadi"] = 4
+	progress.hero_levels["angrboda"] = 4
 	var locked: Array = data.heroes["heroes"].map(func(h): return h["id"]).filter(func(id): return not progress.hero_levels.has(id))
 	var joined: Array[String] = progress.unlock_all_heroes(data)
 	assert_eq(Array(joined), locked, "the locked heroes joined, in data order")
@@ -379,6 +379,18 @@ func test_heroes_opened_beyond_won_stages_survive_a_reload() -> void:
 	assert_eq(restored.hero_levels.keys(), progress.hero_levels.keys(), "heroes kept after jumping back")
 
 
+func test_save_from_before_the_m6_unlock_order() -> void:
+	# Before M6 Skadi came after stage 3 and Angrboda after 6: a save with stage 4 won has Skadi, not Angrboda.
+	var restored = Progress.from_dict({
+		"version": Progress.VERSION, "silver": 0, "experience": 0, "cleared_stage": 4,
+		"hero_levels": {"torvald": 6, "sigrid": 6, "eyvind": 6, "skadi": 4},
+		"formation": ["torvald", "sigrid", "eyvind", "skadi", ""],
+	}, data)
+	assert_eq(restored.level_of("skadi"), 4, "Skadi kept with her level")
+	assert_eq(restored.level_of("angrboda"), 5, "Angrboda joins at the squad average: (6 + 6 + 6 + 4) / 4 → 5")
+	assert_true(restored.is_in_formation("angrboda"), "and takes the free slot")
+
+
 func test_version_one_save_is_migrated() -> void:
 	# An M3 save: no formation, no unlocked heroes, no last-seen time.
 	var restored = Progress.from_dict({
@@ -406,7 +418,11 @@ func test_broken_values_fall_back_to_safe_ones() -> void:
 	assert_eq(restored.level_of("torvald"), data.max_level(), "level clamped to max")
 	assert_eq(restored.level_of("sigrid"), restored.level_of("torvald"), "broken level: joins like a new hero (the squad is Torvald alone)")
 	assert_true(not restored.hero_levels.has("unknown_hero"), "unknown hero ignored")
-	assert_eq(restored.squad_ids(), ["torvald"], "duplicates and unknown heroes dropped from the formation")
+	assert_eq(restored.formation[0], "torvald", "saved slot kept")
+	assert_eq(restored.formation.count("torvald"), 1, "duplicates dropped from the formation")
+	assert_true(not restored.is_in_formation("unknown_hero"), "unknown heroes dropped from the formation")
+	# Heroes without a saved level join like new heroes, into the free slots (M6).
+	assert_eq(restored.squad_ids().size(), data.slot_count(), "free slots taken by the heroes that joined")
 
 
 func test_empty_saved_formation_is_refilled() -> void:

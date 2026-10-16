@@ -1,6 +1,7 @@
 ## Battle screen: shows the stage battle (scripts/battle) and passes taps to it.
 ## The squad from the formation fights the stage picked on the chapter map; a win pays the reward
 ## (less for a replay) and may bring a new hero; «Отступить» ends the battle as a defeat.
+## Tapping an enemy marks it as the target (tap again to remove the mark).
 ## Progress is saved after every stage.
 extends Control
 
@@ -85,13 +86,15 @@ func _on_speed_pressed() -> void:
 func _refresh() -> void:
 	%RetreatButton.disabled = _battle.finished
 	for unit in _battle.units:
-		_views[unit.id].refresh(unit)
+		_views[unit.id].refresh(unit, unit.id == _battle.marked_target_id)
 		if _cards.has(unit.id):
 			_cards[unit.id].refresh(unit, _battle.can_use_ultimate(unit.id))
 
 
 func _add_view(unit) -> void:
 	var view := FighterView.new(unit)
+	if unit.team == BattleUnit.Team.ENEMIES:
+		view.tapped.connect(_battle.toggle_mark.bind(unit.id))
 	%Field.add_child(view)
 	_views[unit.id] = view
 

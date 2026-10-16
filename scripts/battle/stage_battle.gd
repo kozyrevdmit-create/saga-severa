@@ -134,6 +134,20 @@ func retreat() -> bool:
 	return true
 
 
+## Marks an enemy of the current wave (see Battle.toggle_mark); a new wave starts without a mark.
+func toggle_mark(unit_id: int) -> bool:
+	if finished:
+		return false
+	var changed: bool = battle.toggle_mark(unit_id)
+	_collect_battle_events()
+	return changed
+
+
+var marked_target_id: int:
+	get:
+		return battle.marked_target_id
+
+
 func can_use_ultimate(unit_id: int) -> bool:
 	return not finished and battle.can_use_ultimate(unit_id)
 

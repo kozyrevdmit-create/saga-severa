@@ -13,6 +13,7 @@ var time := 0.0
 var auto_ultimates := false  ## "Авто": heroes use ultimates as soon as they are ready
 var finished := false
 var victory := false
+var marked_target_id := -1  ## enemy the player marked (tap): heroes that can reach it hit it first; -1 = none
 
 var _energy: Dictionary  ## balance.json "energy": per_attack, per_heal, per_hit_taken
 var _target_weights: Dictionary  ## balance.json "target_weights": by_class, default
@@ -64,7 +65,24 @@ func run_to_end(max_seconds: float) -> void:
 		step()
 
 
-## Events since the last call: damage, heal, death, ultimate, special, end. Used by the screen for effects.
+## The player taps an enemy: it becomes the marked target; tapping the marked enemy again removes the mark.
+## Only a living enemy can be marked. Returns true when the mark changed. Adds {"type": "mark", "unit"} (-1 = none).
+func toggle_mark(unit_id: int) -> bool:
+	if finished or unit_id < 0 or unit_id >= units.size():
+		return false
+	var unit = units[unit_id]
+	if unit.team != BattleUnit.Team.ENEMIES or not unit.is_alive():
+		return false
+	_set_mark(-1 if marked_target_id == unit_id else unit_id)
+	return true
+
+
+func _set_mark(unit_id: int) -> void:
+	marked_target_id = unit_id
+	_events.append({"type": "mark", "unit": unit_id})
+
+
+## Events since the last call: damage, heal, death, mark, ultimate, special, end. Used by the screen for effects.
 func take_events() -> Array[Dictionary]:
 	var events := _events
 	_events = []
@@ -206,6 +224,8 @@ func _deal_damage(source, target, multiplier: float, kind: String) -> void:
 		_gain_energy(target, int(_energy["per_hit_taken"]))
 	else:
 		_events.append({"type": "death", "unit": target.id})
+		if target.id == marked_target_id:
+			_set_mark(-1)
 
 
 func _heal(source, target, amount: int) -> void:
@@ -227,6 +247,9 @@ func _pick_front_row_target(unit):
 	var candidates := _front_row_or_rest(_alive(_opponents_of(unit)))
 	if candidates.is_empty():
 		return null
+	var marked = _marked_among(unit, candidates)
+	if marked != null:
+		return marked
 	var weights := PackedFloat32Array()
 	for candidate in candidates:
 		weights.append(_target_weight(candidate))
@@ -238,11 +261,24 @@ func _target_weight(target) -> float:
 
 
 func _pick_lowest_hp_target(unit):
+	var candidates := _alive(_opponents_of(unit))
+	var marked = _marked_among(unit, candidates)
+	if marked != null:
+		return marked
 	var best = null
-	for target in _alive(_opponents_of(unit)):
+	for target in candidates:
 		if best == null or target.hp < best.hp:
 			best = target
 	return best
+
+
+## The marked enemy when a hero can reach it (it is among the targets the hero's action may pick), else null.
+## Enemies never follow the mark.
+func _marked_among(unit, candidates: Array):
+	if unit.team != BattleUnit.Team.HEROES or marked_target_id < 0:
+		return null
+	var marked = units[marked_target_id]
+	return marked if marked in candidates else null
 
 
 func _pick_most_wounded_ally(unit):

@@ -6,6 +6,7 @@ const GameData := preload("res://scripts/data/game_data.gd")
 const KNOWN_ACTIONS := ["attack_front_row", "attack_lowest_hp", "heal_or_attack"]
 const KNOWN_EFFECTS := ["buff_allies", "hits", "damage", "heal_allies"]
 const KNOWN_TARGETS := ["front_row_single", "front_row_all", "all_enemies"]
+const KNOWN_PASSIVES := ["attack_per_missing_hp", "damage_taken_reduction"]
 
 var data = GameData.load_all()
 
@@ -14,7 +15,7 @@ func test_all_six_heroes_present() -> void:
 	var ids := []
 	for hero in data.heroes["heroes"]:
 		ids.append(hero["id"])
-	assert_eq(ids, ["torvald", "sigrid", "eyvind", "skadi", "angrboda", "hrungnir"], "hero ids")
+	assert_eq(ids, ["torvald", "sigrid", "eyvind", "angrboda", "skadi", "hrungnir"], "hero ids")
 
 
 func test_heroes_have_valid_fields() -> void:
@@ -32,6 +33,9 @@ func test_heroes_have_valid_fields() -> void:
 			assert_true(effect["type"] in KNOWN_EFFECTS, "%s effect type %s known" % [who, effect["type"]])
 			if effect.has("target"):
 				assert_true(effect["target"] in KNOWN_TARGETS, "%s effect target %s known" % [who, effect["target"]])
+		if hero.has("passive"):
+			assert_true(hero["passive"]["type"] in KNOWN_PASSIVES, "%s passive type known" % who)
+			assert_true(not str(hero["passive"].get("description", "")).is_empty(), "%s passive has a description" % who)
 
 
 func test_classes_have_valid_fields() -> void:
@@ -42,10 +46,18 @@ func test_classes_have_valid_fields() -> void:
 		assert_true(Color.html_is_valid(hero_class["color"]), "%s color" % class_id)
 
 
+func test_shieldbearers_have_the_tank_passive() -> void:
+	for hero in data.heroes["heroes"]:
+		if hero["class"] == "shieldbearer":
+			var multiplier := float(hero.get("passive", {}).get("damage_taken_multiplier", 1.0))
+			assert_true(hero["passive"]["type"] == "damage_taken_reduction" and multiplier > 0.0 and multiplier < 1.0,
+					"%s takes less damage" % hero["id"])
+
+
 func test_starting_heroes_and_unlocks() -> void:
 	assert_eq(data.starting_hero_ids(), ["torvald", "sigrid", "eyvind"], "starting heroes")
-	assert_eq(int(data.get_hero("skadi")["unlock_after_stage"]), 3, "Skadi unlock")
-	assert_eq(int(data.get_hero("angrboda")["unlock_after_stage"]), 6, "Angrboda unlock")
+	assert_eq(int(data.get_hero("angrboda")["unlock_after_stage"]), 3, "Angrboda unlock (M6: the healer comes first)")
+	assert_eq(int(data.get_hero("skadi")["unlock_after_stage"]), 6, "Skadi unlock")
 	assert_eq(int(data.get_hero("hrungnir")["unlock_after_stage"]), 9, "Hrungnir unlock")
 
 

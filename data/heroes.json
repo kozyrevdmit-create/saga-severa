@@ -70,6 +70,11 @@
         "effects": [
           { "type": "buff_allies", "stat": "damage_taken", "multiplier": 0.6, "duration": 4.0 }
         ]
+      },
+      "passive": {
+        "type": "damage_taken_reduction",
+        "description": "−30% получаемого урона",
+        "damage_taken_multiplier": 0.7
       }
     },
     {
@@ -114,6 +119,24 @@
       }
     },
     {
+      "id": "angrboda",
+      "name": "Ангрбода",
+      "class": "volva",
+      "clan": "jotunheim",
+      "hp": 620,
+      "attack": 45,
+      "attack_interval": 1.4,
+      "unlock_after_stage": 3,
+      "ultimate": {
+        "energy_cost": 52,
+        "name": "Исцеление",
+        "description": "Лечит отряд на 25% макс. HP каждого",
+        "effects": [
+          { "type": "heal_allies", "max_hp_fraction": 0.25 }
+        ]
+      }
+    },
+    {
       "id": "skadi",
       "name": "Скади",
       "class": "archer",
@@ -121,7 +144,7 @@
       "hp": 600,
       "attack": 70,
       "attack_interval": 1.1,
-      "unlock_after_stage": 3,
+      "unlock_after_stage": 6,
       "ultimate": {
         "energy_cost": 92,
         "name": "Ледяной залп",
@@ -133,24 +156,6 @@
             "attack_multiplier": 1.2,
             "status": { "kind": "slow", "amount": 0.3, "duration": 2.0 }
           }
-        ]
-      }
-    },
-    {
-      "id": "angrboda",
-      "name": "Ангрбода",
-      "class": "volva",
-      "clan": "jotunheim",
-      "hp": 620,
-      "attack": 45,
-      "attack_interval": 1.4,
-      "unlock_after_stage": 6,
-      "ultimate": {
-        "energy_cost": 52,
-        "name": "Исцеление",
-        "description": "Лечит отряд на 25% макс. HP каждого",
-        "effects": [
-          { "type": "heal_allies", "max_hp_fraction": 0.25 }
         ]
       }
     },
@@ -175,6 +180,11 @@
             "status": { "kind": "stun", "duration": 1.5 }
           }
         ]
+      },
+      "passive": {
+        "type": "damage_taken_reduction",
+        "description": "−30% получаемого урона",
+        "damage_taken_multiplier": 0.7
       }
     }
   ]

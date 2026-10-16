@@ -214,3 +214,16 @@ func test_progress_shares_count_every_wave() -> void:
 	hero.hp = 250
 	assert_near(stage.enemy_hp_share_taken(), 0.5, 0.0001, "1000 of 2000 enemy HP over both waves")
 	assert_near(stage.hero_hp_share_left(), 0.25, 0.0001, "a quarter of the squad's HP left")
+
+
+func test_mark_does_not_carry_over_to_the_next_wave() -> void:
+	var stage = StageBattle.from_data(data, 1, squad_at(10), 5)
+	assert_true(stage.toggle_mark(stage.enemies()[0].id), "first wave enemy marked")
+	assert_eq(stage.marked_target_id, stage.enemies()[0].id, "mark visible through the stage")
+	assert_eq(events_of(stage.take_events(), "mark").size(), 1, "mark event passed on")
+	while stage.wave_index == 0 and not stage.finished:
+		stage.step()
+	assert_eq(stage.wave_index, 1, "second wave arrived")
+	assert_eq(stage.marked_target_id, -1, "a new wave starts without a mark")
+	stage.retreat()
+	assert_true(not stage.toggle_mark(stage.enemies()[0].id), "no marks after the stage ended")
