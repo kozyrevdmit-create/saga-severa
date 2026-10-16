@@ -67,6 +67,33 @@ func test_the_formation_screen_follows_the_finger_and_a_drag_does_not_change_the
 	_close(screen)
 
 
+func test_after_pulling_past_the_top_the_list_turns_back_with_the_finger() -> void:
+	var screen = await _open(HEROES_SCENE, false)
+	var tree := Engine.get_main_loop() as SceneTree
+	var scroll: ScrollContainer = _find_scroll(screen)
+	var bar := scroll.get_v_scroll_bar()
+	bar.value = 0.0
+	await tree.process_frame
+	var was_touch := Input.emulate_touch_from_mouse
+	Input.emulate_touch_from_mouse = true
+	var point := scroll.get_global_rect().get_center()
+	_push_button(point, true)
+	await tree.process_frame
+	for i in 4:  # finger down: the list is already at its top and stays
+		point.y += 40.0
+		_push_motion(point, Vector2(0, 40.0))
+		await tree.process_frame
+	assert_eq(bar.value, 0.0, "the list does not move past its top")
+	point.y -= 30.0
+	_push_motion(point, Vector2(0, -30.0))
+	await tree.process_frame
+	assert_near(bar.value, 30.0, 0.01, "turning the finger back moves the list at once")
+	_push_button(point, false)
+	await tree.process_frame
+	Input.emulate_touch_from_mouse = was_touch
+	_close(screen)
+
+
 func _game_state() -> Node:
 	return (Engine.get_main_loop() as SceneTree).root.get_node("GameState")
 

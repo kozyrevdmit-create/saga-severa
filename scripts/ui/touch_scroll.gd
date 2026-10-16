@@ -67,8 +67,10 @@ func _move(finger_dy: float) -> void:
 		_finger_offset = -finger_dy  # like the built-in drag: the list starts from here, without a jump
 		propagate_notification(NOTIFICATION_SCROLL_BEGIN)  # cancels the press of the button under the finger
 		scroll_started.emit()
-	get_v_scroll_bar().value = _drag_from + _finger_offset
-	_glide.track(_clock, _drag_from + _finger_offset)
+	var bar := get_v_scroll_bar()
+	bar.value = _drag_from + _finger_offset
+	_finger_offset = bar.value - _drag_from  # past the start or end the list stays; turning back moves it at once
+	_glide.track(_clock, bar.value)
 
 
 func _release() -> void:
