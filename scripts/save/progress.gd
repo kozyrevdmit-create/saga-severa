@@ -148,6 +148,19 @@ func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
 	return reward
 
 
+## Keeps the saved pack times honest when the device clock jumps back: a pack that has come back is forgotten
+## (turning the clock back does not send it away again), and a pack never waits longer than the respawn time from
+## now. Called when the game starts or comes back and while the map is open.
+func update_pack_timers(data, now_unix: int) -> void:
+	var latest: int = now_unix + data.pack_respawn_seconds()
+	for pack_id in pack_respawn_unix.keys():
+		var at := int(pack_respawn_unix[pack_id])
+		if at <= now_unix:
+			pack_respawn_unix.erase(pack_id)
+		elif at > latest:
+			pack_respawn_unix[pack_id] = latest
+
+
 ## Debug panel «Промотать время»: beaten packs come back that much sooner.
 func skip_pack_timers(seconds: int) -> void:
 	for pack_id in pack_respawn_unix:

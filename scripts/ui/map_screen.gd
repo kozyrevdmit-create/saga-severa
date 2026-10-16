@@ -17,7 +17,8 @@ const STAGE_SIZE := 84.0  ## stage circle at the map's own scale (≈ 1 screen p
 const BOSS_SIZE := 100.0
 const PACK_SIZE := 96.0
 const CAPTION_GAP := 6.0
-const MIN_MARKER_SCALE := 0.75  ## markers shrink with the map on a short screen, but stay big enough to tap
+const MIN_MARKER_SCALE := 0.75  ## markers shrink with the map on a short screen, but stay readable
+const MIN_TAP_HEIGHT := 96.0  ## spec: buttons at least 96 px tall on the screen, whatever the markers' scale
 const MAX_MARKER_SCALE := 1.1
 const CAPTION_FONT_SIZE := 20
 const NUMBER_FONT_SIZE := 38
@@ -191,6 +192,7 @@ func _on_pack_pressed(pack_id: String) -> void:
 
 
 func _refresh_packs() -> void:
+	GameState.progress.update_pack_timers(GameState.data, GameState.now())
 	for pack_id in _pack_markers:
 		_refresh_pack(pack_id)
 
@@ -289,7 +291,8 @@ func _make_marker(token: Panel, caption: PanelContainer, side: String, point: Di
 	return marker
 
 
-## Lays the token and the caption out inside the marker's button by its side.
+## Lays the token and the caption out inside the marker's button by its side. The button reaches at least
+## MIN_TAP_HEIGHT on the screen (at the markers' scale): the parts are centred in a taller tap area when needed.
 func _arrange(marker: Dictionary) -> void:
 	var token: Control = marker["token"]
 	var caption: Control = marker["caption"]
@@ -318,8 +321,11 @@ func _arrange(marker: Dictionary) -> void:
 	var visible_parts := Rect2(caption.position, caption_size)
 	if token.visible:
 		visible_parts = visible_parts.merge(Rect2(token.position, token_size))
+	var pad := maxf(0.0, MIN_TAP_HEIGHT / _marker_scale - visible_parts.size.y) / 2.0
+	caption.position.y += pad
+	token.position.y += pad
 	marker["button"].position = Vector2.ZERO
-	marker["button"].size = visible_parts.end
+	marker["button"].size = Vector2(visible_parts.end.x, visible_parts.end.y + 2.0 * pad)
 
 
 func _pulse(token: Control) -> void:
@@ -339,6 +345,7 @@ func _layout() -> void:
 	%MapPicture.size = _map_shown
 	_marker_scale = clampf(map_scale, MIN_MARKER_SCALE, MAX_MARKER_SCALE)
 	for marker in _markers:
+		_arrange(marker)
 		_place(marker)
 
 

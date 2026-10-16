@@ -12,6 +12,8 @@ var _saved_progress
 var _saved_window_size: Vector2i
 
 
+## The tap areas reach 96 px (spec) and may overlap a little on a short screen; a tap on a token or a caption still
+## lands on its own marker (the topmost button under the finger).
 func test_markers_fit_the_screen_without_overlapping() -> void:
 	for window in [PHONE_SIZE, BASE_SIZE]:
 		for cleared in [0, 4, 10]:
@@ -20,13 +22,21 @@ func test_markers_fit_the_screen_without_overlapping() -> void:
 			var screen_rect: Rect2 = screen.get_viewport_rect()
 			var free_area := Rect2(0, screen.get_node("%TopBar").get_global_rect().end.y, screen_rect.size.x,
 					screen.get_node("%BottomBar").get_global_rect().position.y - screen.get_node("%TopBar").get_global_rect().end.y)
-			var rects := []
+			var drawn := []
 			for marker in screen._markers:
-				var rect: Rect2 = marker["button"].get_global_rect()
-				assert_true(free_area.encloses(rect), "%s: marker %s is on the screen between the bars (%s)" % [where, _name(marker), rect])
-				for other in rects:
-					assert_true(not other[1].intersects(rect), "%s: %s and %s overlap" % [where, other[0], _name(marker)])
-				rects.append([_name(marker), rect])
+				var button: Button = marker["button"]
+				assert_true(button.get_global_rect().size.y >= 96.0 - 0.01, "%s: %s can be tapped, at least 96 px tall (%s)" % [
+						where, _name(marker), button.get_global_rect().size.y])
+				var parts: Array[Rect2] = [marker["caption"].get_global_rect()]
+				if marker["token"].visible:
+					parts.append(marker["token"].get_global_rect())
+				for part in parts:
+					assert_true(free_area.encloses(part), "%s: %s is on the screen between the bars (%s)" % [where, _name(marker), part])
+					for other in drawn:
+						assert_true(not other[1].intersects(part), "%s: %s and %s overlap" % [where, other[0], _name(marker)])
+					assert_true(_marker_at(screen, part.get_center()) == marker, "%s: a tap on %s reaches it" % [where, _name(marker)])
+				for part in parts:
+					drawn.append([_name(marker), part])
 				var token: Control = marker["token"]
 				if token.visible:
 					var center: Vector2 = token.get_global_rect().get_center()
@@ -125,6 +135,16 @@ func _close(screen: Control) -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	tree.root.get_node("GameState").progress = _saved_progress
 	tree.root.size = _saved_window_size
+
+
+## The marker whose button a tap at `point` reaches: the topmost one (the last child of the board) under the finger.
+func _marker_at(screen: Control, point: Vector2):
+	var found = null
+	for marker in screen._markers:
+		if marker["button"].get_global_rect().has_point(point) and (found == null
+				or marker["button"].get_index() > found["button"].get_index()):
+			found = marker
+	return found
 
 
 func _texts(node: Node) -> String:

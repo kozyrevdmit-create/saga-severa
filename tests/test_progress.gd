@@ -574,6 +574,20 @@ func test_pack_timer_never_grows_past_the_respawn_time() -> void:
 			"the device clock turned back a day: still at most the respawn time")
 
 
+func test_turning_the_clock_back_moves_the_saved_pack_time() -> void:
+	var progress = Progress.new_game(data)
+	var respawn: int = data.pack_respawn_seconds()
+	progress.apply_pack_victory(data, "wolves", NOW)
+	var back := NOW - 24 * 3600
+	progress.update_pack_timers(data, back)
+	assert_eq(progress.pack_respawn_unix["wolves"], back + respawn, "the saved time moves back with the clock")
+	assert_true(progress.is_pack_available(data, "wolves", back + respawn), "back after the respawn time of real waiting")
+	progress.apply_pack_victory(data, "wolves", NOW)
+	progress.update_pack_timers(data, NOW + respawn)
+	assert_true(not progress.pack_respawn_unix.has("wolves"), "a pack that came back is forgotten")
+	assert_true(progress.is_pack_available(data, "wolves", NOW), "turning the clock back does not send it away again")
+
+
 func test_pack_timers_are_saved_and_old_saves_have_every_pack_on_the_map() -> void:
 	var progress = Progress.new_game(data)
 	win_stages(progress, 6)

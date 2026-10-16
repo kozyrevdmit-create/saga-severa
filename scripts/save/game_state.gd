@@ -126,9 +126,11 @@ func _on_returned() -> void:
 	_heartbeat.start()
 
 
-## Banks the income for the time away (from the saved "last seen" time to now), then saves.
+## Banks the income for the time away (from the saved "last seen" time to now), checks the beast pack timers
+## against the clock, then saves.
 func _bank_offline_income() -> void:
 	var gained: int = progress.collect_offline_income(data, now())
+	progress.update_pack_timers(data, now())
 	SaveStorage.save_progress(progress)
 	if gained > 0:
 		offline_bank_changed.emit()
