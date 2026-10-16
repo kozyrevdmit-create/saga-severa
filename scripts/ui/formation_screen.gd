@@ -1,5 +1,6 @@
 ## Squad formation (spec 5.4): tap a hero to put them into the next free slot, tap a hero in a slot to take
 ## them out. Shows the squad's «Сила», each hero's role and which clan bonuses are active. Saves after every change.
+## The screen scrolls (a finger dragged over the hero cards scrolls it too); the bench wraps onto new lines.
 extends Control
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -20,14 +21,20 @@ func _on_slot_pressed(hero_id: String) -> void:
 	if GameState.progress.formation_remove(hero_id):
 		_changed()
 	else:
-		%Message.text = "В отряде должен остаться хотя бы один герой."
+		_show_message("В отряде должен остаться хотя бы один герой.")
 
 
 func _on_bench_hero_pressed(hero_id: String) -> void:
 	if GameState.progress.formation_add(GameState.data, hero_id):
 		_changed()
 	else:
-		%Message.text = "Все слоты заняты. Сначала убери кого-нибудь из отряда."
+		_show_message("Все слоты заняты. Сначала убери кого-нибудь из отряда.")
+
+
+## The message sits below the bench: scroll to it so it is seen.
+func _show_message(text_value: String) -> void:
+	%Message.text = text_value
+	%Scroll.ensure_control_visible.call_deferred(%Message)
 
 
 func _changed() -> void:
@@ -77,6 +84,8 @@ func _make_hero_button(hero_id: String) -> Button:
 	var data = GameState.data
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
+	# The drag passes on to the ScrollContainer; once the screen starts scrolling, the tap is cancelled.
+	button.mouse_filter = Control.MOUSE_FILTER_PASS
 	button.custom_minimum_size = Vector2(0, 150)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.add_theme_font_size_override("font_size", 24)

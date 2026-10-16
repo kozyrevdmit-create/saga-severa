@@ -2,6 +2,7 @@
 ##   godot --headless --path . --script res://tests/run_tests.gd
 ## Exit code 0 = all passed, 1 = something failed.
 ## Any engine/script error printed during a test also fails that test.
+## A test may wait for frames (await): screen tests need the layout to settle.
 extends SceneTree
 
 
@@ -44,7 +45,7 @@ func _initialize() -> void:
 				continue
 			catcher.errors.clear()
 			var suite = script.new()
-			suite.call(test_name)
+			await suite.call(test_name)
 			var problems: Array = suite.failures + catcher.errors
 			if problems.is_empty():
 				passed += 1
