@@ -38,7 +38,7 @@ const Progress := preload("res://scripts/save/progress.gd")
 const POLICY_NAMES := {"human": "человек", "sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
 
 var data
-var _variant_failed := false  ## a sensitivity variant failed
+var _variant_failed := false  ## a sensitivity variant failed, or --recommend found a stage it cannot reach (exit code 1)
 ## A battle can stall: a lone völva against the boss heals herself about as fast as he hits her and rarely attacks
 ## (found in M5.1, about 1 in 2000–4000 test fights). A battle still running after
 ## balance.json → balance_check.stall_after_seconds of battle time counts as a defeat and is reported as stalled.
@@ -110,7 +110,7 @@ func _initialize() -> void:
 
 	if recommend:
 		_print_recommended()
-		quit()
+		quit(1 if _variant_failed else 0)
 		return
 
 	if sensitivity:
@@ -722,6 +722,7 @@ func _print_recommended() -> void:
 	print("6. Рекомендуемая сила: сила отряда, при которой человек побеждает в %d%% боёв (%d боёв на точку)" % [roundi(share * 100), fights])
 	print("Этап | уровни | побед | сила | округлено | сейчас в stages.json")
 	var found := []
+	var unreachable := []
 	for stage in range(1, data.stage_count() + 1):
 		var progress = Progress.new_game(data)
 		for won in range(1, stage):
@@ -732,13 +733,18 @@ func _print_recommended() -> void:
 			for k in ids.size():
 				progress.hero_levels[ids[k]] = mini(data.max_level(), 1 + step / ids.size() + (1 if k < step % ids.size() else 0))
 			return _win_rate(stage, progress.squad(data), "human", fights) / 100.0
+		var max_step: int = ids.size() * (data.max_level() - 1)  # every squad hero at the max level
 		var low := 0
 		var high := 0
 		if rate_at.call(0) < share:
 			high = 1
-			while rate_at.call(high) < share and high < ids.size() * data.max_level():
+			while high < max_step and rate_at.call(high) < share:
 				low = high
-				high *= 2
+				high = mini(high * 2, max_step)
+			if rate_at.call(high) < share:
+				unreachable.append(stage)
+				print("%4d | недостижимо: даже на %d уровне побед %d%%" % [stage, data.max_level(), roundi(rate_at.call(high) * 100)])
+				continue
 			while high - low > 1:
 				var middle := (low + high) / 2
 				if rate_at.call(middle) >= share:
@@ -751,6 +757,11 @@ func _print_recommended() -> void:
 		found.append(rounded)
 		print("%4d | %6s | %4d%% | %4d | %9d | %d" % [stage, _levels_text(progress.squad(data)), roundi(rate * 100), power, rounded,
 				data.recommended_power(stage)])
+	if not unreachable.is_empty():
+		print("Числа для stages.json не выводятся: этапы %s не набирают %d%% побед даже на максимальном уровне — поправьте баланс." % [
+				", ".join(unreachable.map(func(v): return str(v))), roundi(share * 100)])
+		_variant_failed = true
+		return
 	print("Для stages.json: " + ", ".join(found.map(func(v): return str(v))))
 
 
