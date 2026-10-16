@@ -198,7 +198,7 @@ func _refresh_packs() -> void:
 
 
 ## Three looks: on the map (portrait, tappable), away («через 1:24» where the pack stood, no portrait),
-## locked (dimmed, «после этапа N»).
+## locked (dimmed portrait, «после этапа N»).
 func _refresh_pack(pack_id: String) -> void:
 	var data = GameState.data
 	var progress = GameState.progress
@@ -216,7 +216,7 @@ func _refresh_pack(pack_id: String) -> void:
 	else:
 		status.text = "в бой!"
 	button.disabled = state != "ready"
-	button.modulate = Color(1, 1, 1, 0.6) if state == "locked" else Color.WHITE
+	marker["token"].modulate = Color(1, 1, 1, 0.55) if state == "locked" else Color.WHITE  # the caption stays readable
 	marker["token"].visible = state != "away"
 	marker["side"] = "center" if state == "away" else "below"
 	marker["state"] = state
