@@ -523,6 +523,9 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, p
 	battle.auto_ultimates = policy != "human"
 	var ready_since := {}
 	var charge_started := {}
+	## hero id -> battle time the ultimate became ready; the charge ends there, not when the human taps it later
+	## («Авто» uses it in the same step, so it is never seen ready and the ultimate's time counts).
+	var charged_at := {}
 	for hero in battle.heroes():
 		charge_started[hero.def_id] = 0.0
 	var fallen: Array[String] = []  ## heroes in the order they fell
@@ -532,6 +535,10 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, p
 			_stalled[stall_key] += 1
 			break
 		battle.step()
+		if record_charges:
+			for hero in battle.heroes():
+				if battle.can_use_ultimate(hero.id) and not charged_at.has(hero.def_id):
+					charged_at[hero.def_id] = battle.time
 		if policy == "human":
 			_human_step(battle, ready_since)
 		for event in battle.take_events():
@@ -542,10 +549,11 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key: String, p
 			if record_charges and event["type"] == "ultimate":
 				var hero_id: String = battle.units[event["unit"]].def_id
 				var entry: Array = _charges.get(hero_id, [0.0, 0])
-				entry[0] += battle.time - charge_started[hero_id]
+				entry[0] += float(charged_at.get(hero_id, battle.time)) - charge_started[hero_id]
 				entry[1] += 1
 				_charges[hero_id] = entry
 				charge_started[hero_id] = battle.time
+				charged_at.erase(hero_id)
 	if policy != "" and battle.victory:
 		_count_deaths(policy, squad, fallen)
 	return {"victory": battle.victory, "time": battle.time}
