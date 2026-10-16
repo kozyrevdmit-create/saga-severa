@@ -434,3 +434,45 @@ func test_non_number_version_starts_new_game() -> void:
 	for broken_version in [{}, [], "1", null]:
 		var restored = Progress.from_dict({"version": broken_version, "silver": 999}, data)
 		assert_eq(restored.to_dict(), Progress.new_game(data).to_dict(), "version %s gives a new game" % str(broken_version))
+
+
+# --- squad power («Сила») -----------------------------------------------------
+
+func test_hero_power_formula_from_balance_json() -> void:
+	var weights: Dictionary = data.balance["squad_power"]
+	var hero: Dictionary = data.get_hero("torvald")
+	var no_bonus := {"hp": 0.0, "attack": 0.0}
+	var expected := float(hero["hp"]) * float(weights["hp_weight"]) + float(hero["attack"]) * float(weights["attack_weight"])
+	assert_eq(data.hero_power("torvald", 1, no_bonus), roundi(expected), "level 1: HP × hp_weight + attack × attack_weight")
+	var multiplier: float = data.hero_stat_multiplier(5)
+	assert_eq(data.hero_power("torvald", 5, no_bonus), roundi(expected * multiplier), "HP and attack grow with the level")
+	var with_hp_bonus := float(hero["hp"]) * 1.2 * float(weights["hp_weight"]) + float(hero["attack"]) * float(weights["attack_weight"])
+	assert_eq(data.hero_power("torvald", 1, {"hp": 0.2, "attack": 0.0}), roundi(with_hp_bonus), "clan bonus counts")
+
+
+func test_squad_power_is_the_sum_over_the_squad_with_clan_bonuses() -> void:
+	var progress = Progress.new_game(data)
+	var synergy: Dictionary = data.synergy_bonuses(progress.squad_ids())
+	assert_true(synergy["hp"] > 0.0, "three Midgard heroes: the HP bonus is on")
+	var total := 0
+	for hero_id in progress.squad_ids():
+		total += data.hero_power(hero_id, progress.level_of(hero_id), synergy)
+	assert_eq(progress.squad_power(data), total, "sum of the squad heroes")
+	progress.hero_levels["sigrid"] = 4
+	assert_true(progress.squad_power(data) > total, "a level-up raises the power")
+
+
+func test_bench_hero_does_not_count_and_level_up_gain_matches() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 9)
+	assert_true(not progress.is_in_formation("hrungnir"), "Hrungnir waits on the bench")
+	var before: int = progress.squad_power(data)
+	progress.hero_levels["hrungnir"] = 20
+	assert_eq(progress.squad_power(data), before, "the bench does not add to the squad's power")
+	assert_eq(progress.hero_power(data, "hrungnir"), data.hero_power("hrungnir", 20, data.synergy_bonuses([])), "bench hero: no clan bonus")
+	for hero_id in progress.squad_ids():
+		var gain: int = progress.level_up_power_gain(data, hero_id)
+		var power_before: int = progress.squad_power(data)
+		progress.hero_levels[hero_id] += 1
+		assert_eq(progress.squad_power(data) - power_before, gain, "«+N силы» of %s is what the squad gains" % hero_id)
+		assert_true(gain > 0, "%s gains power" % hero_id)

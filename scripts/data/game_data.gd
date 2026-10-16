@@ -86,6 +86,22 @@ func hero_stat_multiplier(level: int) -> float:
 	return pow(1.0 + float(balance["leveling"]["stat_growth_per_level"]), level - 1)
 
 
+## «Сила» of one hero, a whole number: HP × hp_weight + attack × attack_weight (balance.json → squad_power),
+## with HP and attack at the hero's level (stat_growth_per_level) and the squad's clan bonuses (synergy_bonuses).
+func hero_power(hero_id: String, level: int, synergy: Dictionary) -> int:
+	var hero: Dictionary = get_hero(hero_id)
+	var weights: Dictionary = balance["squad_power"]
+	var multiplier := hero_stat_multiplier(level)
+	var hp := float(hero["hp"]) * multiplier * (1.0 + float(synergy["hp"]))
+	var attack := float(hero["attack"]) * multiplier * (1.0 + float(synergy["attack"]))
+	return roundi(hp * float(weights["hp_weight"]) + attack * float(weights["attack_weight"]))
+
+
+## «Рекомендуемая сила» of a stage (stages.json → recommended_power, found by tools/balance_sim.gd -- --recommend).
+func recommended_power(stage_id: int) -> int:
+	return int(get_stage(stage_id)["recommended_power"])
+
+
 ## Enemy HP and attack multiplier on a stage: each stage adds enemy_power_growth_per_stage on top of the previous one.
 func enemy_power_multiplier(stage_id: int) -> float:
 	return pow(1.0 + float(balance["enemy_power_growth_per_stage"]), stage_id - 1)

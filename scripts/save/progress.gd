@@ -155,6 +155,28 @@ func level_up(data, hero_id: String) -> bool:
 	return true
 
 
+# --- squad power («Сила») -----------------------------------------------------
+
+## The squad's «Сила»: the sum of the squad heroes' power (GameData.hero_power) with the squad's clan bonuses.
+func squad_power(data) -> int:
+	var total := 0
+	for hero_id in squad_ids():
+		total += hero_power(data, hero_id)
+	return total
+
+
+## A hero's power at their level (plus extra_levels): with the squad's clan bonuses when in the squad, without on the bench.
+func hero_power(data, hero_id: String, extra_levels := 0) -> int:
+	var synergy: Dictionary = data.synergy_bonuses(squad_ids() if is_in_formation(hero_id) else [])
+	return data.hero_power(hero_id, level_of(hero_id) + extra_levels, synergy)
+
+
+## «+N силы» on the level-up button: how much the hero's power grows with the next level
+## (for a hero in the squad, exactly how much the squad's power grows).
+func level_up_power_gain(data, hero_id: String) -> int:
+	return hero_power(data, hero_id, 1) - hero_power(data, hero_id)
+
+
 # --- formation ----------------------------------------------------------------
 
 func slot_row(data, slot: int) -> String:

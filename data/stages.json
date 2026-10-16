@@ -9,6 +9,7 @@
     {
       "id": 1,
       "chapter": 1,
+      "recommended_power": 4650,
       "reward": {
         "silver": 270,
         "experience": 20
@@ -22,6 +23,7 @@
     {
       "id": 2,
       "chapter": 1,
+      "recommended_power": 4650,
       "reward": {
         "silver": 330,
         "experience": 40
@@ -35,6 +37,7 @@
     {
       "id": 3,
       "chapter": 1,
+      "recommended_power": 4950,
       "reward": {
         "silver": 340,
         "experience": 60
@@ -48,48 +51,66 @@
     {
       "id": 4,
       "chapter": 1,
+      "recommended_power": 6650,
       "reward": {
-        "silver": 385,
+        "silver": 430,
         "experience": 80
       },
       "waves": [
-        ["draugr"],
-        ["draugr", "wolf", "wolf"],
-        ["draugr", "wolf", "draugr_archer"]
+        ["draugr", "draugr", "wolf"],
+        ["draugr", "draugr", "draugr_archer"],
+        ["draugr", "draugr", "draugr_archer", "draugr_archer"]
       ]
     },
     {
       "id": 5,
       "chapter": 1,
+      "recommended_power": 7850,
       "reward": {
         "silver": 455,
         "experience": 100
       },
       "waves": [
-        ["draugr"],
-        ["draugr", "wolf", "wolf"],
-        ["draugr", "wolf", "draugr_archer"]
+        ["draugr", "draugr", "wolf"],
+        ["draugr", "draugr", "draugr_archer"],
+        ["draugr", "draugr", "draugr_archer", "draugr_archer"]
       ]
     },
     {
       "id": 6,
       "chapter": 1,
+      "recommended_power": 8800,
       "reward": {
         "silver": 500,
         "experience": 120
       },
       "waves": [
-        ["wolf", "wolf"],
-        ["draugr", "wolf"],
-        ["draugr", "wolf", "wolf"]
+        ["draugr", "draugr", "wolf"],
+        ["draugr", "draugr", "draugr_archer"],
+        ["draugr", "draugr", "wolf", "draugr_archer"]
       ]
     },
     {
       "id": 7,
       "chapter": 1,
+      "recommended_power": 11800,
       "reward": {
         "silver": 510,
         "experience": 140
+      },
+      "waves": [
+        ["draugr", "draugr", "wolf"],
+        ["draugr", "draugr", "draugr_archer"],
+        ["draugr", "draugr", "draugr_archer", "draugr_archer"]
+      ]
+    },
+    {
+      "id": 8,
+      "chapter": 1,
+      "recommended_power": 12500,
+      "reward": {
+        "silver": 685,
+        "experience": 160
       },
       "waves": [
         ["draugr", "draugr", "wolf"],
@@ -98,11 +119,12 @@
       ]
     },
     {
-      "id": 8,
+      "id": 9,
       "chapter": 1,
+      "recommended_power": 13750,
       "reward": {
-        "silver": 685,
-        "experience": 160
+        "silver": 720,
+        "experience": 180
       },
       "waves": [
         ["draugr", "draugr", "wolf"],
@@ -111,27 +133,15 @@
       ]
     },
     {
-      "id": 9,
-      "chapter": 1,
-      "reward": {
-        "silver": 720,
-        "experience": 180
-      },
-      "waves": [
-        ["draugr", "draugr"],
-        ["draugr", "draugr", "wolf"],
-        ["draugr", "wolf", "draugr_archer"]
-      ]
-    },
-    {
       "id": 10,
       "chapter": 1,
+      "recommended_power": 14850,
       "reward": {
         "silver": 850,
         "experience": 200
       },
       "waves": [
-        ["draugr", "wolf", "wolf"],
+        ["draugr", "draugr", "wolf"],
         ["draugr", "wolf", "draugr_archer"],
         ["draugr_king"]
       ]

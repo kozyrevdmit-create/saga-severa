@@ -53,10 +53,15 @@ size_flags_vertical = 4
 theme_override_font_sizes/font_size = 32
 text = "Серебро: 0"
 
-[node name="List" type="VBoxContainer" parent="Margin/Layout"]
-unique_name_in_owner = true
+[node name="Scroll" type="ScrollContainer" parent="Margin/Layout"]
 layout_mode = 2
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="Margin/Layout/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 16
 
 [node name="BackButton" type="Button" parent="Margin/Layout"]

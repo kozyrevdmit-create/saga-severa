@@ -23,6 +23,10 @@
     "back_slots": 3
   },
   "replay_reward_share": 0.5,
+  "squad_power": {
+    "hp_weight": 1.0,
+    "attack_weight": 10.0
+  },
   "new_hero": {
     "join_level": "squad_average"
   },
@@ -39,6 +43,12 @@
     "long_press_seconds": 0.8,
     "add_silver": 10000,
     "skip_time_hours": 1
+  },
+  "simulation": {
+    "human_ultimate_delay_seconds": 1.5,
+    "recommended_power_win_share": 0.7,
+    "recommended_power_fights": 100,
+    "recommended_power_round_to": 50
   },
   "balance_check": {
     "max_average_replays_per_stage": 5,

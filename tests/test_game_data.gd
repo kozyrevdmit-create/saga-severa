@@ -54,6 +54,21 @@ func test_shieldbearers_have_the_tank_passive() -> void:
 					"%s takes less damage" % hero["id"])
 
 
+func test_every_stage_has_a_growing_recommended_power() -> void:
+	var previous := 0
+	for stage in data.stages["stages"]:
+		var power: int = data.recommended_power(int(stage["id"]))
+		assert_true(power > 0, "stage %s has a recommended power" % stage["id"])
+		assert_true(power >= previous, "stage %s needs at least as much power as the one before" % stage["id"])
+		previous = power
+
+
+func test_heroes_have_role_details() -> void:
+	for hero in data.heroes["heroes"]:
+		var detail: String = hero.get("role_detail", "")
+		assert_true(detail.begins_with(data.get_hero_class(hero)["role_short"] + " · "), "%s: «роль · уточнение»" % hero["id"])
+
+
 func test_starting_heroes_and_unlocks() -> void:
 	assert_eq(data.starting_hero_ids(), ["torvald", "sigrid", "eyvind"], "starting heroes")
 	assert_eq(int(data.get_hero("angrboda")["unlock_after_stage"]), 3, "Angrboda unlock (M6: the healer comes first)")
