@@ -56,6 +56,8 @@ func _add_row(hero_id: String) -> void:
 	style.set_corner_radius_all(12)
 	style.set_content_margin_all(16)
 	panel.add_theme_stylebox_override("panel", style)
+	# A finger dragged over a card must reach the ScrollContainer (a panel stops it by default).
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 	%List.add_child(panel)
 
 	var box := VBoxContainer.new()
@@ -68,6 +70,7 @@ func _add_row(hero_id: String) -> void:
 	var swatch := ColorRect.new()
 	swatch.color = Color.html(data.get_hero_class(hero)["color"])
 	swatch.custom_minimum_size = Vector2(24, 0)
+	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	line.add_child(swatch)
 
 	var info := VBoxContainer.new()
@@ -85,6 +88,8 @@ func _add_row(hero_id: String) -> void:
 	button.focus_mode = Control.FOCUS_NONE
 	button.add_theme_font_size_override("font_size", 24)
 	button.pressed.connect(_on_level_up_pressed.bind(hero_id))
+	# The drag passes on to the ScrollContainer too; once the list starts scrolling, the press is cancelled.
+	button.mouse_filter = Control.MOUSE_FILTER_PASS
 	line.add_child(button)
 
 	var ultimate: Dictionary = hero["ultimate"]

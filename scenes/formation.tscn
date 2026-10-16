@@ -37,65 +37,78 @@ theme_override_constants/margin_bottom = 48
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="Title" type="Label" parent="Margin/Layout"]
+[node name="Scroll" type="ScrollContainer" parent="Margin/Layout"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="Margin/Layout/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Margin/Layout/Scroll/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "Отряд"
 
-[node name="PowerLabel" type="Label" parent="Margin/Layout"]
+[node name="PowerLabel" type="Label" parent="Margin/Layout/Scroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 30
 text = "Сила отряда: 0"
 
-[node name="Hint" type="Label" parent="Margin/Layout"]
+[node name="Hint" type="Label" parent="Margin/Layout/Scroll/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 0.65)
 theme_override_font_sizes/font_size = 22
 text = "Нажми на героя — он встанет в свободный слот. Нажми на героя в слоте — он уйдёт из отряда."
 autowrap_mode = 3
 
-[node name="FrontTitle" type="Label" parent="Margin/Layout"]
+[node name="FrontTitle" type="Label" parent="Margin/Layout/Scroll/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 26
 text = "Первый ряд — принимает удары"
 
-[node name="FrontRow" type="HBoxContainer" parent="Margin/Layout"]
+[node name="FrontRow" type="HBoxContainer" parent="Margin/Layout/Scroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="BackTitle" type="Label" parent="Margin/Layout"]
+[node name="BackTitle" type="Label" parent="Margin/Layout/Scroll/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 26
 text = "Второй ряд"
 
-[node name="BackRow" type="HBoxContainer" parent="Margin/Layout"]
+[node name="BackRow" type="HBoxContainer" parent="Margin/Layout/Scroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="SynergyTitle" type="Label" parent="Margin/Layout"]
+[node name="SynergyTitle" type="Label" parent="Margin/Layout/Scroll/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 26
 text = "Роды (3 героя одного рода — бонус всему отряду)"
 autowrap_mode = 3
 
-[node name="Synergies" type="VBoxContainer" parent="Margin/Layout"]
+[node name="Synergies" type="VBoxContainer" parent="Margin/Layout/Scroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="BenchTitle" type="Label" parent="Margin/Layout"]
+[node name="BenchTitle" type="Label" parent="Margin/Layout/Scroll/Content"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 26
 text = "Не в отряде"
 
-[node name="Bench" type="HBoxContainer" parent="Margin/Layout"]
+[node name="Bench" type="HFlowContainer" parent="Margin/Layout/Scroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
 
-[node name="Message" type="Label" parent="Margin/Layout"]
+[node name="Message" type="Label" parent="Margin/Layout/Scroll/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
