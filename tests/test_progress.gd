@@ -582,6 +582,13 @@ func test_turning_the_clock_back_moves_the_saved_pack_time() -> void:
 	progress.update_pack_timers(data, back)
 	assert_eq(progress.pack_respawn_unix["wolves"], back + respawn, "the saved time moves back with the clock")
 	assert_true(progress.is_pack_available(data, "wolves", back + respawn), "back after the respawn time of real waiting")
+	# A small step back: an hour after the win the clock goes back 30 minutes; the pack still comes back
+	# after the respawn time of real waiting.
+	var won_at := NOW + 7 * 24 * 3600
+	progress.apply_pack_victory(data, "boars", won_at)
+	progress.update_pack_timers(data, won_at + 3600)
+	progress.update_pack_timers(data, won_at + 1800)
+	assert_eq(progress.pack_seconds_left(data, "boars", won_at + 1800), respawn - 3600, "an hour of real waiting counts")
 	progress.apply_pack_victory(data, "wolves", NOW)
 	progress.update_pack_timers(data, NOW + respawn)
 	assert_true(not progress.pack_respawn_unix.has("wolves"), "a pack that came back is forgotten")

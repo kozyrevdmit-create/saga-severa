@@ -15,6 +15,7 @@ var last_seen_unix := 0  ## when the game was last open; 0 = never
 var offline_bank := 0  ## offline income collected on return, waiting for «Забрать»
 var mark_hint_shown := false  ## the battle hint about the target mark was shown (once per game; a reset shows it again)
 var pack_respawn_unix := {}  ## beaten beast pack id -> when it comes back to the map (unix time)
+var pack_clock_unix := 0  ## when the pack timers were last checked against the clock (to notice it turned back); 0 = never
 
 
 static func new_game(data) -> RefCounted:
@@ -39,6 +40,7 @@ func reset(data, now_unix: int) -> void:
 	offline_bank = fresh.offline_bank
 	mark_hint_shown = fresh.mark_hint_shown
 	pack_respawn_unix = fresh.pack_respawn_unix
+	pack_clock_unix = fresh.pack_clock_unix
 	last_seen_unix = now_unix
 
 
@@ -144,21 +146,25 @@ func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
 	var reward := pack_reward(data)
 	silver += int(reward["silver"])
 	experience += int(reward["experience"])
+	update_pack_timers(data, now_unix)
 	pack_respawn_unix[pack_id] = now_unix + data.pack_respawn_seconds()
 	return reward
 
 
-## Keeps the saved pack times honest when the device clock jumps back: a pack that has come back is forgotten
-## (turning the clock back does not send it away again), and a pack never waits longer than the respawn time from
-## now. Called when the game starts or comes back and while the map is open.
+## Keeps the saved pack times honest when the device clock jumps back: every saved time moves back by as much as
+## the clock went back since the last check, so the real wait stays the respawn time; a pack never waits longer than
+## the respawn time from now; a pack that has come back is forgotten (turning the clock back does not send it away
+## again). Called when the game starts or comes back, while the map is open and when a pack is beaten.
 func update_pack_timers(data, now_unix: int) -> void:
+	var went_back := maxi(0, pack_clock_unix - now_unix)
+	pack_clock_unix = now_unix
 	var latest: int = now_unix + data.pack_respawn_seconds()
 	for pack_id in pack_respawn_unix.keys():
-		var at := int(pack_respawn_unix[pack_id])
+		var at := mini(int(pack_respawn_unix[pack_id]) - went_back, latest)
 		if at <= now_unix:
 			pack_respawn_unix.erase(pack_id)
-		elif at > latest:
-			pack_respawn_unix[pack_id] = latest
+		else:
+			pack_respawn_unix[pack_id] = at
 
 
 ## Debug panel «Промотать время»: beaten packs come back that much sooner.
@@ -389,6 +395,7 @@ func to_dict() -> Dictionary:
 		"offline_bank": offline_bank,
 		"mark_hint_shown": mark_hint_shown,
 		"pack_respawn_unix": pack_respawn_unix.duplicate(),
+		"pack_clock_unix": pack_clock_unix,
 	}
 
 
@@ -414,6 +421,7 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 			var at := _to_int(respawns.get(pack_id), 0)
 			if at > 0:
 				progress.pack_respawn_unix[pack_id] = at
+	progress.pack_clock_unix = maxi(0, _to_int(saved.get("pack_clock_unix"), 0))
 
 	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
 	# a hero without a saved level joins like a new hero (at the join level counted over the heroes with a saved
