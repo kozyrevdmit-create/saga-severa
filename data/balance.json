@@ -39,6 +39,10 @@
     "max_hours": 8,
     "last_seen_refresh_seconds": 60
   },
+  "beast_packs": {
+    "respawn_hours": 2,
+    "reward_share_of_first_win": 0.3
+  },
   "mark_hint": {
     "seconds": 6
   },

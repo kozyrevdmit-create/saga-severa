@@ -1,5 +1,5 @@
 ## Player progress: silver, experience (jarl level), won stages, unlocked heroes with their levels,
-## the squad formation and the time the game was last open (for offline income).
+## the squad formation, the time the game was last open (for offline income) and when beaten beast packs come back.
 ## Rules only; reading and writing the save file lives in save_storage.gd.
 extends RefCounted
 
@@ -14,6 +14,7 @@ var formation: Array[String] = []  ## one hero id or EMPTY per slot; front slots
 var last_seen_unix := 0  ## when the game was last open; 0 = never
 var offline_bank := 0  ## offline income collected on return, waiting for «Забрать»
 var mark_hint_shown := false  ## the battle hint about the target mark was shown (once per game; a reset shows it again)
+var pack_respawn_unix := {}  ## beaten beast pack id -> when it comes back to the map (unix time)
 
 
 static func new_game(data) -> RefCounted:
@@ -27,7 +28,7 @@ static func new_game(data) -> RefCounted:
 
 
 ## Debug panel «Сбросить прогресс»: everything back to a new game (stages, heroes and their levels, squad,
-## silver, jarl experience, offline bank, the target mark hint). The offline clock restarts now, so the time before the reset earns nothing.
+## silver, jarl experience, offline bank, the target mark hint, beast pack timers). The offline clock restarts now, so the time before the reset earns nothing.
 func reset(data, now_unix: int) -> void:
 	var fresh = new_game(data)
 	silver = fresh.silver
@@ -37,6 +38,7 @@ func reset(data, now_unix: int) -> void:
 	formation = fresh.formation
 	offline_bank = fresh.offline_bank
 	mark_hint_shown = fresh.mark_hint_shown
+	pack_respawn_unix = fresh.pack_respawn_unix
 	last_seen_unix = now_unix
 
 
@@ -98,6 +100,58 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 				_join(data, hero_id, level)
 				new_heroes.append(hero_id)
 	return {"silver": silver_gain, "experience": experience_gain, "replay": replay, "new_heroes": new_heroes}
+
+
+# --- beast packs ----------------------------------------------------------------
+
+## Beast packs fight at the strength of the last stage won and pay a share of its first-win reward
+## (stage 1 before the first win).
+func pack_stage() -> int:
+	return maxi(1, cleared_stage)
+
+
+func is_pack_unlocked(data, pack_id: String) -> bool:
+	return cleared_stage >= int(data.get_pack(pack_id)["unlock_after_stage"])
+
+
+## Seconds until a beaten pack comes back; 0 = it is on the map. Counted by the clock, so the time while the game
+## is closed counts too. Never more than the respawn time, even if the device clock was turned back.
+func pack_seconds_left(data, pack_id: String, now_unix: int) -> int:
+	if not pack_respawn_unix.has(pack_id):
+		return 0
+	return clampi(int(pack_respawn_unix[pack_id]) - now_unix, 0, data.pack_respawn_seconds())
+
+
+## The pack is on the map and can be fought: unlocked and not waiting to come back.
+func is_pack_available(data, pack_id: String, now_unix: int) -> bool:
+	return is_pack_unlocked(data, pack_id) and pack_seconds_left(data, pack_id, now_unix) == 0
+
+
+## The reward for beating a pack: balance.json → beast_packs.reward_share_of_first_win of the first-win reward
+## of pack_stage(), silver with the jarl bonus. Returns {silver, experience}.
+func pack_reward(data) -> Dictionary:
+	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
+	var base: Dictionary = data.get_stage(pack_stage())["reward"]
+	return {
+		"silver": roundi(float(base["silver"]) * share * silver_multiplier(data)),
+		"experience": roundi(float(base["experience"]) * share),
+	}
+
+
+## Pays the pack reward and sends the pack away for balance.json → beast_packs.respawn_hours.
+## A defeat or a retreat changes nothing: the pack stays on the map. Returns {silver, experience}.
+func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
+	var reward := pack_reward(data)
+	silver += int(reward["silver"])
+	experience += int(reward["experience"])
+	pack_respawn_unix[pack_id] = now_unix + data.pack_respawn_seconds()
+	return reward
+
+
+## Debug panel «Промотать время»: beaten packs come back that much sooner.
+func skip_pack_timers(seconds: int) -> void:
+	for pack_id in pack_respawn_unix:
+		pack_respawn_unix[pack_id] = int(pack_respawn_unix[pack_id]) - seconds
 
 
 # --- hero levels --------------------------------------------------------------
@@ -321,6 +375,7 @@ func to_dict() -> Dictionary:
 		"last_seen_unix": last_seen_unix,
 		"offline_bank": offline_bank,
 		"mark_hint_shown": mark_hint_shown,
+		"pack_respawn_unix": pack_respawn_unix.duplicate(),
 	}
 
 
@@ -339,6 +394,13 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	# A save from before M6.1 has no flag: the hint is new, so it is shown once there too.
 	var hint_shown = saved.get("mark_hint_shown")
 	progress.mark_hint_shown = hint_shown is bool and hint_shown
+	# A save from before M9 has no pack timers: every unlocked pack is on the map.
+	var respawns = saved.get("pack_respawn_unix")
+	if respawns is Dictionary:
+		for pack_id in data.pack_ids():
+			var at := _to_int(respawns.get(pack_id), 0)
+			if at > 0:
+				progress.pack_respawn_unix[pack_id] = at
 
 	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
 	# a hero without a saved level joins like a new hero (at the join level counted over the heroes with a saved

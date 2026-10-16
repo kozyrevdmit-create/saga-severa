@@ -15,6 +15,7 @@ var data
 var progress
 var settings
 var selected_stage := 1  ## stage the battle screen should fight (set by the chapter map)
+var selected_pack := ""  ## beast pack the battle screen should fight instead of a stage; "" = a stage (set by the chapter map)
 
 var _visibility_callback  ## keeps the browser callback alive
 var _heartbeat := Timer.new()  ## refreshes "last seen" while the game is in front
@@ -45,8 +46,9 @@ func claim_offline_income() -> void:
 
 ## Debug panel «Сбросить прогресс»: a new game, saved at once. The settings stay as they are.
 func reset_progress() -> void:
-	progress.reset(data, _now())
+	progress.reset(data, now())
 	selected_stage = 1
+	selected_pack = ""
 	save()
 
 
@@ -70,9 +72,11 @@ func debug_jump_to_stage(stage_id: int) -> void:
 
 
 ## Debug panel «Промотать время»: as if the game had been closed for skip_time_hours; the income goes
-## into the bank and the «Пока тебя не было» window shows it.
+## into the bank and the «Пока тебя не было» window shows it, and beaten beast packs come back that much sooner.
 func debug_skip_time() -> void:
-	progress.last_seen_unix = _now() - roundi(float(data.balance["debug_panel"]["skip_time_hours"]) * 3600.0)
+	var seconds := roundi(float(data.balance["debug_panel"]["skip_time_hours"]) * 3600.0)
+	progress.last_seen_unix = now() - seconds
+	progress.skip_pack_timers(seconds)
 	_bank_offline_income()
 
 
@@ -83,7 +87,7 @@ func save_settings() -> void:
 func save() -> void:
 	# In the background the "last seen" time stays at the moment the game left, so that time is counted later.
 	if not _away:
-		progress.last_seen_unix = _now()
+		progress.last_seen_unix = now()
 	SaveStorage.save_progress(progress)
 
 
@@ -124,11 +128,12 @@ func _on_returned() -> void:
 
 ## Banks the income for the time away (from the saved "last seen" time to now), then saves.
 func _bank_offline_income() -> void:
-	var gained: int = progress.collect_offline_income(data, _now())
+	var gained: int = progress.collect_offline_income(data, now())
 	SaveStorage.save_progress(progress)
 	if gained > 0:
 		offline_bank_changed.emit()
 
 
-func _now() -> int:
+## The clock for offline income and beast pack timers (unix seconds).
+func now() -> int:
 	return int(Time.get_unix_time_from_system())

@@ -1,4 +1,4 @@
-## Progress rules: levelling, rewards and replays, hero unlocks, formation, jarl level, offline income, saves.
+## Progress rules: levelling, rewards and replays, hero unlocks, formation, jarl level, offline income, beast packs, saves.
 ## Expected numbers come from data/*.json.
 extends "res://tests/base_test.gd"
 
@@ -312,6 +312,7 @@ func test_reset_returns_everything_to_a_new_game() -> void:
 	progress.formation_remove("eyvind")
 	progress.last_seen_unix = 1000000
 	progress.collect_offline_income(data, 1000000 + 3600)
+	progress.apply_pack_victory(data, "wolves", 1000000)
 	assert_true(progress.offline_bank > 0, "something in the offline bank before the reset")
 	progress.reset(data, 2000000)
 	var expected: Dictionary = Progress.new_game(data).to_dict()
@@ -362,6 +363,7 @@ func test_progress_survives_dict_round_trip() -> void:
 	progress.formation_remove("sigrid")
 	progress.last_seen_unix = 1790000000
 	progress.offline_bank = 321
+	progress.apply_pack_victory(data, "boars", 1790000000)
 	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
 	assert_eq(restored.to_dict(), progress.to_dict(), "same progress after JSON round trip")
 
@@ -504,3 +506,85 @@ func test_recommended_power_is_red_only_while_the_squad_is_weaker() -> void:
 		for hero_id in progress.squad_ids():
 			progress.hero_levels[hero_id] += 1
 	assert_true(not progress.is_below_recommended(data, stage), "at or above the recommended power: not red")
+
+
+# --- beast packs (M9) ------------------------------------------------------------
+
+const NOW := 1800000000
+
+
+func test_packs_unlock_after_their_stage() -> void:
+	var progress = Progress.new_game(data)
+	for pack_id in data.pack_ids():
+		var unlock := int(data.get_pack(pack_id)["unlock_after_stage"])
+		progress.cleared_stage = maxi(0, unlock - 1)
+		if unlock > 0:
+			assert_true(not progress.is_pack_available(data, pack_id, NOW), "%s is locked before stage %d" % [pack_id, unlock])
+		progress.cleared_stage = unlock
+		assert_true(progress.is_pack_available(data, pack_id, NOW), "%s is on the map after stage %d" % [pack_id, unlock])
+
+
+func test_pack_strength_and_reward_follow_the_last_stage_won() -> void:
+	var progress = Progress.new_game(data)
+	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
+	assert_eq(progress.pack_stage(), 1, "before the first win the packs are as strong as stage 1")
+	assert_eq(progress.pack_reward(data)["silver"], roundi(float(data.get_stage(1)["reward"]["silver"]) * share), "and pay a share of stage 1")
+	win_stages(progress, 6)
+	assert_eq(progress.pack_stage(), 6, "after stage 6: stage 6 strength")
+	var reward: Dictionary = data.get_stage(6)["reward"]
+	var expected := {
+		"silver": roundi(float(reward["silver"]) * share * progress.silver_multiplier(data)),
+		"experience": roundi(float(reward["experience"]) * share),
+	}
+	assert_eq(progress.pack_reward(data), expected, "a share of stage 6's first win, silver with the jarl bonus")
+	assert_true(progress.silver_multiplier(data) > 1.0, "the jarl bonus is really in play here")
+
+
+func test_beaten_pack_pays_and_comes_back_after_the_respawn_time() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 4)
+	var expected: Dictionary = progress.pack_reward(data)
+	var silver_before: int = progress.silver
+	var experience_before: int = progress.experience
+	assert_eq(progress.apply_pack_victory(data, "boars", NOW), expected, "the reward is returned")
+	assert_eq(progress.silver - silver_before, int(expected["silver"]), "silver paid")
+	assert_eq(progress.experience - experience_before, int(expected["experience"]), "experience paid")
+	var respawn: int = data.pack_respawn_seconds()
+	assert_eq(progress.pack_seconds_left(data, "boars", NOW), respawn, "the pack is away for the respawn time")
+	assert_true(not progress.is_pack_available(data, "boars", NOW + respawn - 1), "still away a second before")
+	assert_eq(progress.pack_seconds_left(data, "boars", NOW + 3600), respawn - 3600, "time counts by the clock (also while the game is closed)")
+	assert_true(progress.is_pack_available(data, "boars", NOW + respawn), "back on the map after the respawn time")
+	assert_true(progress.is_pack_available(data, "wolves", NOW), "other packs are not touched")
+
+
+func test_skip_time_brings_packs_back_sooner() -> void:
+	var progress = Progress.new_game(data)
+	progress.apply_pack_victory(data, "wolves", NOW)
+	var respawn: int = data.pack_respawn_seconds()
+	progress.skip_pack_timers(3600)
+	assert_eq(progress.pack_seconds_left(data, "wolves", NOW), respawn - 3600, "an hour less to wait")
+	progress.skip_pack_timers(respawn)
+	assert_true(progress.is_pack_available(data, "wolves", NOW), "back once the skipped time covers the wait")
+
+
+func test_pack_timer_never_grows_past_the_respawn_time() -> void:
+	var progress = Progress.new_game(data)
+	progress.apply_pack_victory(data, "wolves", NOW)
+	assert_eq(progress.pack_seconds_left(data, "wolves", NOW - 24 * 3600), data.pack_respawn_seconds(),
+			"the device clock turned back a day: still at most the respawn time")
+
+
+func test_pack_timers_are_saved_and_old_saves_have_every_pack_on_the_map() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 6)
+	progress.apply_pack_victory(data, "bear", NOW)
+	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
+	assert_eq(restored.pack_seconds_left(data, "bear", NOW), data.pack_respawn_seconds(), "the timer survives a reload")
+	var old_save: Dictionary = progress.to_dict()
+	old_save.erase("pack_respawn_unix")
+	restored = Progress.from_dict(old_save, data)
+	for pack_id in data.pack_ids():
+		assert_true(restored.is_pack_available(data, pack_id, NOW), "a save from before M9: %s is on the map" % pack_id)
+	old_save["pack_respawn_unix"] = {"bear": "soon", "nobody": NOW}
+	restored = Progress.from_dict(old_save, data)
+	assert_eq(restored.pack_respawn_unix, {}, "broken values and unknown packs are dropped")

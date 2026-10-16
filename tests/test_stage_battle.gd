@@ -227,3 +227,18 @@ func test_mark_does_not_carry_over_to_the_next_wave() -> void:
 	assert_eq(stage.marked_target_id, -1, "a new wave starts without a mark")
 	stage.retreat()
 	assert_true(not stage.toggle_mark(stage.enemies()[0].id), "no marks after the stage ended")
+
+
+# --- beast packs (M9) -------------------------------------------------------------
+
+func test_a_pack_is_one_wave_at_the_given_stage_strength() -> void:
+	var battle = StageBattle.from_pack(data, "boars", 5, squad_at(3), 1)
+	assert_eq(battle.wave_count, 1, "one wave")
+	var power: float = data.enemy_power_multiplier(5)
+	assert_eq(battle.enemies().map(func(e): return e.def_id), data.get_pack("boars")["enemies"], "the pack's beasts")
+	for enemy in battle.enemies():
+		var definition: Dictionary = data.get_enemy(enemy.def_id)
+		assert_eq(enemy.max_hp, roundi(definition["hp"] * power), "%s HP at stage 5 strength" % enemy.def_id)
+		assert_near(enemy.base_attack, definition["attack"] * power, 0.001, "%s attack at stage 5 strength" % enemy.def_id)
+	battle.run_to_end(600.0)
+	assert_true(battle.finished, "the pack battle ends")

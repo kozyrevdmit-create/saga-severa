@@ -1,37 +1,42 @@
-## Chapter map: a vertical path of the chapter's stages from the bottom up.
-## Won stages are marked and can be replayed, the next stage is highlighted, later ones are locked.
-## The last stage shows the boss. On top — the squad's «Сила»; every stage shows its «Рекомендуемая сила»,
-## the number in red while the squad is weaker than that. Placeholder shapes only.
+## Chapter map: the chapter's painted map (stages.json → chapters[].map) fills the screen height, the sides that do
+## not fit are cut off. The stages stand on the trail from the bottom up (stages.json → stages[].map_point: x, y as
+## shares of the picture, the side of the caption). Won stages are marked and can be replayed, the next stage is
+## highlighted, later ones are locked; the last stage shows the boss. Each caption shows the stage's
+## «Рекомендуемая сила», in red while the squad is weaker than that; the squad's «Сила» is in the top bar.
+## Beast packs (packs.json) stand off the trail: a beast's portrait while the pack can be fought, «через 1:24» while
+## a beaten pack is away (it comes back by itself, the screen follows the clock), dimmed until it is unlocked.
+## The top bar and the «Назад» button lie on a see-through paper strip so they read over the picture.
 extends Control
+
+const Art := preload("res://scripts/ui/art.gd")
 
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 
-const NODE_SIZE := Vector2(320, 96)  ## spec: buttons at least 96 px tall
-const BOSS_NODE_SIZE := Vector2(360, 100)
-const ZIGZAG := [0.3, 0.7]  ## node centre x as a share of the path width, alternating
-const CLEARED_COLOR := Color("#2f7d4a")
-const CURRENT_COLOR := Color("#c99a2e")
-const LOCKED_COLOR := Color("#2a2f38")
-const BOSS_COLOR := Color("#7a2a2a")
-const PATH_DONE_COLOR := Color("#4fa36a")
-const PATH_TODO_COLOR := Color(1, 1, 1, 0.15)
-const TOO_WEAK_COLOR := Color("#ff4d4d")
-const NODE_FONT_SIZE := 22
+const STAGE_SIZE := 84.0  ## stage circle at the map's own scale (≈ 1 screen pixel per map pixel on an iPhone)
+const BOSS_SIZE := 100.0
+const PACK_SIZE := 96.0
+const CAPTION_GAP := 6.0
+const MIN_MARKER_SCALE := 0.75  ## markers shrink with the map on a short screen, but stay big enough to tap
+const MAX_MARKER_SCALE := 1.1
+const CAPTION_FONT_SIZE := 20
+const NUMBER_FONT_SIZE := 38
+const CURRENT_PULSE_SCALE := 1.08
+const CURRENT_PULSE_SECONDS := 0.7
+
+const INK := Color("#1a1a1a")
+const PAPER := Color("#efe3c8")
+const CAPTION_PAPER := Color(0.937, 0.89, 0.784, 0.9)
+const CLEARED_COLOR := Color("#3f6a96")  ## the map's cold blue
+const CURRENT_COLOR := Color("#b5442c")  ## the map's rust red
+const CURRENT_BORDER := Color("#ffe27a")
+const LOCKED_COLOR := Color(0.102, 0.102, 0.102, 0.85)
+const BOSS_LOCKED_COLOR := Color("#4a1a14")
+const TOO_WEAK_COLOR := Color("#c81e1e")  ## a red that reads on the paper caption
+const CROWN_COLOR := Color("#e8c547")
 
 
-## Lines between the stage nodes, drawn under them.
-class PathLines extends Control:
-	var points: Array[Vector2] = []
-	var done_segments := 0
-
-	func _draw() -> void:
-		for i in range(points.size() - 1):
-			var color := PATH_DONE_COLOR if i < done_segments else PATH_TODO_COLOR
-			draw_line(points[i], points[i + 1], color, 10.0, true)
-
-
-## Placeholder boss icon: a crown.
+## Boss icon: a crown over the last stage.
 class CrownIcon extends Control:
 	func _draw() -> void:
 		var w := size.x
@@ -39,108 +44,313 @@ class CrownIcon extends Control:
 		var crown := PackedVector2Array([
 			Vector2(0, h), Vector2(0, h * 0.3), Vector2(w * 0.25, h * 0.6), Vector2(w * 0.5, 0),
 			Vector2(w * 0.75, h * 0.6), Vector2(w, h * 0.3), Vector2(w, h)])
-		draw_colored_polygon(crown, Color("#e8c547"))
+		draw_colored_polygon(crown, CROWN_COLOR)
+		crown.append(crown[0])
+		draw_polyline(crown, INK, 3.0, true)
 
 
-var _nodes: Array[Button] = []
-var _lines := PathLines.new()
-var _crown := CrownIcon.new()
+var _map_size := Vector2.ONE  ## the map picture's own size
+var _markers: Array[Dictionary] = []  ## {button, token, caption, side, point (shares of the picture)}
+var _stage_buttons := {}  ## stage id -> Button
+var _pack_markers := {}  ## pack id -> its marker plus {status: Label, state: "ready" / "away" / "locked"}
+var _map_origin := Vector2.ZERO  ## where the map picture's corner is on the screen
+var _map_shown := Vector2.ONE  ## the map picture's size on the screen
+var _marker_scale := 1.0
+var _clock := Timer.new()
 
 
 func _ready() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
-	var stage: Dictionary = data.get_stage(1)
-	%Title.text = "Глава %d · %s" % [int(stage["chapter"]), data.get_chapter(int(stage["chapter"]))["name"]]
+	var chapter: Dictionary = data.get_chapter(int(data.get_stage(1)["chapter"]))
+	%Title.text = "Глава %d · %s" % [int(chapter["id"]), chapter["name"]]
 	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
-	_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	%Path.add_child(_lines)
+	%MapPicture.texture = Art.map_picture(chapter["map"])
+	_map_size = %MapPicture.texture.get_size()
 	for stage_id in range(1, data.stage_count() + 1):
-		var node := _make_node(stage_id, data, progress)
-		%Path.add_child(node)
-		_nodes.append(node)
-	_crown.custom_minimum_size = Vector2(72, 56)
-	_crown.size = _crown.custom_minimum_size
-	_crown.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	%Path.add_child(_crown)
+		_add_stage(stage_id)
+	for pack_id in data.pack_ids():
+		_add_pack(pack_id)
 	%BackButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
-	%Path.resized.connect(_layout)
+	%Board.resized.connect(_layout)
+	_clock.wait_time = 1.0
+	_clock.timeout.connect(_refresh_packs)
+	add_child(_clock)
+	_clock.start()
 	_layout()
 
 
-func _make_node(stage_id: int, data, progress) -> Button:
+# --- stages -------------------------------------------------------------------
+
+func _add_stage(stage_id: int) -> void:
+	var data = GameState.data
+	var progress = GameState.progress
 	var is_boss: bool = stage_id == data.stage_count()
-	var button := Button.new()
-	button.focus_mode = Control.FOCUS_NONE
-	button.size = BOSS_NODE_SIZE if is_boss else NODE_SIZE
-	button.add_theme_font_size_override("font_size", NODE_FONT_SIZE)
+	var cleared: bool = progress.is_replay(stage_id)
+	var open: bool = progress.is_stage_open(data, stage_id)
+	var current := open and not cleared
+	var side: float = BOSS_SIZE if is_boss else STAGE_SIZE
+
 	var color := LOCKED_COLOR
 	var state := ""
-	if progress.is_replay(stage_id):
+	if cleared:
 		color = CLEARED_COLOR
 		state = "пройден"
-	elif progress.is_stage_open(data, stage_id):
+	elif open:
 		color = CURRENT_COLOR
 		state = "в бой!"
-	var lines: Array[String] = ["Этап %d · %s" % [stage_id, state] if state != "" else "Этап %d" % stage_id]
-	if is_boss:
-		lines.append(data.get_enemy(data.get_stage(stage_id)["waves"].back()[0])["name"])
-		if not progress.is_replay(stage_id) and not progress.is_stage_open(data, stage_id):
-			color = BOSS_COLOR.darkened(0.4)
-	var power := str(data.recommended_power(stage_id))
-	if progress.is_below_recommended(data, stage_id):
-		power = "[color=#%s]%s[/color]" % [TOO_WEAK_COLOR.to_html(false), power]
-	lines.append("Рекомендуемая сила " + power)
+	elif is_boss:
+		color = BOSS_LOCKED_COLOR
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
-	style.set_corner_radius_all(48)
-	if progress.is_stage_open(data, stage_id) and not progress.is_replay(stage_id):
-		style.set_border_width_all(8)
-		style.border_color = Color("#ffe27a")
-	for state_name in ["normal", "hover", "pressed", "disabled"]:
-		button.add_theme_stylebox_override(state_name, style)
-	button.disabled = not progress.is_stage_open(data, stage_id)
+	style.set_corner_radius_all(roundi(side / 2.0))
+	style.set_border_width_all(6 if current else 3)
+	style.border_color = CURRENT_BORDER if current else (PAPER if open else PAPER.darkened(0.45))
+	var token := _make_token(Vector2(side, side), style)
+	var number := _make_label(str(stage_id), NUMBER_FONT_SIZE, PAPER if open else PAPER.darkened(0.35))
+	number.add_theme_constant_override("outline_size", 6)
+	number.add_theme_color_override("font_outline_color", INK)
+	number.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	token.add_child(number)
+	if current:
+		_pulse(token)
+
+	var lines: Array[Control] = [_make_label("Этап %d · %s" % [stage_id, state] if state != "" else "Этап %d" % stage_id,
+			CAPTION_FONT_SIZE, INK)]
+	if is_boss:
+		lines.append(_make_label(data.get_enemy(data.get_stage(stage_id)["waves"].back()[0])["name"], CAPTION_FONT_SIZE, INK))
+	var power := HBoxContainer.new()
+	power.add_theme_constant_override("separation", 0)
+	power.alignment = BoxContainer.ALIGNMENT_CENTER
+	power.add_child(_make_label("Рек. сила ", CAPTION_FONT_SIZE, INK))
+	var weak: bool = progress.is_below_recommended(data, stage_id)
+	var power_number := _make_label(str(data.recommended_power(stage_id)), CAPTION_FONT_SIZE, TOO_WEAK_COLOR if weak else INK)
+	power_number.name = "RecommendedPower"
+	power.add_child(power_number)
+	lines.append(power)
+
+	var point: Dictionary = data.get_stage(stage_id)["map_point"]
+	var marker := _make_marker(token, _make_caption(lines), point["label"], point)
+	var button: Button = marker["button"]
+	if is_boss:
+		var crown := CrownIcon.new()
+		crown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		crown.size = Vector2(56, 42)
+		crown.position = Vector2((side - crown.size.x) / 2.0, -crown.size.y + 8.0)
+		token.add_child(crown)
+		token.move_child(crown, 0)
+	button.disabled = not open
 	button.pressed.connect(_on_stage_pressed.bind(stage_id))
-	button.add_child(_make_node_text("\n".join(lines), button))
-	return button
-
-
-## The button's text as a label on top of it: a plain button cannot colour one number.
-func _make_node_text(bbcode: String, button: Button) -> RichTextLabel:
-	var label := RichTextLabel.new()
-	label.bbcode_enabled = true
-	label.text = "[center]%s[/center]" % bbcode
-	label.fit_content = true
-	label.scroll_active = false
-	label.autowrap_mode = TextServer.AUTOWRAP_OFF
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("normal_font_size", NODE_FONT_SIZE)
-	label.add_theme_color_override("default_color",
-			button.get_theme_color("font_disabled_color" if button.disabled else "font_color"))
-	label.add_theme_constant_override("outline_size", 6)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
-	label.set_anchors_and_offsets_preset(Control.PRESET_HCENTER_WIDE)
-	label.resized.connect(func(): label.position.y = (button.size.y - label.size.y) / 2.0)
-	return label
+	_stage_buttons[stage_id] = button
 
 
 func _on_stage_pressed(stage_id: int) -> void:
 	GameState.selected_stage = stage_id
+	GameState.selected_pack = ""
 	get_tree().change_scene_to_file(BATTLE_SCENE)
 
 
+# --- beast packs --------------------------------------------------------------
+
+func _add_pack(pack_id: String) -> void:
+	var data = GameState.data
+	var pack: Dictionary = data.get_pack(pack_id)
+	var style := StyleBoxFlat.new()
+	style.bg_color = PAPER
+	style.set_corner_radius_all(16)
+	style.set_border_width_all(3)
+	style.border_color = INK
+	var token := _make_token(Vector2(PACK_SIZE, PACK_SIZE), style)
+	var portrait := TextureRect.new()
+	portrait.texture = Art.enemy_portrait(data.get_enemy(pack["icon"]))
+	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 5)
+	token.add_child(portrait)
+
+	var name_label := _make_label(pack["name"], CAPTION_FONT_SIZE, INK)
+	var status := _make_label("", CAPTION_FONT_SIZE, INK)
+	status.name = "Status"
+	var marker := _make_marker(token, _make_caption([name_label, status]), "below", pack["map_point"])
+	marker["button"].pressed.connect(_on_pack_pressed.bind(pack_id))
+	marker["status"] = status
+	marker["state"] = ""
+	_pack_markers[pack_id] = marker
+	_refresh_pack(pack_id)
+
+
+func _on_pack_pressed(pack_id: String) -> void:
+	if not GameState.progress.is_pack_available(GameState.data, pack_id, GameState.now()):
+		_refresh_packs()
+		return
+	GameState.selected_pack = pack_id
+	get_tree().change_scene_to_file(BATTLE_SCENE)
+
+
+func _refresh_packs() -> void:
+	for pack_id in _pack_markers:
+		_refresh_pack(pack_id)
+
+
+## Three looks: on the map (portrait, tappable), away («через 1:24» where the pack stood, no portrait),
+## locked (dimmed, «после этапа N»).
+func _refresh_pack(pack_id: String) -> void:
+	var data = GameState.data
+	var progress = GameState.progress
+	var marker: Dictionary = _pack_markers[pack_id]
+	var button: Button = marker["button"]
+	var status: Label = marker["status"]
+	var seconds_left: int = progress.pack_seconds_left(data, pack_id, GameState.now())
+	var state := "ready"
+	if not progress.is_pack_unlocked(data, pack_id):
+		state = "locked"
+		status.text = "после этапа %d" % int(data.get_pack(pack_id)["unlock_after_stage"])
+	elif seconds_left > 0:
+		state = "away"
+		status.text = "через %s" % clock_text(seconds_left)
+	else:
+		status.text = "в бой!"
+	button.disabled = state != "ready"
+	button.modulate = Color(1, 1, 1, 0.6) if state == "locked" else Color.WHITE
+	marker["token"].visible = state != "away"
+	marker["side"] = "center" if state == "away" else "below"
+	marker["state"] = state
+	_arrange(marker)
+	_place(marker)
+
+
+## «1:24» — hours and minutes left, rounded up (59 seconds left is «0:01», not «0:00»).
+static func clock_text(seconds: int) -> String:
+	var minutes := ceili(seconds / 60.0)
+	return "%d:%02d" % [minutes / 60, minutes % 60]
+
+
+# --- markers ------------------------------------------------------------------
+
+func _make_token(token_size: Vector2, style: StyleBoxFlat) -> Panel:
+	var token := Panel.new()
+	token.add_theme_stylebox_override("panel", style)
+	token.size = token_size
+	token.pivot_offset = token_size / 2.0
+	token.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return token
+
+
+func _make_caption(lines: Array[Control]) -> PanelContainer:
+	var caption := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = CAPTION_PAPER
+	style.set_corner_radius_all(10)
+	style.set_border_width_all(2)
+	style.border_color = INK
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 2
+	style.content_margin_bottom = 4
+	caption.add_theme_stylebox_override("panel", style)
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", -4)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for line in lines:
+		box.add_child(line)
+	caption.add_child(box)
+	return caption
+
+
+func _make_label(text_value: String, font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.text = text_value
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return label
+
+
+## A see-through button holding the token and its caption: a tap on either starts the battle.
+## side: "left" / "right" — the caption beside the token, "below" — under it, "center" — over the token's place
+## (a pack that is away). Returns the marker: {button, token, caption, side, point}.
+func _make_marker(token: Panel, caption: PanelContainer, side: String, point: Dictionary) -> Dictionary:
+	var button := Button.new()
+	button.focus_mode = Control.FOCUS_NONE
+	button.flat = true
+	for state_name in ["normal", "hover", "pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(state_name, StyleBoxEmpty.new())
+	button.add_child(caption)
+	button.add_child(token)
+	%Board.add_child(button)
+	var marker := {"button": button, "token": token, "caption": caption, "side": side, "point": point}
+	_arrange(marker)
+	_markers.append(marker)
+	return marker
+
+
+## Lays the token and the caption out inside the marker's button by its side.
+func _arrange(marker: Dictionary) -> void:
+	var token: Control = marker["token"]
+	var caption: Control = marker["caption"]
+	caption.reset_size()
+	var caption_size := caption.size
+	var token_size := token.size
+	match marker["side"]:
+		"left":
+			caption.position = Vector2(0, (token_size.y - caption_size.y) / 2.0)
+			token.position = Vector2(caption_size.x + CAPTION_GAP, 0)
+		"right":
+			token.position = Vector2.ZERO
+			caption.position = Vector2(token_size.x + CAPTION_GAP, (token_size.y - caption_size.y) / 2.0)
+		"below":
+			var width := maxf(token_size.x, caption_size.x)
+			token.position = Vector2((width - token_size.x) / 2.0, 0)
+			caption.position = Vector2((width - caption_size.x) / 2.0, token_size.y + CAPTION_GAP)
+		_:
+			var box := token_size.max(caption_size)
+			token.position = (box - token_size) / 2.0
+			caption.position = (box - caption_size) / 2.0
+	# The caption may stand above the token's top: shift both so the button starts at 0.
+	var top := minf(0.0, caption.position.y)
+	caption.position.y -= top
+	token.position.y -= top
+	var visible_parts := Rect2(caption.position, caption_size)
+	if token.visible:
+		visible_parts = visible_parts.merge(Rect2(token.position, token_size))
+	marker["button"].position = Vector2.ZERO
+	marker["button"].size = visible_parts.end
+
+
+func _pulse(token: Control) -> void:
+	var tween := token.create_tween().set_loops()
+	tween.tween_property(token, "scale", Vector2.ONE * CURRENT_PULSE_SCALE, CURRENT_PULSE_SECONDS).set_trans(Tween.TRANS_SINE)
+	tween.tween_property(token, "scale", Vector2.ONE, CURRENT_PULSE_SECONDS).set_trans(Tween.TRANS_SINE)
+
+
+## The map fills the screen height (the sides that do not fit are cut off; on a screen wider than the map it fills
+## the width instead).
 func _layout() -> void:
-	var area: Vector2 = %Path.size
-	var step := area.y / _nodes.size()
-	var centers: Array[Vector2] = []
-	for i in _nodes.size():
-		var node := _nodes[i]
-		var center := Vector2(area.x * ZIGZAG[i % ZIGZAG.size()], area.y - (i + 0.5) * step)
-		node.position = center - node.size / 2.0
-		centers.append(center)
-	var boss: Button = _nodes.back()
-	_crown.position = Vector2(boss.position.x - _crown.size.x - 12, boss.position.y + (boss.size.y - _crown.size.y) / 2.0)
-	_lines.size = area
-	_lines.points = centers
-	_lines.done_segments = GameState.progress.cleared_stage
-	_lines.queue_redraw()
+	var area: Vector2 = %Board.size
+	var map_scale := maxf(area.y / _map_size.y, area.x / _map_size.x)
+	_map_shown = _map_size * map_scale
+	_map_origin = (area - _map_shown) / 2.0
+	%MapPicture.position = _map_origin
+	%MapPicture.size = _map_shown
+	_marker_scale = clampf(map_scale, MIN_MARKER_SCALE, MAX_MARKER_SCALE)
+	for marker in _markers:
+		_place(marker)
+
+
+## Puts the marker so that its token's centre stands on its point of the picture.
+func _place(marker: Dictionary) -> void:
+	var button: Button = marker["button"]
+	var token: Control = marker["token"]
+	var center: Vector2 = token.position + token.size / 2.0
+	button.scale = Vector2.ONE * _marker_scale
+	button.position = map_point_on_screen(marker["point"]) - center * _marker_scale
+
+
+## Where a point of the map picture (x, y as shares) is on the screen now.
+func map_point_on_screen(point: Dictionary) -> Vector2:
+	return _map_origin + Vector2(float(point["x"]), float(point["y"])) * _map_shown

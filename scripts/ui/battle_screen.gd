@@ -1,6 +1,8 @@
 ## Battle screen: shows the stage battle (scripts/battle) and passes taps to it.
 ## The squad from the formation fights the stage picked on the chapter map; a win pays the reward
 ## (less for a replay) and may bring a new hero; «Отступить» ends the battle as a defeat.
+## A beast pack picked on the map (GameState.selected_pack) is one wave at the strength of the last stage won;
+## a win pays the pack reward and sends the pack away for a while, a defeat or a retreat leaves it on the map.
 ## Tapping an enemy marks it as the target (tap again to remove the mark). The player's first battle shows a hint
 ## about it, once per game (Progress.mark_hint_shown), until the first mark or for balance.json → mark_hint.seconds.
 ## Progress is saved after every stage.
@@ -33,6 +35,7 @@ const MARK_HINT_TEXT := "Нажми на врага, чтобы отряд би�
 
 var _battle
 var _stage_id := 1
+var _pack_id := ""  ## the beast pack being fought; "" = a stage
 var _speed := 1
 var _views := {}  ## unit id -> FighterView (enemy ids are reused by every wave)
 var _popups_this_frame := {}  ## unit id -> popups already shown this frame (stacked, not overlapped)
@@ -44,8 +47,12 @@ var _mark_hint: PanelContainer  ## null unless the hint is on screen
 func _ready() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
-	_stage_id = GameState.selected_stage if progress.is_stage_open(data, GameState.selected_stage) else progress.next_stage_id(data)
-	_battle = StageBattle.from_data(data, _stage_id, progress.squad(data), randi())
+	if GameState.selected_pack != "" and progress.is_pack_available(data, GameState.selected_pack, GameState.now()):
+		_pack_id = GameState.selected_pack
+		_battle = StageBattle.from_pack(data, _pack_id, progress.pack_stage(), progress.squad(data), randi())
+	else:
+		_stage_id = GameState.selected_stage if progress.is_stage_open(data, GameState.selected_stage) else progress.next_stage_id(data)
+		_battle = StageBattle.from_data(data, _stage_id, progress.squad(data), randi())
 	var active: Array[String] = []
 	for synergy in data.clan_synergies(progress.squad_ids()):
 		if synergy["active"]:
@@ -124,8 +131,11 @@ func _show_wave() -> void:
 			_views.erase(unit_id)
 	for enemy in _battle.enemies():
 		_add_view(enemy)
-	%StageLabel.text = "Этап %d · Волна %d/%d" % [_stage_id, _battle.wave_index + 1, _battle.wave_count]
-	if GameState.progress.is_replay(_stage_id):
+	if _pack_id != "":
+		%StageLabel.text = GameState.data.get_pack(_pack_id)["name"]
+	else:
+		%StageLabel.text = "Этап %d · Волна %d/%d" % [_stage_id, _battle.wave_index + 1, _battle.wave_count]
+	if _pack_id == "" and GameState.progress.is_replay(_stage_id):
 		%StageLabel.text += " · повтор"
 	_layout_fighters()
 
@@ -278,7 +288,12 @@ func _hide_mark_hint() -> void:
 func _finish_stage(victory: bool, retreat: bool) -> void:
 	_hide_mark_hint()
 	var progress = GameState.progress
-	if victory:
+	if victory and _pack_id != "":
+		var pack_reward: Dictionary = progress.apply_pack_victory(GameState.data, _pack_id, GameState.now())
+		%ResultTitle.text = "Победа!"
+		%ResultHint.text = "+%d серебра · +%d опыта\nСтая вернётся через %s" % [
+			int(pack_reward["silver"]), int(pack_reward["experience"]), _hours_text(GameState.data.pack_respawn_seconds())]
+	elif victory:
 		var reward: Dictionary = progress.apply_victory(GameState.data, _stage_id)
 		%ResultTitle.text = "Победа!"
 		%ResultHint.text = "+%d серебра · +%d опыта" % [int(reward["silver"]), int(reward["experience"])]
@@ -293,6 +308,15 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 	GameState.save()
 	%ResultOverlay.visible = true
 	_show_next_new_hero()
+
+
+## «2 ч», «1 ч 30 мин», «45 мин».
+static func _hours_text(seconds: int) -> String:
+	var hours := seconds / 3600
+	var minutes := (seconds % 3600) / 60
+	if hours > 0 and minutes > 0:
+		return "%d ч %d мин" % [hours, minutes]
+	return "%d ч" % hours if hours > 0 else "%d мин" % minutes
 
 
 ## «Новый герой присоединился к дружине» for each hero this win unlocked, one after another.
