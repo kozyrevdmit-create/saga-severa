@@ -55,3 +55,56 @@ func test_save_overwrites_previous_save() -> void:
 	SaveStorage.save_progress(progress, TEST_PATH)
 	assert_eq(SaveStorage.load_progress(data, TEST_PATH).silver, 2, "latest save wins")
 	_cleanup()
+
+
+# --- settings (M8) ---------------------------------------------------------------
+
+const Settings := preload("res://scripts/save/settings.gd")
+const TEST_SETTINGS_PATH := "user://test_settings.json"
+
+
+func _cleanup_settings() -> void:
+	for path in [TEST_SETTINGS_PATH, TEST_SETTINGS_PATH + ".tmp"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+func test_names_in_battle_are_shown_by_default() -> void:
+	_cleanup_settings()
+	assert_true(SaveStorage.load_settings(TEST_SETTINGS_PATH).show_names_in_battle, "no settings file: names shown")
+	assert_true(SaveStorage.SETTINGS_PATH != SaveStorage.SAVE_PATH, "settings live in their own file")
+
+
+func test_settings_save_then_load() -> void:
+	_cleanup_settings()
+	var settings = Settings.new()
+	settings.show_names_in_battle = false
+	assert_true(SaveStorage.save_settings(settings, TEST_SETTINGS_PATH), "saved")
+	assert_eq(SaveStorage.load_settings(TEST_SETTINGS_PATH).show_names_in_battle, false, "names stay off")
+	_cleanup_settings()
+
+
+func test_damaged_settings_fall_back_to_defaults() -> void:
+	_cleanup_settings()
+	var file := FileAccess.open(TEST_SETTINGS_PATH, FileAccess.WRITE)
+	file.store_string("[1, 2")
+	file.close()
+	assert_true(SaveStorage.load_settings(TEST_SETTINGS_PATH).show_names_in_battle, "damaged file: names shown")
+	assert_true(Settings.from_dict({"show_names_in_battle": "no"}).show_names_in_battle, "a wrong value keeps the default")
+	_cleanup_settings()
+
+
+func test_resetting_progress_keeps_settings() -> void:
+	_cleanup()
+	_cleanup_settings()
+	var settings = Settings.new()
+	settings.show_names_in_battle = false
+	SaveStorage.save_settings(settings, TEST_SETTINGS_PATH)
+	var progress = Progress.new_game(data)
+	progress.silver = 500
+	progress.reset(data, 0)
+	SaveStorage.save_progress(progress, TEST_PATH)
+	assert_true(not progress.to_dict().has("show_names_in_battle"), "settings are not part of the progress")
+	assert_eq(SaveStorage.load_settings(TEST_SETTINGS_PATH).show_names_in_battle, false, "names stay off after the reset")
+	_cleanup()
+	_cleanup_settings()

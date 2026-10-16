@@ -191,11 +191,9 @@ text = "Новый герой присоединился к дружине!"
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="NewHeroSwatch" type="ColorRect" parent="NewHeroOverlay/NewHeroBox"]
+[node name="NewHeroPortrait" type="CenterContainer" parent="NewHeroOverlay/NewHeroBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(220, 220)
 layout_mode = 2
-size_flags_horizontal = 4
 
 [node name="NewHeroName" type="Label" parent="NewHeroOverlay/NewHeroBox"]
 unique_name_in_owner = true

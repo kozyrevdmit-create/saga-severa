@@ -177,3 +177,17 @@ func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:
 	for hero in data.heroes["heroes"]:
 		var stage := int(hero["unlock_after_stage"])
 		assert_true(stage >= 0 and stage < data.stage_count(), "%s unlocks on an existing stage" % hero["id"])
+
+
+## M8: the hit feedback is short (~0.15 s) and a fighter does not flash again before the last flash is over.
+func test_hit_feedback_is_short_and_spaced() -> void:
+	var visual: Dictionary = GameData.load_all().visual
+	var flash: Dictionary = visual["hit_flash"]
+	var flash_seconds := float(flash["hold_seconds"]) + float(flash["fade_seconds"])
+	assert_near(flash_seconds, 0.15, 0.05, "the flash lasts about 0.15 s")
+	assert_true(float(flash["strength"]) > 0.0 and float(flash["strength"]) <= 1.0, "flash strength is a share")
+	assert_true(Color.html_is_valid(flash["color"]), "flash colour")
+	assert_true(float(visual["hit_shake"]["distance"]) <= 0.05, "a light shake: at most 5% of the picture")
+	assert_near(float(visual["hit_shake"]["seconds"]), 0.15, 0.05, "the shake is short")
+	assert_true(float(visual["hit_min_gap_seconds"]) > maxf(flash_seconds, float(visual["hit_shake"]["seconds"])),
+			"the next flash of one fighter waits until the last one is over")

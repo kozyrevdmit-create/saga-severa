@@ -1,5 +1,5 @@
-## Loads game content (heroes, enemies, stages, balance) from JSON files in res://data/.
-## All balance numbers live in those files, never in code.
+## Loads game content (heroes, enemies, stages, balance, visual) from JSON files in res://data/.
+## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback.
 extends RefCounted
 
 const DATA_DIR := "res://data/"
@@ -8,6 +8,7 @@ var heroes: Dictionary  ## heroes.json: classes, clans, heroes
 var enemies: Dictionary  ## enemies.json
 var stages: Dictionary  ## stages.json
 var balance: Dictionary  ## balance.json
+var visual: Dictionary  ## visual.json: hit flash and shake
 
 
 static func load_all() -> RefCounted:
@@ -16,6 +17,7 @@ static func load_all() -> RefCounted:
 	data.enemies = load_json("enemies.json")
 	data.stages = load_json("stages.json")
 	data.balance = load_json("balance.json")
+	data.visual = load_json("visual.json")
 	return data
 
 

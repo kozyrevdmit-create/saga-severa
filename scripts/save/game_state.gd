@@ -1,5 +1,6 @@
-## Autoload "GameState": game data and the player's progress, shared by all screens.
-## Screens call save() after every change. Offline income: when the game starts or comes back from the
+## Autoload "GameState": game data, the player's progress and settings, shared by all screens.
+## Screens call save() after every change of the progress and save_settings() after a change of the settings
+## (a separate file: «Сбросить прогресс» keeps them). Offline income: when the game starts or comes back from the
 ## background, the income for the time away goes into the bank (Progress.collect_offline_income);
 ## leaving, hiding or unfocusing the game saves the time it was last seen and stops the heartbeat,
 ## so the time in the background is not overwritten before it is counted.
@@ -12,6 +13,7 @@ const SaveStorage := preload("res://scripts/save/save_storage.gd")
 
 var data
 var progress
+var settings
 var selected_stage := 1  ## stage the battle screen should fight (set by the chapter map)
 
 var _visibility_callback  ## keeps the browser callback alive
@@ -22,6 +24,7 @@ var _away := false  ## the game is in the background (between leaving and coming
 func _ready() -> void:
 	data = GameData.load_all()
 	progress = SaveStorage.load_progress(data)
+	settings = SaveStorage.load_settings()
 	# While the game is in front, refresh the "last seen" time now and then, in case it is closed without notice.
 	_heartbeat.wait_time = float(data.balance["offline_income"]["last_seen_refresh_seconds"])
 	_heartbeat.timeout.connect(save)
@@ -40,7 +43,7 @@ func claim_offline_income() -> void:
 	save()
 
 
-## Debug panel «Сбросить прогресс»: a new game, saved at once.
+## Debug panel «Сбросить прогресс»: a new game, saved at once. The settings stay as they are.
 func reset_progress() -> void:
 	progress.reset(data, _now())
 	selected_stage = 1
@@ -71,6 +74,10 @@ func debug_jump_to_stage(stage_id: int) -> void:
 func debug_skip_time() -> void:
 	progress.last_seen_unix = _now() - roundi(float(data.balance["debug_panel"]["skip_time_hours"]) * 3600.0)
 	_bank_offline_income()
+
+
+func save_settings() -> void:
+	SaveStorage.save_settings(settings)
 
 
 func save() -> void:

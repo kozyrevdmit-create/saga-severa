@@ -11,6 +11,7 @@ const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 const FighterView := preload("res://scripts/ui/fighter_view.gd")
 const HeroCard := preload("res://scripts/ui/hero_card.gd")
 const Art := preload("res://scripts/ui/art.gd")
+const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
 
 const MAP_SCENE := "res://scenes/map.tscn"
 
@@ -27,6 +28,7 @@ const ULTIMATE_COLOR := Color("#ffd84a")
 const SPECIAL_COLOR := Color("#ff9a3c")
 const HEAL_COLOR := Color("#6bff8a")
 const POPUP_STACK_STEP := 36.0
+const NEW_HERO_PORTRAIT_SIZE := 260.0
 const MARK_HINT_TEXT := "Нажми на врага, чтобы отряд бил его первым"
 
 var _battle
@@ -102,11 +104,13 @@ func _refresh() -> void:
 
 func _add_view(unit) -> void:
 	var view: FighterView
+	var visual: Dictionary = GameState.data.visual
+	var show_name: bool = GameState.settings.show_names_in_battle
 	if unit.team == BattleUnit.Team.HEROES:
-		view = FighterView.new(unit, Art.hero_picture(unit.def_id), 1.0)
+		view = FighterView.new(unit, Art.hero_picture(unit.def_id), 1.0, visual, show_name)
 	else:
 		var enemy: Dictionary = GameState.data.get_enemy(unit.def_id)
-		view = FighterView.new(unit, Art.enemy_picture(unit.def_id), float(enemy["art_scale"]))
+		view = FighterView.new(unit, Art.enemy_picture(unit.def_id), float(enemy["art_scale"]), visual, show_name)
 		view.tapped.connect(_battle.toggle_mark.bind(unit.id))
 	%Field.add_child(view)
 	_views[unit.id] = view
@@ -162,7 +166,7 @@ func _show_event(event: Dictionary) -> void:
 	match event["type"]:
 		"damage":
 			_animate(event["source"], "lunge")
-			_animate(event["target"], "flash")
+			_animate(event["target"], "hit")
 			var color := DAMAGE_TO_HERO_COLOR if event["target_is_hero"] else DAMAGE_TO_ENEMY_COLOR
 			var font_size := 32
 			match event["kind"]:
@@ -191,7 +195,7 @@ func _show_event(event: Dictionary) -> void:
 			_finish_stage(event["victory"], event.get("retreat", false))
 
 
-## Calls the fighter view's animation ("lunge" or "flash") if the fighter is on screen.
+## Calls the fighter view's animation ("lunge" or "hit") if the fighter is on screen.
 func _animate(unit_id: int, animation: String) -> void:
 	if _views.has(unit_id):
 		_views[unit_id].call(animation)
@@ -300,7 +304,9 @@ func _show_next_new_hero() -> void:
 	var hero_id: String = _new_heroes.pop_front()
 	var hero: Dictionary = data.get_hero(hero_id)
 	var hero_class: Dictionary = data.get_hero_class(hero)
-	%NewHeroSwatch.color = Color.html(hero_class["color"])
+	for old in %NewHeroPortrait.get_children():
+		old.queue_free()
+	%NewHeroPortrait.add_child(HeroesScreen.make_portrait(hero, NEW_HERO_PORTRAIT_SIZE))
 	%NewHeroName.text = hero["name"]
 	var where := "Уже в отряде." if GameState.progress.is_in_formation(hero_id) else "Поставь в отряд на экране «Отряд»."
 	%NewHeroInfo.text = "%s · %s · род %s\nУльта: %s\n%s" % [
