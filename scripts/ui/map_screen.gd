@@ -1,6 +1,7 @@
 ## Chapter map: a vertical path of the chapter's stages from the bottom up.
 ## Won stages are marked and can be replayed, the next stage is highlighted, later ones are locked.
-## The last stage shows the boss. Every stage shows its «Рекомендуемая сила». Placeholder shapes only.
+## The last stage shows the boss. On top — the squad's «Сила»; every stage shows its «Рекомендуемая сила»,
+## the number in red while the squad is weaker than that. Placeholder shapes only.
 extends Control
 
 const BATTLE_SCENE := "res://scenes/battle.tscn"
@@ -15,6 +16,8 @@ const LOCKED_COLOR := Color("#2a2f38")
 const BOSS_COLOR := Color("#7a2a2a")
 const PATH_DONE_COLOR := Color("#4fa36a")
 const PATH_TODO_COLOR := Color(1, 1, 1, 0.15)
+const TOO_WEAK_COLOR := Color("#ff4d4d")
+const NODE_FONT_SIZE := 22
 
 
 ## Lines between the stage nodes, drawn under them.
@@ -49,6 +52,7 @@ func _ready() -> void:
 	var progress = GameState.progress
 	var stage: Dictionary = data.get_stage(1)
 	%Title.text = "Глава %d · %s" % [int(stage["chapter"]), data.get_chapter(int(stage["chapter"]))["name"]]
+	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
 	_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	%Path.add_child(_lines)
 	for stage_id in range(1, data.stage_count() + 1):
@@ -69,7 +73,7 @@ func _make_node(stage_id: int, data, progress) -> Button:
 	var button := Button.new()
 	button.focus_mode = Control.FOCUS_NONE
 	button.size = BOSS_NODE_SIZE if is_boss else NODE_SIZE
-	button.add_theme_font_size_override("font_size", 22)
+	button.add_theme_font_size_override("font_size", NODE_FONT_SIZE)
 	var color := LOCKED_COLOR
 	var state := ""
 	if progress.is_replay(stage_id):
@@ -78,12 +82,15 @@ func _make_node(stage_id: int, data, progress) -> Button:
 	elif progress.is_stage_open(data, stage_id):
 		color = CURRENT_COLOR
 		state = "в бой!"
-	button.text = "Этап %d · %s" % [stage_id, state] if state != "" else "Этап %d" % stage_id
+	var lines: Array[String] = ["Этап %d · %s" % [stage_id, state] if state != "" else "Этап %d" % stage_id]
 	if is_boss:
-		button.text += "\n" + data.get_enemy(data.get_stage(stage_id)["waves"].back()[0])["name"]
+		lines.append(data.get_enemy(data.get_stage(stage_id)["waves"].back()[0])["name"])
 		if not progress.is_replay(stage_id) and not progress.is_stage_open(data, stage_id):
 			color = BOSS_COLOR.darkened(0.4)
-	button.text += "\nРекомендуемая сила %d" % data.recommended_power(stage_id)
+	var power := str(data.recommended_power(stage_id))
+	if progress.is_below_recommended(data, stage_id):
+		power = "[color=#%s]%s[/color]" % [TOO_WEAK_COLOR.to_html(false), power]
+	lines.append("Рекомендуемая сила " + power)
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_corner_radius_all(48)
@@ -94,7 +101,27 @@ func _make_node(stage_id: int, data, progress) -> Button:
 		button.add_theme_stylebox_override(state_name, style)
 	button.disabled = not progress.is_stage_open(data, stage_id)
 	button.pressed.connect(_on_stage_pressed.bind(stage_id))
+	button.add_child(_make_node_text("\n".join(lines), button))
 	return button
+
+
+## The button's text as a label on top of it: a plain button cannot colour one number.
+func _make_node_text(bbcode: String, button: Button) -> RichTextLabel:
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.text = "[center]%s[/center]" % bbcode
+	label.fit_content = true
+	label.scroll_active = false
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("normal_font_size", NODE_FONT_SIZE)
+	label.add_theme_color_override("default_color",
+			button.get_theme_color("font_disabled_color" if button.disabled else "font_color"))
+	label.add_theme_constant_override("outline_size", 6)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	label.set_anchors_and_offsets_preset(Control.PRESET_HCENTER_WIDE)
+	label.resized.connect(func(): label.position.y = (button.size.y - label.size.y) / 2.0)
+	return label
 
 
 func _on_stage_pressed(stage_id: int) -> void:

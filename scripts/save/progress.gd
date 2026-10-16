@@ -13,6 +13,7 @@ var hero_levels := {}  ## unlocked hero id -> level, in unlock order
 var formation: Array[String] = []  ## one hero id or EMPTY per slot; front slots first
 var last_seen_unix := 0  ## when the game was last open; 0 = never
 var offline_bank := 0  ## offline income collected on return, waiting for «Забрать»
+var mark_hint_shown := false  ## the battle hint about the target mark was shown (once per game; a reset shows it again)
 
 
 static func new_game(data) -> RefCounted:
@@ -26,7 +27,7 @@ static func new_game(data) -> RefCounted:
 
 
 ## Debug panel «Сбросить прогресс»: everything back to a new game (stages, heroes and their levels, squad,
-## silver, jarl experience, offline bank). The offline clock restarts now, so the time before the reset earns nothing.
+## silver, jarl experience, offline bank, the target mark hint). The offline clock restarts now, so the time before the reset earns nothing.
 func reset(data, now_unix: int) -> void:
 	var fresh = new_game(data)
 	silver = fresh.silver
@@ -35,6 +36,7 @@ func reset(data, now_unix: int) -> void:
 	hero_levels = fresh.hero_levels
 	formation = fresh.formation
 	offline_bank = fresh.offline_bank
+	mark_hint_shown = fresh.mark_hint_shown
 	last_seen_unix = now_unix
 
 
@@ -156,6 +158,11 @@ func level_up(data, hero_id: String) -> bool:
 
 
 # --- squad power («Сила») -----------------------------------------------------
+
+## The chapter map shows a stage's recommended power in red while the squad is weaker than it.
+func is_below_recommended(data, stage_id: int) -> bool:
+	return data.recommended_power(stage_id) > squad_power(data)
+
 
 ## The squad's «Сила»: the sum of the squad heroes' power (GameData.hero_power) with the squad's clan bonuses.
 func squad_power(data) -> int:
@@ -313,6 +320,7 @@ func to_dict() -> Dictionary:
 		"formation": formation.duplicate(),
 		"last_seen_unix": last_seen_unix,
 		"offline_bank": offline_bank,
+		"mark_hint_shown": mark_hint_shown,
 	}
 
 
@@ -328,6 +336,9 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.cleared_stage = clampi(_to_int(saved.get("cleared_stage"), 0), 0, data.stage_count())
 	progress.last_seen_unix = maxi(0, _to_int(saved.get("last_seen_unix"), 0))
 	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
+	# A save from before M6.1 has no flag: the hint is new, so it is shown once there too.
+	var hint_shown = saved.get("mark_hint_shown")
+	progress.mark_hint_shown = hint_shown is bool and hint_shown
 
 	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
 	# a hero without a saved level joins like a new hero (at the join level counted over the heroes with a saved

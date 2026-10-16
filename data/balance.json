@@ -39,6 +39,9 @@
     "max_hours": 8,
     "last_seen_refresh_seconds": 60
   },
+  "mark_hint": {
+    "seconds": 6
+  },
   "debug_panel": {
     "long_press_seconds": 0.8,
     "add_silver": 10000,
