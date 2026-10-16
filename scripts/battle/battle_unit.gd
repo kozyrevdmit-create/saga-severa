@@ -100,8 +100,12 @@ func attack_power() -> float:
 	return power
 
 
+## Buffs (Shield Wall) times the shieldbearer passive (heroes.json passive.damage_taken_multiplier).
 func damage_taken_multiplier() -> float:
-	return _buff_multiplier("damage_taken")
+	var multiplier := _buff_multiplier("damage_taken")
+	if passive.get("type", "") == "damage_taken_reduction":
+		multiplier *= float(passive["damage_taken_multiplier"])
+	return multiplier
 
 
 ## A newer buff of the same stat from the same source refreshes the old one instead of stacking.

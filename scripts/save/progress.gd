@@ -337,6 +337,7 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	var join_level: int = progress._join_level(data, missing)
 	for hero_id in missing:
 		progress.hero_levels[hero_id] = join_level
+		progress.formation_add(data, hero_id)  # like a new hero: into a free slot, if there is one
 	return progress
 
 

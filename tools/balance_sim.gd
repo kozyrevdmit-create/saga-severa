@@ -12,8 +12,8 @@
 ##    they are trying to beat the most per silver (measured by test fights, see _best_upgrade);
 ##    "неидеальный" spreads silver evenly over all heroes (lowest level first, bench included).
 ##    With --old-bot a third player is added: the sensible player of M4 (best gain in total HP × damage per silver).
-##    Prints replays needed per stage, where players get stuck, how many level-ups a first win buys
-##    and each player's hero levels at the first win.
+##    Prints replays needed per stage, where players get stuck, how many level-ups a first win buys,
+##    each player's hero levels at the first win and who falls first in the won fights.
 ## 2. Per stage: win rate at level 1 and at the levels the sensible player had when they first won it
 ##    (with and without ultimates). With --level=N all heroes are at level N instead.
 ## 3. Average time for each hero's ultimate to charge (auto mode, sensible player's fights).
@@ -36,6 +36,9 @@ var _stall_seconds := 0.0
 var _stalled := {"campaign": 0, "check": 0}  ## stalled battles: the players' fights / test fights and tables 2–3
 var _seed := 1
 var _charges := {}  ## hero id -> [sum of charge times, count]
+## Who falls in the players' won fights: policy -> {won, nobody, first: {hero id: n}, tank: {survived, last, earlier}}.
+## "last": every shieldbearer that fell, fell after every other hero that fell.
+var _deaths := {}
 var _last_stage := 0  ## campaigns stop after this stage
 var _policies: Array = ["sensible", "uneven"]
 var _score_fights := 12  ## test fights per squad when the sensible player picks a level-up
@@ -128,6 +131,7 @@ func _initialize() -> void:
 			var levels := _median_levels(results[policy], stage)
 			line += " | " + " ".join(hero_ids.map(func(id): return "%3s" % (str(levels[id]) if levels.has(id) else "—")))
 		print(line)
+	_print_deaths()
 	if until > 0:
 		_print_stalled()
 		quit()
@@ -308,7 +312,7 @@ func _campaign(policy: String) -> Dictionary:
 		var record := {"stage": stage, "stuck": false}
 		while true:
 			_spend(progress, policy, stage)
-			var fight := _fight(stage, progress.squad(data), policy == "sensible")
+			var fight := _fight(stage, progress.squad(data), policy == "sensible", "campaign", policy)
 			fights += 1
 			battle_time += fight["time"]
 			if fight["victory"]:
@@ -324,7 +328,7 @@ func _campaign(policy: String) -> Dictionary:
 			replays += 1
 			if stage > 1:
 				_spend(progress, policy, stage)
-				var replay := _fight(stage - 1, progress.squad(data), policy == "sensible")
+				var replay := _fight(stage - 1, progress.squad(data), policy == "sensible", "campaign", policy)
 				fights += 1
 				battle_time += replay["time"]
 				if replay["victory"]:
@@ -452,13 +456,15 @@ func _run(battle) -> void:
 
 
 ## `stall_key`: where a stalled fight is counted ("campaign" for the players' fights, "check" for measurements).
-func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campaign") -> Dictionary:
+## `deaths_policy`: a player's fight whose fallen heroes are counted in _deaths ("" = not counted).
+func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campaign", deaths_policy := "") -> Dictionary:
 	_seed += 1
 	var battle = StageBattle.from_data(data, stage, squad, _seed * 7919)
 	battle.auto_ultimates = true
 	var charge_started := {}
 	for hero in battle.heroes():
 		charge_started[hero.def_id] = 0.0
+	var fallen: Array[String] = []  ## heroes in the order they fell
 	while not battle.finished:
 		if battle.time > _stall_seconds:
 			push_warning("Stage %d stalled after %d s of battle time, counted as a defeat" % [stage, _stall_seconds])
@@ -466,6 +472,10 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campai
 			break
 		battle.step()
 		for event in battle.take_events():
+			# Heroes come first in every wave's units, so a hero's id is the same in every wave
+			# (an enemy's id may point past the next wave's units).
+			if event["type"] == "death" and event["unit"] < squad.size():
+				fallen.append(battle.units[event["unit"]].def_id)
 			if record_charges and event["type"] == "ultimate":
 				var hero_id: String = battle.units[event["unit"]].def_id
 				var entry: Array = _charges.get(hero_id, [0.0, 0])
@@ -473,7 +483,55 @@ func _fight(stage: int, squad: Array, record_charges: bool, stall_key := "campai
 				entry[1] += 1
 				_charges[hero_id] = entry
 				charge_started[hero_id] = battle.time
+	if deaths_policy != "" and battle.victory:
+		_count_deaths(deaths_policy, squad, fallen)
 	return {"victory": battle.victory, "time": battle.time}
+
+
+func _count_deaths(policy: String, squad: Array, fallen: Array[String]) -> void:
+	var stats: Dictionary = _deaths.get_or_add(policy, {"won": 0, "nobody": 0, "first": {}, "tank": {"survived": 0, "last": 0, "earlier": 0}})
+	stats["won"] += 1
+	if fallen.is_empty():
+		stats["nobody"] += 1
+	else:
+		stats["first"][fallen[0]] = stats["first"].get(fallen[0], 0) + 1
+	var tanks: Array = squad.map(func(m): return m["id"]).filter(func(id): return data.get_hero(id)["class"] == "shieldbearer")
+	if tanks.is_empty():
+		return
+	var last_other := -1
+	var first_tank := fallen.size()
+	for i in fallen.size():
+		if fallen[i] in tanks:
+			first_tank = mini(first_tank, i)
+		else:
+			last_other = i
+	if first_tank == fallen.size():
+		stats["tank"]["survived"] += 1
+	elif first_tank > last_other:
+		stats["tank"]["last"] += 1
+	else:
+		stats["tank"]["earlier"] += 1
+
+
+func _print_deaths() -> void:
+	print("")
+	print("Кто погибает первым в выигранных боях прохождения (доля побед; щитоносец «в порядке» — выжил или пал последним):")
+	for policy in _policies:
+		if not _deaths.has(policy):
+			continue
+		var stats: Dictionary = _deaths[policy]
+		var won := float(maxi(1, stats["won"]))
+		var parts := ["никто — %d%%" % roundi(100.0 * stats["nobody"] / won)]
+		var first: Dictionary = stats["first"]
+		var ids := first.keys()
+		ids.sort_custom(func(a, b): return first[a] > first[b])
+		for hero_id in ids:
+			parts.append("%s — %d%%" % [data.get_hero(hero_id)["name"], roundi(100.0 * first[hero_id] / won)])
+		var tank: Dictionary = stats["tank"]
+		print("  %s (%d побед): первым погибает %s" % [POLICY_NAMES[policy], stats["won"], ", ".join(parts)])
+		print("    щитоносец: выжил %d%%, пал последним %d%%, пал раньше других %d%% → в порядке %d%%" % [
+			roundi(100.0 * tank["survived"] / won), roundi(100.0 * tank["last"] / won), roundi(100.0 * tank["earlier"] / won),
+			roundi(100.0 * (tank["survived"] + tank["last"]) / won)])
 
 
 # --- reports ----------------------------------------------------------------
