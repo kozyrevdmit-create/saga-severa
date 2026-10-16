@@ -23,7 +23,7 @@
 ## 2. Per stage: win rate at level 1 and at the levels the human player had when they first won it
 ##    (with the human's ultimates and without ultimates), the stage's recommended power (stages.json) and
 ##    the human's squad power at the first win. With --level=N all heroes are at level N instead.
-## 3. Average time for each hero's ultimate to charge (auto mode, sensible player's fights).
+## 3. Average time for each hero's ultimate to charge (the sensible player's fights, or the first --players one).
 ## 4. Offline income for a full absence on every stage, in first wins of the current stage.
 ## 5. (--sensitivity) The campaign again with all heroes' HP and attack and all stage silver rewards at −10% and +10%.
 ## 6. (--recommend) «Рекомендуемая сила» per stage: the squad power at which the human player wins
@@ -52,6 +52,9 @@ var _deaths := {}
 var _last_stage := 0  ## campaigns stop after this stage
 var _policies: Array = ["human", "sensible"]
 var _human_delay := 0.0  ## balance.json → simulation.human_ultimate_delay_seconds
+## Whose fights tables 2 and 3 use: the human and the sensible player, or the first player chosen with --players.
+var _table2_policy := ""
+var _charges_policy := ""
 var _score_fights := 12  ## test fights per squad when the sensible player picks a level-up
 var _score_cache := {}  ## "stage|hero:level,..." -> score; test fights use fixed seeds, so a score never changes
 
@@ -102,6 +105,8 @@ func _initialize() -> void:
 	_last_stage = until if until > 0 else data.stage_count()
 	_stall_seconds = float(data.balance["balance_check"]["stall_after_seconds"])
 	_human_delay = float(data.balance["simulation"]["human_ultimate_delay_seconds"])
+	_table2_policy = "human" if "human" in _policies else _policies[0]
+	_charges_policy = "sensible" if "sensible" in _policies else _policies[0]
 
 	if recommend:
 		_print_recommended()
@@ -163,21 +168,22 @@ func _initialize() -> void:
 
 	# 2. Win rates per stage.
 	print("")
-	print("2. Победы по этапам (%d боёв на ячейку; ульты — как у человека)" % runs)
-	print("Сила человека — медиана силы отряда при первой победе; рек. сила — из stages.json (пересчёт: -- --recommend).")
-	print("Этап | ур.1: побед | уровни человека | побед | без ульт: побед | рек. сила | сила человека")
-	print("-----+-------------+-----------------+-------+-----------------+-----------+--------------")
+	var who: String = POLICY_NAMES[_table2_policy]
+	var table2_ults := _ults_of(_table2_policy)
+	print("2. Победы по этапам (%d боёв на ячейку; ульты — как у игрока «%s»)" % [runs, who])
+	print("Сила игрока — медиана силы отряда при первой победе; рек. сила — из stages.json (пересчёт: -- --recommend).")
+	print("Этап | ур.1: побед | уровни игрока «%s» | побед | без ульт: побед | рек. сила | сила игрока" % who)
 	for stage in range(1, data.stage_count() + 1):
 		var squad_base := _squad_for(stage, {}, 1)
-		var won_levels := _median_levels(results["human"], stage)
+		var won_levels := _median_levels(results[_table2_policy], stage)
 		if forced_level > 0:
 			won_levels = {}
 		var squad_leveled := _squad_for(stage, won_levels, forced_level if forced_level > 0 else 1)
-		var base := _win_rate(stage, squad_base, "human", runs)
-		var leveled := _win_rate(stage, squad_leveled, "human", runs)
+		var base := _win_rate(stage, squad_base, table2_ults, runs)
+		var leveled := _win_rate(stage, squad_leveled, table2_ults, runs)
 		var no_ults := _win_rate(stage, squad_leveled, "none", runs)
-		print("%4d | %10d%% | %15s | %4d%% | %14d%% | %9d | %12s" % [stage, base, _levels_text(squad_leveled), leveled, no_ults,
-				data.recommended_power(stage), _median_power(results["human"], stage)])
+		print("%4d | %10d%% | %15s | %4d%% | %14d%% | %9d | %10s" % [stage, base, _levels_text(squad_leveled), leveled, no_ults,
+				data.recommended_power(stage), _median_power(results[_table2_policy], stage)])
 
 	# 3. Ultimate charge times. Heroes that never fought in the campaigns (e.g. waiting outside a full squad)
 	# are measured by swapping them in for the squad hero of the same class.
@@ -185,7 +191,7 @@ func _initialize() -> void:
 		if _charges.has(hero["id"]):
 			continue
 		for stage in range(1, data.stage_count() + 1):
-			var squad := _squad_for(stage + 1, _median_levels(results["sensible"], stage), 1)
+			var squad := _squad_for(stage + 1, _median_levels(results[_charges_policy], stage), 1)
 			var level: int = squad.map(func(m): return m["level"]).max()
 			for member in squad:
 				if data.get_hero(member["id"])["class"] == hero["class"]:
@@ -195,7 +201,7 @@ func _initialize() -> void:
 			for run in maxi(1, runs / 10):
 				_fight(stage, squad, true, "check", "")
 	print("")
-	print("3. Зарядка ульт (среднее время от нуля до готовности в боях разумного игрока):")
+	print("3. Зарядка ульт (среднее время от нуля до готовности в боях игрока «%s»):" % POLICY_NAMES[_charges_policy])
 	for hero in data.heroes["heroes"]:
 		var entry: Array = _charges.get(hero["id"], [0.0, 0])
 		if entry[1] > 0:
@@ -340,7 +346,7 @@ func _campaign(policy: String) -> Dictionary:
 		var record := {"stage": stage, "stuck": false}
 		while true:
 			_spend(progress, policy, stage)
-			var fight := _fight(stage, progress.squad(data), policy == "sensible", "campaign", policy)
+			var fight := _fight(stage, progress.squad(data), policy == _charges_policy, "campaign", policy)
 			fights += 1
 			battle_time += fight["time"]
 			if fight["victory"]:
@@ -357,7 +363,7 @@ func _campaign(policy: String) -> Dictionary:
 			replays += 1
 			if stage > 1:
 				_spend(progress, policy, stage)
-				var replay := _fight(stage - 1, progress.squad(data), policy == "sensible", "campaign", policy)
+				var replay := _fight(stage - 1, progress.squad(data), policy == _charges_policy, "campaign", policy)
 				fights += 1
 				battle_time += replay["time"]
 				if replay["victory"]:
@@ -488,6 +494,11 @@ func _run(battle, ults: String) -> void:
 		battle.step()
 		if ults == "human":
 			_human_step(battle, ready_since)
+
+
+## How a player uses ultimates: "human" — with a delay (see _human_step), everyone else — «Авто».
+func _ults_of(policy: String) -> String:
+	return "human" if policy == "human" else "auto"
 
 
 ## The human player taps an ultimate card human_ultimate_delay_seconds of battle time after the ultimate is ready.

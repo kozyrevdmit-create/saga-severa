@@ -6,8 +6,8 @@ extends Control
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 
-const NODE_SIZE := Vector2(320, 88)
-const BOSS_NODE_SIZE := Vector2(360, 112)
+const NODE_SIZE := Vector2(320, 96)  ## spec: buttons at least 96 px tall
+const BOSS_NODE_SIZE := Vector2(360, 100)
 const ZIGZAG := [0.3, 0.7]  ## node centre x as a share of the path width, alternating
 const CLEARED_COLOR := Color("#2f7d4a")
 const CURRENT_COLOR := Color("#c99a2e")
