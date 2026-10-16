@@ -476,3 +476,31 @@ func test_bench_hero_does_not_count_and_level_up_gain_matches() -> void:
 		progress.hero_levels[hero_id] += 1
 		assert_eq(progress.squad_power(data) - power_before, gain, "«+N силы» of %s is what the squad gains" % hero_id)
 		assert_true(gain > 0, "%s gains power" % hero_id)
+
+
+# --- target mark hint and the map's red numbers (M6.1) -------------------------
+
+func test_mark_hint_is_shown_once_per_game_and_again_after_a_reset() -> void:
+	var progress = Progress.new_game(data)
+	assert_true(not progress.mark_hint_shown, "a new game has not shown the hint")
+	progress.mark_hint_shown = true
+	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
+	assert_true(restored.mark_hint_shown, "the flag is saved")
+	restored.reset(data, 1000)
+	assert_true(not restored.mark_hint_shown, "«Сбросить прогресс» shows the hint again")
+	var old_save: Dictionary = Progress.new_game(data).to_dict()
+	old_save.erase("mark_hint_shown")
+	assert_true(not Progress.from_dict(old_save, data).mark_hint_shown, "a save from before M6.1 shows the hint once")
+	old_save["mark_hint_shown"] = "yes"
+	assert_true(not Progress.from_dict(old_save, data).mark_hint_shown, "a broken flag counts as not shown")
+
+
+func test_recommended_power_is_red_only_while_the_squad_is_weaker() -> void:
+	var progress = Progress.new_game(data)
+	var stage: int = data.stage_count()
+	assert_true(progress.is_below_recommended(data, stage), "a new squad is weaker than the boss stage asks")
+	assert_true(not progress.is_below_recommended(data, 1), "a new squad is strong enough for stage 1")
+	while progress.squad_power(data) < data.recommended_power(stage):
+		for hero_id in progress.squad_ids():
+			progress.hero_levels[hero_id] += 1
+	assert_true(not progress.is_below_recommended(data, stage), "at or above the recommended power: not red")

@@ -1,7 +1,8 @@
 ## Battle screen: shows the stage battle (scripts/battle) and passes taps to it.
 ## The squad from the formation fights the stage picked on the chapter map; a win pays the reward
 ## (less for a replay) and may bring a new hero; «Отступить» ends the battle as a defeat.
-## Tapping an enemy marks it as the target (tap again to remove the mark).
+## Tapping an enemy marks it as the target (tap again to remove the mark). The player's first battle shows a hint
+## about it, once per game (Progress.mark_hint_shown), until the first mark or for balance.json → mark_hint.seconds.
 ## Progress is saved after every stage.
 extends Control
 
@@ -22,6 +23,7 @@ const ULTIMATE_COLOR := Color("#ffd84a")
 const SPECIAL_COLOR := Color("#ff9a3c")
 const HEAL_COLOR := Color("#6bff8a")
 const POPUP_STACK_STEP := 36.0
+const MARK_HINT_TEXT := "Нажми на врага, чтобы отряд бил его первым"
 
 var _battle
 var _stage_id := 1
@@ -30,6 +32,7 @@ var _views := {}  ## unit id -> FighterView (enemy ids are reused by every wave)
 var _popups_this_frame := {}  ## unit id -> popups already shown this frame (stacked, not overlapped)
 var _cards := {}  ## unit id -> HeroCard
 var _new_heroes: Array[String] = []  ## heroes still to announce after a win
+var _mark_hint: PanelContainer  ## null unless the hint is on screen
 
 
 func _ready() -> void:
@@ -58,6 +61,8 @@ func _ready() -> void:
 	%MenuButton.pressed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
 	%NewHeroButton.pressed.connect(_show_next_new_hero)
 	%Field.resized.connect(_layout_fighters)
+	if not progress.mark_hint_shown:
+		_show_mark_hint()
 	_refresh()
 
 
@@ -149,6 +154,9 @@ func _show_event(event: Dictionary) -> void:
 			_popup(event["unit"], event["name"], ULTIMATE_COLOR, 30, 1.4)
 		"special":
 			_popup(event["unit"], event["name"], SPECIAL_COLOR, 30, 1.4)
+		"mark":
+			if event["unit"] >= 0:
+				_hide_mark_hint()
 		"wave":
 			_show_wave()
 			_banner("Волна %d" % (event["index"] + 1))
@@ -197,8 +205,41 @@ func _float_away(label: Label, duration: float) -> void:
 	tween.chain().tween_callback(label.queue_free)
 
 
+## Shown once per game; the flag is saved at once, so leaving the battle early does not bring it back.
+## Real seconds: the hint stays as long at x2.
+func _show_mark_hint() -> void:
+	GameState.progress.mark_hint_shown = true
+	GameState.save()
+	_mark_hint = PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.7)
+	style.border_color = FighterView.MARK_COLOR
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(12)
+	style.set_content_margin_all(12)
+	_mark_hint.add_theme_stylebox_override("panel", style)
+	_mark_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mark_hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	var label := Label.new()
+	label.text = MARK_HINT_TEXT
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.add_theme_font_size_override("font_size", 26)
+	label.add_theme_color_override("font_color", FighterView.MARK_COLOR)
+	_mark_hint.add_child(label)
+	%Field.add_child(_mark_hint)
+	get_tree().create_timer(float(GameState.data.balance["mark_hint"]["seconds"])).timeout.connect(_hide_mark_hint)
+
+
+func _hide_mark_hint() -> void:
+	if _mark_hint != null:
+		_mark_hint.queue_free()
+		_mark_hint = null
+
+
 ## A retreat counts as a defeat; only the title and the hint's first line differ.
 func _finish_stage(victory: bool, retreat: bool) -> void:
+	_hide_mark_hint()
 	var progress = GameState.progress
 	if victory:
 		var reward: Dictionary = progress.apply_victory(GameState.data, _stage_id)
