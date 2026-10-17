@@ -1,6 +1,7 @@
-## Loads game content (heroes, enemies, stages, beast packs, balance, visual, saga scenes, hints) from JSON files in res://data/.
+## Loads game content (heroes, enemies, stages, beast packs, settlement buildings, balance, visual, saga scenes, hints)
+## from JSON files in res://data/.
 ## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback;
-## story.json holds the texts of the saga scenes (word for word from docs/STORY_M10.md) and when each scene is shown.
+## story.json holds the texts of the saga scenes (word for word from docs/STORY_M10.md, M11, M12) and when each scene is shown.
 extends RefCounted
 
 const DATA_DIR := "res://data/"
@@ -9,6 +10,7 @@ var heroes: Dictionary  ## heroes.json: classes, clans, heroes
 var enemies: Dictionary  ## enemies.json
 var stages: Dictionary  ## stages.json: chapters (map picture, enemy growth), stages (chapter, point on the map)
 var packs: Dictionary  ## packs.json: beast packs on a chapter's map (chapter, enemies, unlock, point on the map)
+var buildings: Dictionary  ## buildings.json: the settlement's buildings (M12): when they open, level costs, bonuses, places
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
 var story: Dictionary  ## story.json: saga scenes (lines, when shown), the ravens who speak in them, speakers' captions
@@ -21,6 +23,7 @@ static func load_all() -> RefCounted:
 	data.enemies = load_json("enemies.json")
 	data.stages = load_json("stages.json")
 	data.packs = load_json("packs.json")
+	data.buildings = load_json("buildings.json")
 	data.balance = load_json("balance.json")
 	data.visual = load_json("visual.json")
 	data.story = load_json("story.json")
@@ -92,7 +95,8 @@ func scene_ids() -> Array[String]:
 
 ## Scenes shown at the moment `when` (story.json → scenes[].show.when): "new_game", "hero_joined" (subject = hero id),
 ## "before_first_battle" or "first_victory" (subject = stage id), "chapter_map" (subject = chapter id: the first time
-## the chapter's map is shown), "before_battle_with" (subject = enemy id: before the first battle where it fights).
+## the chapter's map is shown), "before_battle_with" (subject = enemy id: before the first battle where it fights),
+## "settlement" (no subject: the first time the settlement is entered with construction open, M12).
 ## In story order.
 func scene_ids_shown_at(when: String, subject = null) -> Array[String]:
 	var ids: Array[String] = []
@@ -156,6 +160,38 @@ func pack_ids(chapter_id := 0) -> Array[String]:
 ## Seconds before a beaten pack comes back (balance.json → beast_packs.respawn_hours).
 func pack_respawn_seconds() -> int:
 	return roundi(float(balance["beast_packs"]["respawn_hours"]) * 3600.0)
+
+
+# --- settlement buildings (buildings.json) ---------------------------------------
+
+func get_building(building_id: String) -> Dictionary:
+	for building in buildings.get("buildings", []):
+		if building["id"] == building_id:
+			return building
+	push_error("Unknown building: %s" % building_id)
+	return {}
+
+
+## Building ids in data order (the order of the settlement's plots and of the window texts).
+func building_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for building in buildings.get("buildings", []):
+		ids.append(building["id"])
+	return ids
+
+
+func building_max_level() -> int:
+	return int(buildings["max_level"])
+
+
+## Supplies to raise a building from `level` to `level + 1` (buildings.json → level_costs, the same for every building).
+func building_cost(level: int) -> int:
+	return int(buildings["level_costs"][level])
+
+
+## A building's bonus at `level`: buildings.json → bonus.per_level × level (a share: 0.06 = 6%).
+func building_bonus(building_id: String, level: int) -> float:
+	return float(get_building(building_id)["bonus"]["per_level"]) * level
 
 
 func stage_count() -> int:

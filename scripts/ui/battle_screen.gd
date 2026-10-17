@@ -333,12 +333,12 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 	if victory and _pack_id != "":
 		var pack_reward: Dictionary = progress.apply_pack_victory(GameState.data, _pack_id, GameState.now())
 		%ResultTitle.text = "Победа!"
-		%ResultHint.text = "+%d серебра · +%d опыта\nСтая вернётся через %s" % [
-			int(pack_reward["silver"]), int(pack_reward["experience"]), _hours_text(GameState.data.pack_respawn_seconds())]
+		%ResultHint.text = "%s\nСтая вернётся через %s" % [
+			reward_text(pack_reward), hours_text(progress.pack_respawn_seconds(GameState.data))]
 	elif victory:
 		var reward: Dictionary = progress.apply_victory(GameState.data, _stage_id)
 		%ResultTitle.text = "Победа!"
-		%ResultHint.text = "+%d серебра · +%d опыта" % [int(reward["silver"]), int(reward["experience"])]
+		%ResultHint.text = reward_text(reward)
 		if reward["replay"]:
 			%ResultHint.text += "\nПовтор: %d%% награды" % roundi(float(GameState.data.balance["replay_reward_share"]) * 100)
 		_new_heroes = reward["new_heroes"]
@@ -354,8 +354,16 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 	_show_next_new_hero()
 
 
-## «2 ч», «1 ч 30 мин», «45 мин».
-static func _hours_text(seconds: int) -> String:
+## «+120 серебра · +30 опыта», with «· +20 припасов» once construction is open (M12).
+static func reward_text(reward: Dictionary) -> String:
+	var text := "+%d серебра · +%d опыта" % [int(reward["silver"]), int(reward["experience"])]
+	if int(reward.get("supplies", 0)) > 0:
+		text += " · +%d припасов" % int(reward["supplies"])
+	return text
+
+
+## «2 ч», «1 ч 30 мин», «45 мин» (also the settlement's window for Thjazi's barrow).
+static func hours_text(seconds: int) -> String:
 	var hours := seconds / 3600
 	var minutes := (seconds % 3600) / 60
 	if hours > 0 and minutes > 0:

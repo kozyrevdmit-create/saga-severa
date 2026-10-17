@@ -3,9 +3,13 @@
 ## Every picture is brought to one format, whatever the source size and margins (Sigrid's source is 1254×1254
 ## with no margin): the figure is cut out by its opaque pixels, scaled to fit SIZE × CONTENT_SHARE, centred
 ## horizontally and stood on a common ground line (feet at the same height), on a transparent square SIZE × SIZE.
-## Writes assets/art/heroes/*.png, assets/art/enemies/*.png and assets/art/story/*.png; the editor (or `--import`) imports them.
+## Writes assets/art/heroes/*.png, assets/art/enemies/*.png, assets/art/story/*.png (and maps/, settlement/); the editor (or `--import`) imports them.
 ## Chapter maps (maps/*.png, opaque 1024×1536) are copied as they are into assets/art/maps/: the map fills the screen
 ## height, about 1560 game pixels on an iPhone, so a smaller copy would blur. Their import settings make them small.
+## The settlement (M12, settlement/): its picture settlement.png (opaque 1024×1536, fills the screen height like a map)
+## is copied like a map; the buildings (1024×1024 on a transparent background) are made BUILDING_SIZE × BUILDING_SIZE
+## whole, margins included (data/buildings.json places them by shares of the square), in the four colours.
+## `--only=settlement` (or another folder) prepares only that folder.
 extends SceneTree
 
 const SIZE := 512  ## enough for a sharp 270 px boss on a 3× iPhone screen (game is 720 px wide)
@@ -13,6 +17,9 @@ const CONTENT_SHARE := 920.0 / 1024.0  ## the approved 1024 px pictures leave a 
 const ALPHA_CUTOFF := 0.3  ## faint edge pixels below this do not count as the figure
 const FOLDERS := ["heroes", "enemies", "story"]  ## story: Odin's ravens for the saga scenes (Hugin faces right, Munin left)
 const MAPS_FOLDER := "maps"
+const SETTLEMENT_FOLDER := "settlement"
+const SETTLEMENT_PICTURE := "settlement.png"
+const BUILDING_SIZE := 512  ## a building stands about 270 game pixels wide on the settlement screen
 ## The game names a picture by the hero/enemy id from data/*.json; the art folder spells one name differently.
 const GAME_NAMES := {"thorvald.png": "torvald.png"}
 const PALETTE := ["#1a1a1a", "#efe3c8", "#b5442c", "#3f6a96"]  ## docs/ART_STYLE.md: the only four colours
@@ -22,14 +29,19 @@ const REDDISH := 50  ## a source pixel may turn rust red only if its red is this
 
 func _initialize() -> void:
 	var src := ""
+	var only := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--src="):
 			src = arg.trim_prefix("--src=")
+		elif arg.begins_with("--only="):
+			only = arg.trim_prefix("--only=")
 	if src.is_empty():
 		printerr("Usage: ... -- --src=<folder with heroes/, enemies/, story/ and maps/>")
 		quit(1)
 		return
 	for folder in FOLDERS:
+		if only != "" and folder != only:
+			continue
 		var out_dir := ProjectSettings.globalize_path("res://assets/art/%s" % folder)
 		DirAccess.make_dir_recursive_absolute(out_dir)
 		for file in DirAccess.get_files_at(src.path_join(folder)):
@@ -41,7 +53,7 @@ func _initialize() -> void:
 			result.save_png(out_dir.path_join(game_name))
 			print("%s/%s: %s -> %s %d×%d" % [folder, file, image.get_size(), game_name, SIZE, SIZE])
 	var maps_dir := src.path_join(MAPS_FOLDER)
-	if DirAccess.dir_exists_absolute(maps_dir):
+	if DirAccess.dir_exists_absolute(maps_dir) and (only == "" or only == MAPS_FOLDER):
 		var out_dir := ProjectSettings.globalize_path("res://assets/art/%s" % MAPS_FOLDER)
 		DirAccess.make_dir_recursive_absolute(out_dir)
 		for file in DirAccess.get_files_at(maps_dir):
@@ -51,6 +63,23 @@ func _initialize() -> void:
 				_snap_to_palette(image)
 				image.save_png(out_dir.path_join(file))
 				print("%s/%s: %s" % [MAPS_FOLDER, file, image.get_size()])
+	var settlement_dir := src.path_join(SETTLEMENT_FOLDER)
+	if DirAccess.dir_exists_absolute(settlement_dir) and (only == "" or only == SETTLEMENT_FOLDER):
+		var out_dir := ProjectSettings.globalize_path("res://assets/art/%s" % SETTLEMENT_FOLDER)
+		DirAccess.make_dir_recursive_absolute(out_dir)
+		for file in DirAccess.get_files_at(settlement_dir):
+			if file.get_extension() != "png":
+				continue
+			var image := Image.load_from_file(settlement_dir.path_join(file))
+			if file == SETTLEMENT_PICTURE:
+				image.convert(Image.FORMAT_RGB8)
+				_snap_to_palette(image)
+			else:
+				image.convert(Image.FORMAT_RGBA8)
+				image.resize(BUILDING_SIZE, BUILDING_SIZE, Image.INTERPOLATE_LANCZOS)
+				_snap_to_palette(image)
+			image.save_png(out_dir.path_join(file))
+			print("%s/%s: %s" % [SETTLEMENT_FOLDER, file, image.get_size()])
 	quit()
 
 
@@ -58,15 +87,18 @@ func _initialize() -> void:
 ## colours already; the Jotunheim map came with soft noise (about 230 000 shades), 3.6 MB instead of 0.4 MB.
 ## Rust red only where the source is clearly red (tents, banners): a brownish grey at the edge of a black line is
 ## nearer to the red than to black or bone and would turn into red specks.
+## A picture with transparency keeps its alpha (soft edges); only the colours are snapped.
 func _snap_to_palette(image: Image) -> void:
 	var colors: Array[Color] = []
 	for code in PALETTE:
 		colors.append(Color(code))
+	var format := image.get_format()
+	var step := 4 if format == Image.FORMAT_RGBA8 else 3
 	var bytes := image.get_data()
 	var palette := PackedByteArray()
 	for color in colors:
 		palette.append_array([color.r8, color.g8, color.b8])
-	for i in range(0, bytes.size(), 3):
+	for i in range(0, bytes.size(), step):
 		var best := 0
 		var best_distance := 1 << 30
 		var reddish := bytes[i] - maxi(bytes[i + 1], bytes[i + 2]) >= REDDISH
@@ -83,7 +115,7 @@ func _snap_to_palette(image: Image) -> void:
 		bytes[i] = palette[best * 3]
 		bytes[i + 1] = palette[best * 3 + 1]
 		bytes[i + 2] = palette[best * 3 + 2]
-	image.set_data(image.get_width(), image.get_height(), false, Image.FORMAT_RGB8, bytes)
+	image.set_data(image.get_width(), image.get_height(), false, format, bytes)
 
 
 func _normalize(image: Image) -> Image:

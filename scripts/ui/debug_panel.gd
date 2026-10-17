@@ -1,5 +1,5 @@
 ## Debug panel (spec 5.6), opened by a long press on the silver counter of the main screen:
-## add silver, unlock all heroes, jump to stage N, mark all saga scenes seen, skip time, reset the progress
+## add silver or supplies, unlock all heroes, jump to stage N, mark all saga scenes seen, skip time, reset the progress
 ## («Точно сбросить?» first). Unlocking heroes and jumping to a stage play no saga scenes.
 ## Amounts come from balance.json → debug_panel.
 extends Control
@@ -14,8 +14,10 @@ func _ready() -> void:
 	%ConfirmBox.visible = false
 	var debug: Dictionary = GameState.data.balance["debug_panel"]
 	%AddSilverButton.text = "+%s серебра" % _thousands(int(debug["add_silver"]))
+	%AddSuppliesButton.text = "+%s припасов" % _thousands(int(debug["add_supplies"]))
 	%SkipTimeButton.text = "Промотать время на %s ч" % _number(float(debug["skip_time_hours"]))
 	%AddSilverButton.pressed.connect(_on_add_silver)
+	%AddSuppliesButton.pressed.connect(_on_add_supplies)
 	%UnlockHeroesButton.pressed.connect(_on_unlock_heroes)
 	%UnlockScenesButton.pressed.connect(_on_unlock_scenes)
 	%StageDownButton.pressed.connect(_change_jump_stage.bind(-1))
@@ -43,6 +45,11 @@ func close() -> void:
 func _on_add_silver() -> void:
 	GameState.debug_add_silver()
 	_done("Серебро: %d" % GameState.progress.silver)
+
+
+func _on_add_supplies() -> void:
+	GameState.debug_add_supplies()
+	_done("Припасы: %d" % GameState.progress.supplies)
 
 
 func _on_unlock_heroes() -> void:

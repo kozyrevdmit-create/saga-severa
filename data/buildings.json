@@ -1,0 +1,54 @@
+{
+  "opens_after_chapter": 1,
+  "max_level": 5,
+  "level_costs": [100, 150, 250, 400, 600],
+  "picture": "settlement",
+  "picture_visible_width": 0.84,
+  "buildings": [
+    {
+      "id": "shrine",
+      "name": "Капище",
+      "description": "Мёртвым богам тоже нужен дом.",
+      "opens_after_chapter": 1,
+      "bonus": { "kind": "squad_hp", "per_level": 0.02 },
+      "label": { "x": 0.259, "y": 0.425 },
+      "art": { "x": 0.259, "y": 0.362, "width": 0.27 }
+    },
+    {
+      "id": "training_yard",
+      "name": "Учебный двор",
+      "description": "Здесь герои учатся у бывалых бойцов.",
+      "opens_after_chapter": 1,
+      "bonus": { "kind": "level_up_discount", "per_level": 0.03 },
+      "label": { "x": 0.796, "y": 0.519 },
+      "art": { "x": 0.796, "y": 0.455, "width": 0.27 }
+    },
+    {
+      "id": "pier",
+      "name": "Торговая пристань",
+      "description": "Купцы платят за добычу дружины.",
+      "opens_after_chapter": 1,
+      "bonus": { "kind": "battle_silver", "per_level": 0.03 },
+      "label": { "x": 0.3, "y": 0.535 },
+      "art": { "x": 0.215, "y": 0.59, "width": 0.28 }
+    },
+    {
+      "id": "thjazi_barrow",
+      "name": "Курган Тьяцци",
+      "description": "Дух Тьяцци стережёт угодья.",
+      "opens_after_chapter": 2,
+      "bonus": { "kind": "pack_respawn", "per_level": 0.1 },
+      "label": { "x": 0.664, "y": 0.164 },
+      "art": { "x": 0.664, "y": 0.1, "width": 0.27 }
+    },
+    {
+      "id": "forge",
+      "name": "Кузня",
+      "description": "Настоящую кузню сложат только гномы.",
+      "opens_after_chapter": 3,
+      "bonus": { "kind": "squad_attack", "per_level": 0.02 },
+      "label": { "x": 0.762, "y": 0.639 },
+      "art": { "x": 0.762, "y": 0.575, "width": 0.27 }
+    }
+  ]
+}
