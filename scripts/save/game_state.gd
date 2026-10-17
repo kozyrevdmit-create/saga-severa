@@ -70,6 +70,12 @@ func debug_add_silver() -> void:
 	save()
 
 
+## Debug panel «+N припасов» (balance.json → debug_panel.add_supplies), also before construction opens.
+func debug_add_supplies() -> void:
+	progress.supplies += int(data.balance["debug_panel"]["add_supplies"])
+	save()
+
+
 ## Debug panel «Открыть всех героев».
 func debug_unlock_all_heroes() -> void:
 	progress.unlock_all_heroes(data)

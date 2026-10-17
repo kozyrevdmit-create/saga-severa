@@ -1,6 +1,6 @@
 ## Player progress: silver, experience (jarl level), won stages, unlocked heroes with their levels,
-## the squad formation, the time the game was last open (for offline income), when beaten beast packs come back
-## and which saga scenes have been seen.
+## the squad formation, the time the game was last open (for offline income), when beaten beast packs come back,
+## which saga scenes have been seen, and the settlement (M12): supplies and the buildings' levels.
 ## Rules only; reading and writing the save file lives in save_storage.gd.
 extends RefCounted
 
@@ -19,6 +19,9 @@ var pack_respawn_unix := {}  ## beaten beast pack id -> when it comes back to th
 var pack_clock_unix := 0  ## when the pack timers were last checked against the clock (to notice it turned back); 0 = never
 var seen_scenes: Array[String] = []  ## saga scenes (story.json ids) that have started: each is shown once per game
 var scene_queue: Array[String] = []  ## scenes whose moment has come but that have not started yet (saved, so closing the game does not lose them)
+var supplies := 0  ## «Припасы» (wood, stone, iron) for the settlement's buildings
+var building_levels := {}  ## built building id -> level (1..max); a building not built yet is not here
+var start_supplies_given := false  ## the starting supplies came with the opening of construction (once per game)
 
 
 static func new_game(data) -> RefCounted:
@@ -34,7 +37,7 @@ static func new_game(data) -> RefCounted:
 
 ## Debug panel «Сбросить прогресс»: everything back to a new game (stages, heroes and their levels, squad,
 ## silver, jarl experience, offline bank, the target mark hint, beast pack timers, seen saga scenes: the intro is due
-## again). The offline clock restarts now, so the time before the reset earns nothing.
+## again; supplies and buildings). The offline clock restarts now, so the time before the reset earns nothing.
 func reset(data, now_unix: int) -> void:
 	var fresh = new_game(data)
 	silver = fresh.silver
@@ -48,6 +51,9 @@ func reset(data, now_unix: int) -> void:
 	pack_clock_unix = fresh.pack_clock_unix
 	seen_scenes = fresh.seen_scenes
 	scene_queue = fresh.scene_queue
+	supplies = fresh.supplies
+	building_levels = fresh.building_levels
+	start_supplies_given = fresh.start_supplies_given
 	last_seen_unix = now_unix
 
 
@@ -64,13 +70,15 @@ func unlock_all_heroes(data) -> Array[String]:
 
 
 ## Debug panel «Перейти к этапу N»: stages before N count as won (without rewards), N is the next battle.
-## Heroes earned by those stages join (without their saga scenes); heroes already unlocked stay.
+## Heroes earned by those stages join (without their saga scenes); heroes already unlocked stay. Past chapter 1
+## construction opens with its starting supplies (once per game); buildings already built stay.
 func jump_to_stage(data, stage_id: int) -> void:
 	cleared_stage = clampi(stage_id, 1, data.stage_count()) - 1
 	var level := _join_level(data)
 	for hero_id in data.unlocked_hero_ids(cleared_stage):
 		if not hero_levels.has(hero_id):
 			_join(data, hero_id, level)
+	_open_construction(data)
 
 
 # --- stages and rewards -------------------------------------------------------
@@ -102,17 +110,21 @@ func is_replay(stage_id: int) -> bool:
 	return stage_id <= cleared_stage
 
 
-## Pays the reward (a replay pays replay_reward_share of it; the jarl bonus adds silver),
+## Pays the reward (a replay pays replay_reward_share of it; the jarl bonus and the trading pier add silver),
 ## marks the stage won and unlocks heroes (at the join level, see _join_level). A first win queues the saga scenes
-## of the heroes who joined and of the stage's first victory. Returns {silver, experience, replay, new_heroes}.
+## of the heroes who joined and of the stage's first victory, and brings balance.json → supplies.first_victory
+## while construction is open (the win over chapter 1's boss opens it and brings the starting supplies instead).
+## Returns {silver, experience, supplies, replay, new_heroes}.
 func apply_victory(data, stage_id: int) -> Dictionary:
 	var replay := is_replay(stage_id)
 	var base: Dictionary = data.get_stage(stage_id)["reward"]
 	var share := float(data.balance["replay_reward_share"]) if replay else 1.0
-	var silver_gain := roundi(float(base["silver"]) * share * silver_multiplier(data))
+	var silver_gain := roundi(float(base["silver"]) * share * silver_multiplier(data) * battle_silver_multiplier(data))
 	var experience_gain := roundi(float(base["experience"]) * share)
+	var supplies_gain := 0 if replay or not is_construction_open(data) else int(data.balance["supplies"]["first_victory"])
 	silver += silver_gain
 	experience += experience_gain
+	supplies += supplies_gain
 	var new_heroes: Array[String] = []
 	if not replay:
 		cleared_stage = maxi(cleared_stage, stage_id)
@@ -123,7 +135,9 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 				new_heroes.append(hero_id)
 				_queue_scenes(data, "hero_joined", hero_id)
 		_queue_scenes(data, "first_victory", stage_id)
-	return {"silver": silver_gain, "experience": experience_gain, "replay": replay, "new_heroes": new_heroes}
+		_open_construction(data)
+	return {"silver": silver_gain, "experience": experience_gain, "supplies": supplies_gain, "replay": replay,
+		"new_heroes": new_heroes}
 
 
 # --- saga scenes (data/story.json) ----------------------------------------------
@@ -160,6 +174,17 @@ func scenes_before_battle(data, stage_id: int, pack_id := "") -> Array[String]:
 		if fights:
 			ids.append_array(data.scene_ids_shown_at("before_battle_with", enemy["id"]))
 	return ids.filter(func(scene_id): return not scene_id in seen_scenes)
+
+
+## The scene shown the first time the settlement is entered with construction open (story.json → settlement), or ""
+## (also once it has been seen, and while construction is closed).
+func scene_on_settlement(data) -> String:
+	if not is_construction_open(data):
+		return ""
+	for scene_id in data.scene_ids_shown_at("settlement"):
+		if not scene_id in seen_scenes:
+			return scene_id
+	return ""
 
 
 ## The scene shown the first time the chapter's map is shown (Jotunheim's), or "" (also once it has been seen).
@@ -212,11 +237,18 @@ func is_pack_unlocked(data, pack_id: String) -> bool:
 
 
 ## Seconds until a beaten pack comes back; 0 = it is on the map. Counted by the clock, so the time while the game
-## is closed counts too. Never more than the respawn time, even if the device clock was turned back.
+## is closed counts too. Never more than the respawn time (pack_respawn_seconds), even if the device clock was turned
+## back; a level of Thjazi's barrow built while a pack is away shortens its wait too.
 func pack_seconds_left(data, pack_id: String, now_unix: int) -> int:
 	if not pack_respawn_unix.has(pack_id):
 		return 0
-	return clampi(int(pack_respawn_unix[pack_id]) - now_unix, 0, data.pack_respawn_seconds())
+	return clampi(int(pack_respawn_unix[pack_id]) - now_unix, 0, pack_respawn_seconds(data))
+
+
+## Seconds before a beaten pack comes back: balance.json → beast_packs.respawn_hours, shorter by Thjazi's barrow
+## (M12: −10% per level, 2 h → 1 h at level 5; buildings.json).
+func pack_respawn_seconds(data) -> int:
+	return roundi(data.pack_respawn_seconds() * (1.0 - building_bonus_total(data, "pack_respawn")))
 
 
 ## The pack is on the map and can be fought: unlocked and not waiting to come back.
@@ -225,32 +257,38 @@ func is_pack_available(data, pack_id: String, now_unix: int) -> bool:
 
 
 ## The reward for beating a pack: balance.json → beast_packs.reward_share_of_first_win of the first-win reward
-## of pack_stage(data, pack_id), silver with the jarl bonus. Returns {silver, experience}.
+## of pack_stage(data, pack_id), silver with the jarl bonus and the trading pier; while construction is open also
+## balance.json → supplies.pack_victory (M12). Returns {silver, experience, supplies}.
 ## The packs of a chapter already passed (the player has opened the next chapter) pay less:
 ## beast_packs.reward_share_once_the_next_chapter_is_open; the packs of the current chapter pay the full share (M11.1;
 ## the rule holds for any chapter: Midgard's packs in chapter 2, Jotunheim's once a chapter 3 opens). Otherwise the
-## easy packs of the chapters behind would take away most replays of the current chapter.
+## easy packs of the chapters behind would take away most replays of the current chapter. The same holds for
+## supplies: supplies.pack_victory_once_the_next_chapter_is_open.
 func pack_reward(data, pack_id: String) -> Dictionary:
 	var packs: Dictionary = data.balance["beast_packs"]
 	var share := float(packs["reward_share_of_first_win"])
+	var supplies_key := "pack_victory"
 	var next_chapter := int(data.get_pack(pack_id)["chapter"]) + 1
 	if next_chapter in data.chapter_ids() and is_chapter_open(data, next_chapter):
 		share = float(packs["reward_share_once_the_next_chapter_is_open"])
+		supplies_key = "pack_victory_once_the_next_chapter_is_open"
 	var base: Dictionary = data.get_stage(pack_stage(data, pack_id))["reward"]
 	return {
-		"silver": roundi(float(base["silver"]) * share * silver_multiplier(data)),
+		"silver": roundi(float(base["silver"]) * share * silver_multiplier(data) * battle_silver_multiplier(data)),
 		"experience": roundi(float(base["experience"]) * share),
+		"supplies": int(data.balance["supplies"][supplies_key]) if is_construction_open(data) else 0,
 	}
 
 
-## Pays the pack reward and sends the pack away for balance.json → beast_packs.respawn_hours.
-## A defeat or a retreat changes nothing: the pack stays on the map. Returns {silver, experience}.
+## Pays the pack reward and sends the pack away for pack_respawn_seconds.
+## A defeat or a retreat changes nothing: the pack stays on the map. Returns {silver, experience, supplies}.
 func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
 	var reward := pack_reward(data, pack_id)
 	silver += int(reward["silver"])
 	experience += int(reward["experience"])
+	supplies += int(reward["supplies"])
 	update_pack_timers(data, now_unix)
-	pack_respawn_unix[pack_id] = now_unix + data.pack_respawn_seconds()
+	pack_respawn_unix[pack_id] = now_unix + pack_respawn_seconds(data)
 	return reward
 
 
@@ -261,7 +299,7 @@ func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
 func update_pack_timers(data, now_unix: int) -> void:
 	var went_back := maxi(0, pack_clock_unix - now_unix)
 	pack_clock_unix = now_unix
-	var latest: int = now_unix + data.pack_respawn_seconds()
+	var latest: int = now_unix + pack_respawn_seconds(data)
 	for pack_id in pack_respawn_unix.keys():
 		var at := mini(int(pack_respawn_unix[pack_id]) - went_back, latest)
 		if at <= now_unix:
@@ -313,8 +351,9 @@ func level_of(hero_id: String) -> int:
 	return int(hero_levels.get(hero_id, 1))
 
 
+## Silver for the hero's next level: GameData.level_up_cost, cheaper by the training yard (M12: −3% per level).
 func level_up_cost(data, hero_id: String) -> int:
-	return data.level_up_cost(level_of(hero_id))
+	return roundi(data.level_up_cost(level_of(hero_id)) * (1.0 - building_bonus_total(data, "level_up_discount")))
 
 
 func is_max_level(data, hero_id: String) -> bool:
@@ -340,7 +379,8 @@ func is_below_recommended(data, stage_id: int) -> bool:
 	return data.recommended_power(stage_id) > squad_power(data)
 
 
-## The squad's «Сила»: the sum of the squad heroes' power (GameData.hero_power) with the squad's clan bonuses.
+## The squad's «Сила»: the sum of the squad heroes' power (GameData.hero_power) with the squad's clan bonuses
+## and the settlement's bonuses (the shrine's HP, the forge's attack).
 func squad_power(data) -> int:
 	var total := 0
 	for hero_id in squad_ids():
@@ -348,10 +388,15 @@ func squad_power(data) -> int:
 	return total
 
 
-## A hero's power at their level (plus extra_levels): with the squad's clan bonuses when in the squad, without on the bench.
+## A hero's power at their level (plus extra_levels): with the squad's clan bonuses when in the squad, without on the bench;
+## the settlement's bonuses count for every hero (they are the whole druzhina's). The bonuses add up (+20% clan HP and
+## +4% shrine HP = +24% HP), as in the battle (StageBattle).
 func hero_power(data, hero_id: String, extra_levels := 0) -> int:
-	var synergy: Dictionary = data.synergy_bonuses(squad_ids() if is_in_formation(hero_id) else [])
-	return data.hero_power(hero_id, level_of(hero_id) + extra_levels, synergy)
+	var bonuses: Dictionary = data.synergy_bonuses(squad_ids() if is_in_formation(hero_id) else [])
+	var settlement := settlement_stat_bonuses(data)
+	for stat in settlement:
+		bonuses[stat] += settlement[stat]
+	return data.hero_power(hero_id, level_of(hero_id) + extra_levels, bonuses)
 
 
 ## «+N силы» on the level-up button: how much the hero's power grows with the next level
@@ -378,12 +423,15 @@ func squad_ids() -> Array[String]:
 	return ids
 
 
-## The squad for a battle: [{id, level, row}] in slot order.
+## The squad for a battle: [{id, level, row, bonus}] in slot order; bonus = the settlement's {hp, attack} bonuses
+## (settlement_stat_bonuses), the same for every hero.
 func squad(data) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
+	var bonus := settlement_stat_bonuses(data)
 	for slot in formation.size():
 		if formation[slot] != EMPTY:
-			result.append({"id": formation[slot], "level": level_of(formation[slot]), "row": slot_row(data, slot)})
+			result.append({"id": formation[slot], "level": level_of(formation[slot]), "row": slot_row(data, slot),
+				"bonus": bonus.duplicate()})
 	return result
 
 
@@ -412,6 +460,82 @@ func _reset_formation(data) -> void:
 	formation.clear()
 	for slot in data.slot_count():
 		formation.append(EMPTY)
+
+
+# --- settlement: supplies and buildings (M12) -------------------------------------
+
+## A chapter is won once its last stage (the boss) has been won. A chapter not in the game yet (chapter 3) is never won.
+func is_chapter_won(data, chapter_id: int) -> bool:
+	return chapter_id in data.chapter_ids() and cleared_stage >= data.chapter_stage_ids(chapter_id).back()
+
+
+## Construction opens with the first win over chapter 1's boss (buildings.json → opens_after_chapter): the settlement's
+## scene has all six heroes speak, and chapter 1 and its balance stay as they were. Until then the settlement only
+## brings offline income, and no supplies are earned.
+func is_construction_open(data) -> bool:
+	return is_chapter_won(data, int(data.buildings["opens_after_chapter"]))
+
+
+## A building can be built once construction is open and its chapter is won (Thjazi's barrow after chapter 2,
+## the forge after chapter 3).
+func is_building_open(data, building_id: String) -> bool:
+	return is_construction_open(data) and is_chapter_won(data, int(data.get_building(building_id)["opens_after_chapter"]))
+
+
+## 0 = not built yet.
+func building_level(building_id: String) -> int:
+	return int(building_levels.get(building_id, 0))
+
+
+func is_building_max_level(data, building_id: String) -> bool:
+	return building_level(building_id) >= data.building_max_level()
+
+
+## Supplies for the building's next level (building or improving it).
+func building_cost(data, building_id: String) -> int:
+	return data.building_cost(building_level(building_id))
+
+
+func can_build(data, building_id: String) -> bool:
+	return is_building_open(data, building_id) and not is_building_max_level(data, building_id) \
+			and supplies >= building_cost(data, building_id)
+
+
+## «Построить» / «Улучшить»: the building gets its next level at once for its cost in supplies.
+func build(data, building_id: String) -> bool:
+	if not can_build(data, building_id):
+		return false
+	supplies -= building_cost(data, building_id)
+	building_levels[building_id] = building_level(building_id) + 1
+	return true
+
+
+## The sum of the built buildings' bonuses of one kind (buildings.json → bonus.kind): "squad_hp", "squad_attack",
+## "level_up_discount", "battle_silver", "pack_respawn"; a share (0.06 = 6%).
+func building_bonus_total(data, kind: String) -> float:
+	var total := 0.0
+	for building_id in building_levels:
+		if data.get_building(building_id)["bonus"]["kind"] == kind:
+			total += data.building_bonus(building_id, building_level(building_id))
+	return total
+
+
+## The shrine's HP and the forge's attack bonus for every hero: {"hp": 0.04, "attack": 0.0}.
+func settlement_stat_bonuses(data) -> Dictionary:
+	return {"hp": building_bonus_total(data, "squad_hp"), "attack": building_bonus_total(data, "squad_attack")}
+
+
+## The trading pier: more silver for battles, stages and packs (not for offline income).
+func battle_silver_multiplier(data) -> float:
+	return 1.0 + building_bonus_total(data, "battle_silver")
+
+
+## Once construction opens (also for a save that won chapter 1 before M12, and after the debug jump), the player gets
+## exactly enough supplies for one building of level 1 (buildings.json → level_costs[0]), once per game.
+func _open_construction(data) -> void:
+	if is_construction_open(data) and not start_supplies_given:
+		supplies += data.building_cost(0)
+		start_supplies_given = true
 
 
 # --- jarl (account level) -----------------------------------------------------
@@ -501,6 +625,9 @@ func to_dict() -> Dictionary:
 		"pack_clock_unix": pack_clock_unix,
 		"seen_scenes": seen_scenes.duplicate(),
 		"scene_queue": scene_queue.duplicate(),
+		"supplies": supplies,
+		"building_levels": building_levels.duplicate(),
+		"start_supplies_given": start_supplies_given,
 	}
 
 
@@ -516,6 +643,17 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	progress.cleared_stage = clampi(_to_int(saved.get("cleared_stage"), 0), 0, data.stage_count())
 	progress.last_seen_unix = maxi(0, _to_int(saved.get("last_seen_unix"), 0))
 	progress.offline_bank = maxi(0, _to_int(saved.get("offline_bank"), 0))
+	# A save from before M12 has no settlement: no supplies or buildings; if it has won chapter 1, construction opens
+	# with its starting supplies (at the end, once the stages are restored).
+	progress.supplies = maxi(0, _to_int(saved.get("supplies"), 0))
+	var levels_saved = saved.get("building_levels")
+	if levels_saved is Dictionary:
+		for building_id in data.building_ids():
+			var saved_level := clampi(_to_int(levels_saved.get(building_id), 0), 0, data.building_max_level())
+			if saved_level > 0:
+				progress.building_levels[building_id] = saved_level
+	var given = saved.get("start_supplies_given")
+	progress.start_supplies_given = given is bool and given
 	# A save from before M6.1 has no flag: the hint is new, so it is shown once there too.
 	var hint_shown = saved.get("mark_hint_shown")
 	progress.mark_hint_shown = hint_shown is bool and hint_shown
@@ -574,6 +712,7 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	for hero_id in missing:
 		progress.hero_levels[hero_id] = join_level
 		progress.formation_add(data, hero_id)  # like a new hero: into a free slot, if there is one
+	progress._open_construction(data)
 	return progress
 
 

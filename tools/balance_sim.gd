@@ -37,6 +37,11 @@
 ##    every pack on the map, then fights stages as in table 1 (an attempt at the next stage, a replay of the previous
 ##    one after a defeat, …) until the visit's stage fights (--visit-fights, several lengths) are used up.
 ##    Prints the replays per stage with and without packs, and how often the human beats each pack.
+## Settlement (M12): every player builds with their supplies (from chapter 2 on: first wins, packs) before spending
+## silver, the simple way: the open building with the lowest level, in data order on a tie (капище → двор → пристань →
+## курган), as soon as the supplies are there. Table 1 and table 7 print the buildings' levels at the first win of
+## each stage from the end of chapter 1 on. Tables 2 and 6 measure squads without buildings (recommended power is
+## counted without them).
 extends SceneTree
 
 const GameData := preload("res://scripts/data/game_data.gd")
@@ -187,6 +192,7 @@ func _initialize() -> void:
 			var levels := _median_levels(results[policy], stage)
 			line += " | " + " ".join(hero_ids.map(func(id): return "%3s" % (str(levels[id]) if levels.has(id) else "—")))
 		print(line)
+	_print_buildings(results)
 	_print_deaths()
 	if until > 0:
 		_print_stalled()
@@ -370,7 +376,7 @@ func _campaign(policy: String, visit_fights := 0) -> Dictionary:
 	var stages := []
 	var fights := 0
 	var battle_time := 0.0
-	var packs := {"visits": 0, "fights": 0, "wins": 0, "silver": 0, "stage_silver": 0}
+	var packs := {"visits": 0, "fights": 0, "wins": 0, "silver": 0, "stage_silver": 0, "supplies": 0}
 	var visit_left := 0
 	for stage in range(1, _last_stage + 1):
 		var replays := 0
@@ -392,6 +398,9 @@ func _campaign(policy: String, visit_fights := 0) -> Dictionary:
 				var paid: Dictionary = progress.apply_victory(data, stage)
 				packs["stage_silver"] += int(paid["silver"])
 				record["upgrades"] = _upgrades_bought_by(middle_level, int(paid["silver"]))
+				_build(progress)
+				record["buildings"] = progress.building_levels.duplicate()
+				record["supplies_earned"] = packs["supplies"] + _supplies_from_stages(progress)
 				break
 			if replays >= int(data.balance["balance_check"]["stuck_after_replays"]):
 				record["stuck"] = true
@@ -428,11 +437,14 @@ func _pack_visit(progress, policy: String, packs: Dictionary) -> void:
 		packs["fights"] += 1
 		if fight["victory"]:
 			packs["wins"] += 1
-			packs["silver"] += int(progress.apply_pack_victory(data, pack_id, now)["silver"])
+			var paid: Dictionary = progress.apply_pack_victory(data, pack_id, now)
+			packs["silver"] += int(paid["silver"])
+			packs["supplies"] += int(paid["supplies"])
 
 
-## Spends silver before a fight; `goal` is the stage the player is trying to beat.
+## Builds, then spends silver before a fight; `goal` is the stage the player is trying to beat.
 func _spend(progress, policy: String, goal: int) -> void:
+	_build(progress)
 	while true:
 		var hero_id := ""
 		match policy:
@@ -512,6 +524,27 @@ func _squad_power(progress, upgraded_hero: String) -> float:
 		total_hp += float(hero["hp"]) * multiplier * (1.0 + synergy["hp"])
 		total_dps += float(hero["attack"]) * multiplier * (1.0 + synergy["attack"]) / float(hero["attack_interval"])
 	return total_hp * total_dps
+
+
+## The settlement the simple way: the open building with the lowest level (data order on a tie: капище → двор →
+## пристань → курган), as soon as the supplies are there; the player waits for the supplies otherwise.
+func _build(progress) -> void:
+	while true:
+		var next := ""
+		for building_id in data.building_ids():
+			if progress.is_building_open(data, building_id) and not progress.is_building_max_level(data, building_id) \
+					and (next == "" or progress.building_level(building_id) < progress.building_level(next)):
+				next = building_id
+		if next == "" or not progress.build(data, next):
+			return
+
+
+## Supplies from the stages' first wins and the starting supplies so far (the packs' are counted by _pack_visit).
+func _supplies_from_stages(progress) -> int:
+	if not progress.is_construction_open(data):
+		return 0
+	var first_wins: int = progress.cleared_stage - data.chapter_stage_ids(int(data.buildings["opens_after_chapter"])).back()
+	return data.building_cost(0) + first_wins * int(data.balance["supplies"]["first_victory"])
 
 
 func _lowest_level_hero(progress) -> String:
@@ -671,6 +704,50 @@ func _print_deaths() -> void:
 
 
 # --- reports ----------------------------------------------------------------
+
+## The buildings' levels at the first win of each stage from the opening of construction on (median per building),
+## and the supplies earned by then (starting supplies included).
+func _print_buildings(results: Dictionary) -> void:
+	var first: int = data.chapter_stage_ids(int(data.buildings["opens_after_chapter"])).back()
+	if _last_stage < first:
+		return
+	var ids: Array = data.building_ids().filter(func(id): return int(data.get_building(id)["opens_after_chapter"]) in data.chapter_ids())
+	print("")
+	print("Здания при первой победе (медиана уровней после стройки; «—» — ещё закрыто). Порядок стройки: " +
+			" → ".join(ids.map(func(id): return data.get_building(id)["name"])))
+	print("Этап | " + " | ".join(_policies.map(func(p): return "%-26s" % POLICY_NAMES[p])))
+	print("     | " + " | ".join(_policies.map(func(_p): return " ".join(ids.map(func(id): return "%3s" % data.get_building(id)["name"].substr(0, 3))) + " припасы")))
+	for stage in range(first, _last_stage + 1):
+		var line := "%4d" % stage
+		for policy in _policies:
+			line += " | " + _buildings_text(results[policy], stage, ids)
+		print(line)
+
+
+## «  2   2   1   — 450»: median building levels at the stage's first win and the median supplies earned by then.
+func _buildings_text(campaigns: Array, stage: int, ids: Array) -> String:
+	var per_building := {}
+	var earned := []
+	for campaign in campaigns:
+		for record in campaign["stages"]:
+			if record["stage"] == stage and not record["stuck"] and record.has("buildings"):
+				for building_id in ids:
+					per_building.get_or_add(building_id, []).append(int(record["buildings"].get(building_id, 0)))
+				earned.append(record["supplies_earned"])
+	if earned.is_empty():
+		return "—"
+	var cells := []
+	var opened = Progress.new_game(data)
+	opened.cleared_stage = stage
+	for building_id in ids:
+		if not opened.is_building_open(data, building_id):
+			cells.append("%3s" % "—")
+			continue
+		var values: Array = per_building[building_id]
+		values.sort()
+		cells.append("%3d" % values[values.size() / 2])
+	earned.sort()
+	return " ".join(cells) + " %7d" % earned[earned.size() / 2]
 
 func _stage_summary(campaigns: Array, stage: int) -> Dictionary:
 	var replays := []
@@ -846,6 +923,19 @@ func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
 			fights, _average(visits), _average(visits) * float(packs["respawn_hours"]), pack_fights / campaigns,
 			roundi(100.0 * pack_wins / maxf(1.0, pack_fights)), roundi(100.0 * pack_silver / maxf(1.0, pack_silver + stage_silver)),
 			roundi(100.0 * finished / campaigns)])
+
+	var building_ids: Array = data.building_ids().filter(func(id): return int(data.get_building(id)["opens_after_chapter"]) in data.chapter_ids())
+	var first: int = data.chapter_stage_ids(int(data.buildings["opens_after_chapter"])).back()
+	if _last_stage >= first:
+		print("")
+		print("Здания при первой победе (медиана уровней; " + " ".join(building_ids.map(func(id): return data.get_building(id)["name"].substr(0, 3))) +
+				"; припасов заработано к этому времени, со стартовым запасом):")
+		print("Этап |  без стай" + "".join(visit_fights.map(func(f): return " | заход = %d" % f)))
+		for stage in range(first, _last_stage + 1):
+			var row := "%4d" % stage
+			for fights in variants:
+				row += " | " + _buildings_text(results[fights], stage, building_ids)
+			print(row)
 
 	print("")
 	print("Победы над стаями (%d боёв) и средняя длина боя: отряд и уровни — как у человека при первой победе этапа" % runs)

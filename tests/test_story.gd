@@ -8,12 +8,14 @@
 ## M11: Jotunheim's scene the first time its map is shown (also for an old save), the eagles' scene before the first
 ## battle with carrion eagles (a stage or a pack), Thjazi's scenes before the first battle on stage 20 and after the
 ## first win there; Thjazi speaks with his head from the enemy picture.
+## M12: «Зерно нового мира» (docs/STORY_M12.md) the first time the settlement is entered with construction open
+## (tests/test_settlement.gd plays it).
 extends "res://tests/base_test.gd"
 
 const Progress := preload("res://scripts/save/progress.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 const Art := preload("res://scripts/ui/art.gd")
-const STORY_MDS := ["res://docs/STORY_M10.md", "res://docs/STORY_M11.md"]
+const STORY_MDS := ["res://docs/STORY_M10.md", "res://docs/STORY_M11.md", "res://docs/STORY_M12.md"]
 const LORE_MD := "res://docs/LORE.md"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -22,7 +24,7 @@ const BATTLE_SCENE := "res://scenes/battle.tscn"
 const PHONE_SIZE := Vector2i(720, 1558)  ## iPhone 14 shape at the project's 720 px width
 const BASE_SIZE := Vector2i(720, 1280)  ## project.godot viewport (a shorter phone)
 const SCENES := ["intro", "join_angrboda", "join_skadi", "join_hrungnir", "boss_before", "boss_after",
-	"ch2_intro", "ch2_eagles", "ch2_boss_before", "ch2_boss_after"]
+	"ch2_intro", "ch2_eagles", "ch2_boss_before", "ch2_boss_after", "settlement_intro"]
 
 var _saved_progress
 var _saved_window_size: Vector2i
@@ -30,7 +32,7 @@ var _saved_window_size: Vector2i
 
 # --- texts ----------------------------------------------------------------------
 
-## docs/STORY_M10.md and docs/STORY_M11.md are byte copies of Dmitriy's approved texts (../docs/). Every scene, title,
+## docs/STORY_M10.md, STORY_M11.md and STORY_M12.md are byte copies of Dmitriy's approved texts (../docs/). Every scene, title,
 ## speaker, look («[страница саги]» / «[диалог]»), line and the end card match word for word.
 func test_texts_match_story_md_word_for_word() -> void:
 	var data = await _data()
@@ -39,7 +41,7 @@ func test_texts_match_story_md_word_for_word() -> void:
 		var text := FileAccess.get_file_as_string(path)
 		assert_true(text.contains("утверждено Дмитрием"), "%s: the texts are approved by Dmitriy" % path)
 		md += text + "\n"
-	var heading := RegEx.create_from_string("^## \\d+\\. `(\\w+)` — «(.+)»$")
+	var heading := RegEx.create_from_string("^## (?:\\d+\\. )?`(\\w+)` — «(.+)»$")  # STORY_M12.md: one scene, no number
 	var spoken := RegEx.create_from_string("^- \\*\\*(.+?):\\*\\* (.+)$")
 	var card := RegEx.create_from_string("^Финальная карточка: \\*\\*«(.+)»\\*\\*")
 	var expected := []
@@ -58,8 +60,8 @@ func test_texts_match_story_md_word_for_word() -> void:
 			expected.back()["lines"].append([view, found.get_string(1), found.get_string(2)])
 		elif not expected.is_empty() and card.search(line):
 			expected.back()["end_card"] = card.search(line).get_string(1)
-	assert_eq(expected.map(func(scene): return scene["id"]), SCENES, "six scenes in STORY_M10.md, four in STORY_M11.md")
-	assert_eq(data.scene_ids(), SCENES, "the same ten scenes in story.json, in the same order")
+	assert_eq(expected.map(func(scene): return scene["id"]), SCENES, "six scenes in STORY_M10.md, four in STORY_M11.md, one in STORY_M12.md")
+	assert_eq(data.scene_ids(), SCENES, "the same eleven scenes in story.json, in the same order")
 	for scene in expected:
 		if not data.has_scene(scene["id"]):
 			continue
@@ -102,6 +104,7 @@ func test_speakers_looks_and_moments_are_valid() -> void:
 	assert_eq(data.scene_ids_shown_at("before_battle_with", "ice_troll"), [] as Array[String], "nothing before the troll")
 	assert_eq(data.scene_ids_shown_at("before_first_battle", 20), ["ch2_boss_before"] as Array[String], "before Thjazi")
 	assert_eq(data.scene_ids_shown_at("first_victory", 20), ["ch2_boss_after"] as Array[String], "after Thjazi")
+	assert_eq(data.scene_ids_shown_at("settlement"), ["settlement_intro"] as Array[String], "the settlement's scene")
 	assert_eq(data.speaker_enemy("thjazi"), "thjazi", "Thjazi's portrait is his enemy picture's head")
 	assert_true(not data.is_raven("thjazi"), "Thjazi is not a raven")
 	var story: Dictionary = data.visual["story"]

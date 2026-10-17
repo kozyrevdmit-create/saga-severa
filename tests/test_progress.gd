@@ -642,6 +642,7 @@ func test_pack_strength_and_reward_follow_the_last_stage_won() -> void:
 	var expected := {
 		"silver": roundi(float(reward["silver"]) * share * progress.silver_multiplier(data)),
 		"experience": roundi(float(reward["experience"]) * share),
+		"supplies": 0,  # construction opens after chapter 1 (M12)
 	}
 	assert_eq(progress.pack_reward(data, "wolves"), expected, "a share of stage 6's first win, silver with the jarl bonus")
 	assert_true(progress.silver_multiplier(data) > 1.0, "the jarl bonus is really in play here")
@@ -666,7 +667,9 @@ func test_packs_follow_the_last_stage_won_in_their_own_chapter() -> void:
 		var midgard: Dictionary = data.get_stage(10)["reward"]
 		assert_eq(progress.pack_reward(data, pack_id), {
 			"silver": roundi(float(midgard["silver"]) * past_share * progress.silver_multiplier(data)),
-			"experience": roundi(float(midgard["experience"]) * past_share)}, "%s pays the smaller share of stage 10" % pack_id)
+			"experience": roundi(float(midgard["experience"]) * past_share),
+			"supplies": int(data.balance["supplies"]["pack_victory_once_the_next_chapter_is_open"])},
+			"%s pays the smaller share of stage 10" % pack_id)
 	for pack_id in data.pack_ids(2):
 		assert_eq(progress.pack_stage(data, pack_id), 15, "%s: stage 15" % pack_id)
 	var jotunheim := roundi(float(data.get_stage(15)["reward"]["silver"]) * share * progress.silver_multiplier(data))

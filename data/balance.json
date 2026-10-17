@@ -44,13 +44,19 @@
     "reward_share_of_first_win": 0.3,
     "reward_share_once_the_next_chapter_is_open": 0.1
   },
+  "supplies": {
+    "first_victory": 10,
+    "pack_victory": 300,
+    "pack_victory_once_the_next_chapter_is_open": 100
+  },
   "mark_hint": {
     "seconds": 6
   },
   "debug_panel": {
     "long_press_seconds": 0.8,
     "add_silver": 10000,
-    "skip_time_hours": 1
+    "skip_time_hours": 1,
+    "add_supplies": 1000
   },
   "simulation": {
     "human_ultimate_delay_seconds": 1.5,

@@ -38,13 +38,27 @@ theme_override_font_sizes/font_size = 48
 text = "Отладка"
 horizontal_alignment = 1
 
-[node name="AddSilverButton" type="Button" parent="Box"]
+[node name="AddRow" type="HBoxContainer" parent="Box"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="AddSilverButton" type="Button" parent="Box/AddRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 104)
 layout_mode = 2
+size_flags_horizontal = 3
 focus_mode = 0
-theme_override_font_sizes/font_size = 38
+theme_override_font_sizes/font_size = 32
 text = "+10 000 серебра"
+
+[node name="AddSuppliesButton" type="Button" parent="Box/AddRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 0
+theme_override_font_sizes/font_size = 32
+text = "+1 000 припасов"
 
 [node name="UnlockHeroesButton" type="Button" parent="Box"]
 unique_name_in_owner = true

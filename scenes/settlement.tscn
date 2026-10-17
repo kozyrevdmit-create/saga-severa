@@ -1,6 +1,40 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/settlement_screen.gd" id="1_settlement"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_paper"]
+content_margin_left = 16.0
+content_margin_top = 4.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+bg_color = Color(0.937, 0.89, 0.784, 0.86)
+border_width_bottom = 2
+border_color = Color(0.102, 0.102, 0.102, 0.6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_paper_bottom"]
+content_margin_left = 32.0
+content_margin_top = 12.0
+content_margin_right = 32.0
+content_margin_bottom = 16.0
+bg_color = Color(0.937, 0.89, 0.784, 0.86)
+border_width_top = 2
+border_color = Color(0.102, 0.102, 0.102, 0.6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_window"]
+content_margin_left = 32.0
+content_margin_top = 24.0
+content_margin_right = 32.0
+content_margin_bottom = 24.0
+bg_color = Color(0.937, 0.89, 0.784, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.102, 0.102, 0.102, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
 
 [node name="Settlement" type="Control"]
 layout_mode = 3
@@ -19,47 +53,189 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.07, 0.09, 0.13, 1)
+color = Color(0.247, 0.416, 0.588, 1)
 
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="Board" type="Control" parent="."]
+unique_name_in_owner = true
+clip_contents = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 40
-theme_override_constants/margin_top = 48
-theme_override_constants/margin_right = 40
-theme_override_constants/margin_bottom = 48
+mouse_filter = 2
 
-[node name="Layout" type="VBoxContainer" parent="Margin"]
-layout_mode = 2
-theme_override_constants/separation = 32
-
-[node name="Title" type="Label" parent="Margin/Layout"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 48
-text = "Поселение"
-
-[node name="Info" type="Label" parent="Margin/Layout"]
+[node name="Picture" type="TextureRect" parent="Board"]
 unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 30
-autowrap_mode = 3
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
 
-[node name="Total" type="Label" parent="Margin/Layout"]
+[node name="TopBar" type="PanelContainer" parent="."]
 unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_paper")
+
+[node name="TopLines" type="VBoxContainer" parent="TopBar"]
 layout_mode = 2
-size_flags_vertical = 3
-theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+mouse_filter = 2
+theme_override_constants/separation = -6
+
+[node name="Title" type="Label" parent="TopBar/TopLines"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
 theme_override_font_sizes/font_size = 34
+text = "Поселение"
+horizontal_alignment = 1
+
+[node name="Counters" type="Label" parent="TopBar/TopLines"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
+theme_override_font_sizes/font_size = 26
+text = "Припасы: 0 · Серебро: 0"
+horizontal_alignment = 1
+
+[node name="BottomBar" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_paper_bottom")
+
+[node name="BottomBox" type="VBoxContainer" parent="BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Income" type="Label" parent="BottomBar/BottomBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
+theme_override_font_sizes/font_size = 24
+horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="BackButton" type="Button" parent="Margin/Layout"]
+[node name="ClaimButton" type="Button" parent="BottomBar/BottomBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 112)
+visible = false
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 34
+text = "Забрать"
+
+[node name="BackButton" type="Button" parent="BottomBar/BottomBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 40
 text = "Назад"
+
+[node name="Window" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="WindowCenter" type="CenterContainer" parent="Window"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="WindowPanel" type="PanelContainer" parent="Window/WindowCenter"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(640, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_window")
+
+[node name="WindowBox" type="VBoxContainer" parent="Window/WindowCenter/WindowPanel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="BuildingName" type="Label" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
+theme_override_font_sizes/font_size = 44
+text = "Капище"
+horizontal_alignment = 1
+
+[node name="BuildingDescription" type="Label" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 0.8)
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BuildingLevel" type="Label" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
+theme_override_font_sizes/font_size = 32
+text = "Уровень 0/5"
+horizontal_alignment = 1
+
+[node name="BonusNow" type="Label" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BonusNext" type="Label" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.247, 0.416, 0.588, 1)
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="Cost" type="Label" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.102, 0.102, 0.102, 1)
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BuildButton" type="Button" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+text = "Построить"
+
+[node name="CloseButton" type="Button" parent="Window/WindowCenter/WindowPanel/WindowBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 34
+text = "Закрыть"

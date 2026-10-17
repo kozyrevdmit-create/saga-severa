@@ -2,12 +2,14 @@
 ## from the approved art (docs/ART_STYLE.md). Heroes face right, enemies face left.
 ## Chapter maps: assets/art/maps/<name>.png (stages.json → chapters[].map).
 ## Odin's ravens for the saga scenes: assets/art/story/<id>.png (Hugin faces right, Munin left).
+## The settlement (M12): its picture and the buildings, assets/art/settlement/<name>.png (data/buildings.json).
 extends RefCounted
 
 const HEROES_DIR := "res://assets/art/heroes/"
 const ENEMIES_DIR := "res://assets/art/enemies/"
 const MAPS_DIR := "res://assets/art/maps/"
 const STORY_DIR := "res://assets/art/story/"
+const SETTLEMENT_DIR := "res://assets/art/settlement/"
 
 
 static func hero_picture(hero_id: String) -> Texture2D:
@@ -24,6 +26,11 @@ static func map_picture(map_name: String) -> Texture2D:
 
 static func raven_picture(raven_id: String) -> Texture2D:
 	return load(STORY_DIR + raven_id + ".png")
+
+
+## The settlement's picture (buildings.json → picture) or a building's (by its id).
+static func settlement_picture(picture_name: String) -> Texture2D:
+	return load(SETTLEMENT_DIR + picture_name + ".png")
 
 
 ## Head and shoulders of a hero (data/heroes.json → portrait).

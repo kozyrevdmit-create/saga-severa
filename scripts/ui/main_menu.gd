@@ -1,4 +1,5 @@
-## Main screen: silver, jarl level, the squad's «Сила», the four sections, the gear for «Настройки»
+## Main screen: silver (and supplies, once construction in the settlement is open), jarl level, the squad's «Сила»,
+## the four sections, the gear for «Настройки»
 ## and the "while you were away" window.
 ## A long press on the silver counter opens the debug panel (spec 5.6).
 ## Saga scenes waiting in the queue are played over this screen: the intro on a new game (also once for a save from
@@ -87,6 +88,8 @@ func _refresh() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
 	%SilverLabel.text = "Серебро: %d" % progress.silver
+	%SuppliesLabel.text = "Припасы: %d" % progress.supplies
+	%SuppliesLabel.visible = progress.is_construction_open(data)
 	%JarlLabel.text = "Ярл, уровень %d" % progress.jarl_level(data)
 	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
 	var level_progress: Array[int] = progress.jarl_level_progress(data)
