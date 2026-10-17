@@ -6,9 +6,12 @@
 ## Beast packs (packs.json) stand off the trail: a beast's portrait while the pack can be fought, «через 1:24» while
 ## a beaten pack is away (it comes back by itself, the screen follows the clock), dimmed until it is unlocked.
 ## The top bar and the «Назад» button lie on a see-through paper strip so they read over the picture.
+## The first tap on the boss stage (not won yet) plays the saga scene before the battle (story.json →
+## before_first_battle), once per game; the battle starts right after it.
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
+const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -150,6 +153,14 @@ func _add_stage(stage_id: int) -> void:
 func _on_stage_pressed(stage_id: int) -> void:
 	GameState.selected_stage = stage_id
 	GameState.selected_pack = ""
+	var scene_id: String = GameState.progress.scene_before_battle(GameState.data, stage_id)
+	if scene_id != "":
+		StoryPlayer.play(self, scene_id).finished.connect(_start_battle, CONNECT_DEFERRED)
+	else:
+		_start_battle()
+
+
+func _start_battle() -> void:
 	get_tree().change_scene_to_file(BATTLE_SCENE)
 
 

@@ -52,12 +52,82 @@ toggle_mode = true
 button_pressed = true
 text = "Показывать имена в бою: вкл"
 
+[node name="ScenesButton" type="Button" parent="Margin/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 34
+text = "Сцены саги"
+
 [node name="Spacer" type="Control" parent="Margin/Layout"]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
 [node name="BackButton" type="Button" parent="Margin/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "Назад"
+
+[node name="ScenesOverlay" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.09, 0.13, 1)
+
+[node name="ScenesMargin" type="MarginContainer" parent="ScenesOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 48
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 48
+
+[node name="ScenesLayout" type="VBoxContainer" parent="ScenesOverlay/ScenesMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 24
+
+[node name="ScenesTitle" type="Label" parent="ScenesOverlay/ScenesMargin/ScenesLayout"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Сцены саги"
+
+[node name="SceneList" type="VBoxContainer" parent="ScenesOverlay/ScenesMargin/ScenesLayout"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 16
+
+[node name="NoScenesLabel" type="Label" parent="ScenesOverlay/ScenesMargin/ScenesLayout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.7)
+theme_override_font_sizes/font_size = 30
+text = "Пока нет просмотренных сцен. Они появятся здесь, когда ты их увидишь в игре."
+autowrap_mode = 3
+
+[node name="ScenesSpacer" type="Control" parent="ScenesOverlay/ScenesMargin/ScenesLayout"]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="ScenesBackButton" type="Button" parent="ScenesOverlay/ScenesMargin/ScenesLayout"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 112)
 layout_mode = 2

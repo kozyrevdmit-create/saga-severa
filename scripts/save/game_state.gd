@@ -52,6 +52,18 @@ func reset_progress() -> void:
 	save()
 
 
+## A saga scene starts: it counts as seen at once (also if it is skipped or the game is closed during it).
+func start_scene(scene_id: String) -> void:
+	progress.start_scene(scene_id)
+	save()
+
+
+## Debug panel «Открыть все сцены»: every scene counts as seen, so all can be watched from «Сцены саги».
+func debug_mark_all_scenes_seen() -> void:
+	progress.mark_all_scenes_seen(data)
+	save()
+
+
 ## Debug panel «+N серебра».
 func debug_add_silver() -> void:
 	progress.silver += int(data.balance["debug_panel"]["add_silver"])

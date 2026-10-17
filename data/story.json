@@ -1,0 +1,101 @@
+{
+  "speakers": {
+    "hugin": {"name": "Хугин", "portrait": {"x": 0.6, "y": 0.22, "size": 0.45}},
+    "munin": {"name": "Мунин", "portrait": {"x": 0.4, "y": 0.24, "size": 0.45}}
+  },
+  "scenes": [
+    {
+      "id": "intro",
+      "title": "Сон о замолчавших норнах",
+      "show": {"when": "new_game"},
+      "lines": [
+        {"view": "page", "speaker": "munin", "text": "Помнишь ли ты, ярл? Нет. Никто уже не помнит. Поэтому помню я."},
+        {"view": "page", "speaker": "munin", "text": "У корней Мирового древа три норны пряли нити. Каждая нить — чья-то жизнь. Каждый узел — чья-то смерть."},
+        {"view": "page", "speaker": "hugin", "text": "А потом прялки остановились. Будущее больше никто не пишет."},
+        {"view": "page", "speaker": "munin", "text": "Мёртвые не знают, что умерли. Они встают из курганов и идут домой."},
+        {"view": "page", "speaker": "hugin", "text": "Боги пали. Хель собирает войско. Рагнарёк пришёл раньше срока — и его не остановить."},
+        {"view": "page", "speaker": "hugin", "text": "Но одну нить норны успели допрясть. Твою. Ты — последний, у кого ещё есть завтра."},
+        {"view": "page", "speaker": "munin", "text": "Проснись, ярл. Они уже у ворот."},
+        {"view": "dialog", "speaker": "torvald", "text": "Ярл! Мёртвые у частокола. Я встану в первом ряду — как всегда."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Опять ты первый. Оставь мне хоть одного, Торвальд."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Не спорьте, хватит на всех. Мертвецов в Мидгарде теперь больше, чем живых. Я считал."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Ярл, ты кричал во сне. Что тебе снилось? Расскажи — я сложу об этом песню."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Потом споёшь. Сначала — топоры."}
+      ]
+    },
+    {
+      "id": "join_angrboda",
+      "title": "Вёльва из Железного леса",
+      "show": {"when": "hero_joined", "hero": "angrboda"},
+      "lines": [
+        {"view": "dialog", "speaker": "sigrid", "text": "Ётунша. В нашем лагере. Торвальд, ты это видишь?"},
+        {"view": "dialog", "speaker": "angrboda", "text": "Опусти топор, дочь Мидгарда. Я пришла не за твоей головой."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Я вижу нити, ярл. Все оборваны — кроме твоей. Она ещё светится."},
+        {"view": "dialog", "speaker": "torvald", "text": "И чего ты хочешь от нашего ярла, вёльва?"},
+        {"view": "dialog", "speaker": "angrboda", "text": "Того же, что и вы: пережить конец мира. А раны я лечу лучше, чем вы деретесь."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Вёльва, раз ты видишь нити — скажи, почему норны замолчали?"},
+        {"view": "dialog", "speaker": "angrboda", "text": "…Некоторые нити лучше не трогать, скальд."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Я слежу за тобой, ётунша."}
+      ]
+    },
+    {
+      "id": "join_skadi",
+      "title": "Охотница",
+      "show": {"when": "hero_joined", "hero": "skadi"},
+      "lines": [
+        {"view": "dialog", "speaker": "skadi", "text": "Не стреляйте. Я охочусь на тех же, что и вы."},
+        {"view": "dialog", "speaker": "skadi", "text": "Двенадцать драугров за три дня. Мои стрелы их упокаивают. Ваши топоры — тоже. Пойдём вместе."},
+        {"view": "dialog", "speaker": "torvald", "text": "Великанша из Ётунхейма. Далеко же ты зашла."},
+        {"view": "dialog", "speaker": "skadi", "text": "Говорят, твоя нить ещё пишется, ярл. Говорят, рядом с ней можно переписать чужую."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Кто говорит, Скади?"},
+        {"view": "dialog", "speaker": "skadi", "text": "Ветер."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Наконец-то в дружине кто-то выше Торвальда. Он будет ворчать неделю."},
+        {"view": "dialog", "speaker": "torvald", "text": "Не буду."}
+      ]
+    },
+    {
+      "id": "join_hrungnir",
+      "title": "Сделка",
+      "show": {"when": "hero_joined", "hero": "hrungnir"},
+      "lines": [
+        {"view": "dialog", "speaker": "hrungnir", "text": "Ярл. Предлагаю сделку."},
+        {"view": "dialog", "speaker": "hrungnir", "text": "Мой щит — твоей дружине. Взамен — место для ётунов в мире, который будет после."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Каменный великан пришёл торговаться. Тор бы посмеялся."},
+        {"view": "dialog", "speaker": "hrungnir", "text": "Тора больше нет. А я есть."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Он держит слово, ярл. Камень не умеет лгать."},
+        {"view": "dialog", "speaker": "torvald", "text": "Два щита в первом ряду. Пусть будет так."}
+      ]
+    },
+    {
+      "id": "boss_before",
+      "title": "Корона мертвеца",
+      "show": {"when": "before_first_battle", "stage": 10},
+      "lines": [
+        {"view": "dialog", "speaker": "munin", "text": "Помнишь его, Торвальд? Я помню."},
+        {"view": "dialog", "speaker": "torvald", "text": "Эта корона… Нет. Не может быть."},
+        {"view": "dialog", "speaker": "torvald", "text": "Ярл Хальвдан. Мой ярл. Я поклялся стоять за его спиной — и не устоял."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Он нас не узнаёт, Торвальд. Мёртвые не знают, что умерли."},
+        {"view": "dialog", "speaker": "hugin", "text": "Хель дала ему новую корону. Теперь он конунг мёртвых — её военачальник в Мидгарде."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Тогда упокоим его. Это лучшее, что можно сделать для ярла."},
+        {"view": "dialog", "speaker": "torvald", "text": "Я встану первым. Это мой долг."}
+      ]
+    },
+    {
+      "id": "boss_after",
+      "title": "Путь на восток",
+      "show": {"when": "first_victory", "stage": 10},
+      "lines": [
+        {"view": "dialog", "speaker": "torvald", "text": "Спи, ярл Хальвдан. Теперь — по-настоящему."},
+        {"view": "dialog", "speaker": "torvald", "text": "Одного ярла я не уберёг. Второго не отдам. Ни Хель, ни волкам, ни самой смерти."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Мы знаем, Торвальд. Теперь — знаем."},
+        {"view": "page", "speaker": "hugin", "text": "Курганы Мидгарда затихли. Но Хель не одна."},
+        {"view": "page", "speaker": "hugin", "text": "На востоке, за горами, — Железный лес. Там мертвец-великан свил гнездо на мёртвом дереве."},
+        {"view": "page", "speaker": "munin", "text": "Его звали Тьяцци. Я помню, как его убили боги. Он — не помнит."},
+        {"view": "dialog", "speaker": "skadi", "text": "…"},
+        {"view": "dialog", "speaker": "angrboda", "text": "Ярнвид. Железный лес. Я не была дома очень давно."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Значит, на восток. Ярл, какой дорогой пойдём? Мне нужно знать — для песни."}
+      ],
+      "end_card": "Сага продолжится. Глава 2 — Ётунхейм"
+    }
+  ]
+}

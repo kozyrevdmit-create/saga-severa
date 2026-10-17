@@ -54,6 +54,14 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 38
 text = "Открыть всех героев"
 
+[node name="UnlockScenesButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+text = "Открыть все сцены"
+
 [node name="StageRow" type="HBoxContainer" parent="Box"]
 layout_mode = 2
 theme_override_constants/separation = 16
@@ -149,7 +157,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 0.75)
 theme_override_font_sizes/font_size = 30
-text = "Пропадёт всё: пройденные этапы, герои и их уровни, отряд, серебро, уровень ярла и копилка поселения. Игра начнётся заново."
+text = "Пропадёт всё: пройденные этапы, герои и их уровни, отряд, серебро, уровень ярла, копилка поселения и просмотренные сцены саги. Игра начнётся заново."
 horizontal_alignment = 1
 autowrap_mode = 3
 
