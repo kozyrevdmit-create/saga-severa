@@ -55,7 +55,7 @@ func _on_unlock_heroes() -> void:
 ## «Открыть все сцены»: all saga scenes can be watched from «Настройки» → «Сцены саги».
 func _on_unlock_scenes() -> void:
 	GameState.debug_mark_all_scenes_seen()
-	_done("Сцены — в «Настройки» → «Сцены саги»")
+	_done("Сцены открыты: «Настройки», пункт «Сцены саги»")  # no arrow: the game font has no such glyph
 
 
 func _change_jump_stage(step: int) -> void:
