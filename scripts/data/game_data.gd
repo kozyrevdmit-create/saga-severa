@@ -11,7 +11,7 @@ var stages: Dictionary  ## stages.json: chapters (with their map picture), stage
 var packs: Dictionary  ## packs.json: beast packs on the chapter map (enemies, unlock, point on the map)
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
-var story: Dictionary  ## story.json: saga scenes (lines, when shown) and the ravens who speak in them
+var story: Dictionary  ## story.json: saga scenes (lines, when shown), the ravens who speak in them, speakers' captions
 
 
 static func load_all() -> RefCounted:
@@ -108,6 +108,11 @@ func scene_ids_shown_at(when: String, subject = null) -> Array[String]:
 func speaker_name(speaker_id: String) -> String:
 	var ravens: Dictionary = story.get("speakers", {})
 	return ravens[speaker_id]["name"] if ravens.has(speaker_id) else get_hero(speaker_id)["name"]
+
+
+## The short caption under the name, «кто есть кто» (story.json → captions, word for word from docs/LORE.md, 6а).
+func speaker_caption(speaker_id: String) -> String:
+	return story.get("captions", {}).get(speaker_id, "")
 
 
 func is_raven(speaker_id: String) -> bool:

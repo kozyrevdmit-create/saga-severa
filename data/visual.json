@@ -11,13 +11,14 @@
   },
   "hit_min_gap_seconds": 0.4,
   "list_scroll": {
-    "glide_seconds": 0.3,
-    "max_speed_screens_per_second": 5,
+    "glide_seconds": 0.2,
+    "max_speed_screens_per_second": 3,
     "stop_speed_screens_per_second": 0.03,
     "speed_sample_seconds": 0.1
   },
   "story": {
     "letters_per_second": 45,
-    "quiet_raven_alpha": 0.4
+    "quiet_raven_alpha": 0.4,
+    "continue_mark_blink_seconds": 1.0
   }
 }

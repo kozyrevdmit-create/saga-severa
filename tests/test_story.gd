@@ -2,13 +2,15 @@
 ## is shown once per game at its moment (the intro on a new game and once for an old save, a hero's scene after their
 ## «Новый герой» window, the boss's scenes before the first battle and after the first win); the debug panel and an
 ## old save's heroes bring no scenes; «Пропустить» closes the scene; «Сцены саги» in «Настройки» plays seen scenes
-## again; «Сбросить прогресс» forgets them. Every line fits a phone screen.
+## again; «Сбросить прогресс» forgets them. Every line fits a phone screen. M10.1: under every speaker's name a caption
+## word for word from docs/LORE.md («6а. Кто есть кто»); a drawn «продолжить» mark blinks once a line is typed out.
 extends "res://tests/base_test.gd"
 
 const Progress := preload("res://scripts/save/progress.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 const Art := preload("res://scripts/ui/art.gd")
 const STORY_MD := "res://docs/STORY_M10.md"
+const LORE_MD := "res://docs/LORE.md"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const MAP_SCENE := "res://scenes/map.tscn"
@@ -87,6 +89,31 @@ func test_speakers_looks_and_moments_are_valid() -> void:
 	var story: Dictionary = data.visual["story"]
 	assert_true(float(story["letters_per_second"]) >= 20.0, "the text is typed fast")
 	assert_near(float(story["quiet_raven_alpha"]), 0.4, 0.1, "the quiet raven is faded to about 40%")
+
+
+## The captions «кто есть кто» are word for word the table of docs/LORE.md, section 6а, and every speaker in story.json
+## has one.
+func test_captions_match_the_lore_word_for_word() -> void:
+	var data = await _data()
+	var lore := {}  ## name → caption, from the table of section 6а
+	var in_section := false
+	var row := RegEx.create_from_string("^\\| (.+?) \\| (.+?) \\|$")
+	for line in FileAccess.get_file_as_string(LORE_MD).split("\n"):
+		if line.begins_with("## "):
+			in_section = line.begins_with("## 6а. Кто есть кто")
+		elif in_section and row.search(line) and not line.begins_with("| Имя |"):
+			lore[row.search(line).get_string(1)] = row.search(line).get_string(2)
+	assert_eq(lore.size(), 8, "eight captions in the lore table")
+	assert_eq(lore.get("Хугин", ""), "ворон Одина · Мысль", "the table is read")
+	var captions: Dictionary = data.story["captions"]
+	assert_eq(captions.size(), lore.size(), "story.json has a caption for each row of the table, no more")
+	for speaker_id in captions:
+		var name: String = data.speaker_name(speaker_id)
+		assert_true(lore.has(name), "%s is in the lore table" % name)
+		assert_eq(data.speaker_caption(speaker_id), lore.get(name, ""), "%s: the caption word for word" % name)
+	for scene_id in data.scene_ids():
+		for line in data.get_scene(scene_id)["lines"]:
+			assert_true(not data.speaker_caption(line["speaker"]).is_empty(), "%s: %s has a caption" % [scene_id, line["speaker"]])
 
 
 # --- when scenes are shown ----------------------------------------------------------
@@ -251,6 +278,77 @@ func test_tap_shows_the_whole_line_then_the_next() -> void:
 	_restore()
 
 
+## The caption stands under the name at every line, on a saga page and in a dialog, smaller and paler than the name.
+func test_the_caption_is_under_the_name_at_every_line() -> void:
+	await _use_progress(Progress.new_game((await _data())))
+	var tree := Engine.get_main_loop() as SceneTree
+	var screen := _blank_screen()
+	var player = StoryPlayer.play(screen, "intro")
+	await tree.process_frame
+	var expected := ["ворон Одина · Память", "ворон Одина · Память", "ворон Одина · Мысль", "ворон Одина · Память",
+			"ворон Одина · Мысль", "ворон Одина · Мысль", "ворон Одина · Память", "щитоносец дружины", "берсерк дружины",
+			"скальд дружины", "скальд дружины", "берсерк дружины"]
+	for i in expected.size():
+		var on_page: bool = player.get_node("%Page").visible
+		var prefix := "%Page" if on_page else "%Dialog"
+		var name: Label = player.get_node(prefix + "Name")
+		var caption: Label = player.get_node(prefix + "Caption")
+		assert_eq(caption.text, expected[i], "line %d: the caption" % (i + 1))
+		await tree.process_frame
+		assert_true(caption.get_global_rect().position.y >= name.get_global_rect().end.y - 0.5, "line %d: under the name" % (i + 1))
+		assert_true(caption.get_theme_font_size("font_size") < name.get_theme_font_size("font_size"), "smaller than the name")
+		var paler: Color = caption.get_theme_color("font_color")
+		assert_true(paler.s < name.get_theme_color("font_color").s, "paler than the name")
+		player.tap()
+		player.tap()
+	screen.queue_free()
+	_restore()
+
+
+## While a line is typed there is no «продолжить» mark; once it is whole, the mark (in the text's colour, at the bottom
+## right of the text) fades in and out once every continue_mark_blink_seconds. On a page, in a dialog, on the end card.
+func test_the_continue_mark_blinks_once_the_line_is_shown() -> void:
+	var data = await _data()
+	await _use_progress(Progress.new_game(data))
+	var tree := Engine.get_main_loop() as SceneTree
+	var blink := float(data.visual["story"]["continue_mark_blink_seconds"])
+	assert_near(blink, 1.0, 0.3, "about once a second")
+	var screen := _blank_screen()
+	var player = StoryPlayer.play(screen, "boss_after")
+	await tree.process_frame
+	for view in ["Dialog", "Page", "End"]:
+		while (view == "Page" and not player.get_node("%Page").visible) or (view == "End" and not player.is_on_end_card()):
+			player.tap()
+			player.tap()
+		var mark: Control = player.continue_mark()
+		assert_eq(mark, player.get_node("%" + view + "Mark"), "%s: its own mark" % view)
+		var text: Label = player.get_node("%" + view + "Text")
+		if view != "End":
+			assert_true(not player.is_line_shown(), "%s: the line is being typed" % view)
+			player._process(0.25)
+			assert_eq(mark.modulate.a, 0.0, "%s: no mark while typing" % view)
+			player.tap()
+		assert_true(player.is_line_shown(), "%s: the line is whole" % view)
+		assert_eq(mark.color, text.get_theme_color("font_color"), "%s: in the text's colour" % view)
+		player._process(blink / 2.0)
+		assert_near(mark.modulate.a, 1.0, 0.001, "%s: fully shown half a blink later" % view)
+		player._process(blink / 2.0)
+		assert_near(mark.modulate.a, 0.0, 0.001, "%s: and gone again after a whole blink" % view)
+		player._process(blink / 4.0)
+		assert_near(mark.modulate.a, 0.5, 0.001, "%s: softly, not on and off" % view)
+		await tree.process_frame
+		var rect := mark.get_global_rect()
+		var text_rect := text.get_global_rect()
+		assert_true(rect.position.y >= text_rect.end.y - 0.5, "%s: under the text" % view)
+		assert_near(rect.end.x, text_rect.end.x, 1.0, "%s: at its right edge" % view)
+		assert_true(rect.size.x >= 20.0 and rect.size.x <= 40.0, "%s: small" % view)
+		if view != "End":
+			player.tap()
+			assert_eq(mark.modulate.a, 0.0, "%s: the next line hides it" % view)
+	screen.queue_free()
+	_restore()
+
+
 ## The speaker's portrait: the hero's portrait from «Герои», a raven's head for a raven in a dialog.
 func test_dialog_shows_the_speakers_portrait() -> void:
 	await _use_progress(Progress.new_game((await _data())))
@@ -314,6 +412,8 @@ func test_every_line_fits_the_phone_screen() -> void:
 				var shown: Control = player.get_node("%PageText" if line["view"] == "page" else "%DialogPanel")
 				var rect := shown.get_global_rect()
 				assert_true(screen_rect.encloses(rect), "%s fits the screen (%s)" % [where, rect])
+				var mark_rect: Rect2 = player.continue_mark().get_global_rect()
+				assert_true(screen_rect.encloses(mark_rect), "%s: the «продолжить» mark too (%s)" % [where, mark_rect])
 				if line["view"] == "dialog":
 					assert_true(rect.position.y > player.get_node("%SkipButton").get_global_rect().end.y, "%s: below «Пропустить»" % where)
 					var text: Label = player.get_node("%DialogText")

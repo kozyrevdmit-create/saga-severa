@@ -6,8 +6,12 @@
 ##   name and the text;
 ## «диалог» — a panel at the bottom with the speaker's portrait (a hero's from «Герои», a raven's head), name and text;
 ##   behind it the screen the scene started on, dimmed.
+## Under the speaker's name always stands a short caption, «кто есть кто» (story.json → captions; M10.1). Once a line is
+## typed out, a small mark at the bottom right of the text blinks softly: tap to go on (visual.json →
+## story.continue_mark_blink_seconds, one fade in and out); while the line is being typed there is no mark.
 ## «Пропустить» closes the whole scene at once. A scene with an end card (story.json → end_card) ends with the card on
-## paper; a tap closes it. Start a scene with StoryPlayer.play(screen, scene_id): it counts as seen as soon as it starts.
+## paper (with the same mark); a tap closes it. Start a scene with StoryPlayer.play(screen, scene_id): it counts as seen
+## as soon as it starts.
 extends Control
 
 signal finished  ## the scene is over: watched to the end or skipped
@@ -27,6 +31,9 @@ var _typing: Label  ## the label whose text is being typed
 var _letters := 0.0  ## letters of the line shown so far
 var _letters_per_second := 1.0
 var _quiet_alpha := 1.0
+var _mark: Control  ## the «продолжить» mark of the view on screen
+var _mark_seconds := 0.0  ## how long the mark has been blinking
+var _blink_seconds := 1.0
 var _closed := false
 
 
@@ -44,6 +51,10 @@ func _ready() -> void:
 	var settings: Dictionary = data.visual["story"]
 	_letters_per_second = float(settings["letters_per_second"])
 	_quiet_alpha = float(settings["quiet_raven_alpha"])
+	_blink_seconds = float(settings["continue_mark_blink_seconds"])
+	%PageMark.color = %PageText.get_theme_color("font_color")
+	%DialogMark.color = %DialogText.get_theme_color("font_color")
+	%EndMark.color = %EndText.get_theme_color("font_color")
 	%Hugin.texture = Art.raven_picture("hugin")
 	%Munin.texture = Art.raven_picture("munin")
 	var scene: Dictionary = data.get_scene(scene_id)
@@ -54,7 +65,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if _typing == null or is_line_shown():
+	if is_line_shown():
+		_blink(delta)
 		return
 	_letters += delta * _letters_per_second
 	if _letters >= _typing.get_total_character_count():
@@ -99,6 +111,26 @@ func is_on_end_card() -> bool:
 	return _on_end_card
 
 
+## The «продолжить» mark of the view on screen (its modulate.a is 0 while the line is being typed).
+func continue_mark() -> Control:
+	return _mark
+
+
+## The mark fades in and out once every continue_mark_blink_seconds, starting from invisible.
+func _blink(delta: float) -> void:
+	if _mark == null:
+		return
+	_mark_seconds += delta
+	_mark.modulate.a = 0.5 - 0.5 * cos(TAU * _mark_seconds / _blink_seconds)
+
+
+func _use_mark(mark: Control) -> void:
+	for each in [%PageMark, %DialogMark, %EndMark]:
+		each.modulate.a = 0.0
+	_mark = mark
+	_mark_seconds = 0.0
+
+
 func _next() -> void:
 	if _on_end_card:
 		close()
@@ -123,7 +155,9 @@ func _show_line(line: Dictionary) -> void:
 		%Hugin.modulate.a = 1.0 if speaker == "hugin" else _quiet_alpha
 		%Munin.modulate.a = 1.0 if speaker == "munin" else _quiet_alpha
 		%PageName.text = data.speaker_name(speaker)
+		%PageCaption.text = data.speaker_caption(speaker)
 		%PageText.text = line["text"]
+		_use_mark(%PageMark)
 		_type(%PageText)
 	else:
 		for old in %DialogPortrait.get_children():
@@ -136,7 +170,9 @@ func _show_line(line: Dictionary) -> void:
 			texture = Art.hero_portrait(data.get_hero(speaker))
 		%DialogPortrait.add_child(HeroesScreen.make_portrait_frame(texture, PORTRAIT_SIZE))
 		%DialogName.text = data.speaker_name(speaker)
+		%DialogCaption.text = data.speaker_caption(speaker)
 		%DialogText.text = line["text"]
+		_use_mark(%DialogMark)
 		_type(%DialogText)
 
 
@@ -155,3 +191,4 @@ func _show_end_card() -> void:
 	%SkipButton.visible = false
 	%EndText.text = _end_card
 	%EndCard.visible = true
+	_use_mark(%EndMark)
