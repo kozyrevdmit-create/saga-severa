@@ -4,7 +4,8 @@
 ## «страница саги» — the whole screen is old paper (the battlefield's paper shader), both ravens on top (Hugin left,
 ##   Munin right; the one who speaks is bright, the other faded to story.quiet_raven_alpha), under them the speaker's
 ##   name and the text;
-## «диалог» — a panel at the bottom with the speaker's portrait (a hero's from «Герои», a raven's head), name and text;
+## «диалог» — a panel at the bottom with the speaker's portrait (a hero's from «Герои», a raven's head, Thjazi's head from his
+##   enemy picture), name and text;
 ##   behind it the screen the scene started on, dimmed.
 ## Under the speaker's name always stands a short caption, «кто есть кто» (story.json → captions; M10.1). Once a line is
 ## typed out, a small mark at the bottom right of the text blinks softly: tap to go on (visual.json →
@@ -166,6 +167,8 @@ func _show_line(line: Dictionary) -> void:
 		var texture: Texture2D
 		if data.is_raven(speaker):
 			texture = Art.raven_portrait(speaker, data.story["speakers"][speaker])
+		elif data.speaker_enemy(speaker) != "":
+			texture = Art.enemy_portrait(data.get_enemy(data.speaker_enemy(speaker)))  # Thjazi's head
 		else:
 			texture = Art.hero_portrait(data.get_hero(speaker))
 		%DialogPortrait.add_child(HeroesScreen.make_portrait_frame(texture, PORTRAIT_SIZE))

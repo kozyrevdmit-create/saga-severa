@@ -15,6 +15,9 @@ const FOLDERS := ["heroes", "enemies", "story"]  ## story: Odin's ravens for the
 const MAPS_FOLDER := "maps"
 ## The game names a picture by the hero/enemy id from data/*.json; the art folder spells one name differently.
 const GAME_NAMES := {"thorvald.png": "torvald.png"}
+const PALETTE := ["#1a1a1a", "#efe3c8", "#b5442c", "#3f6a96"]  ## docs/ART_STYLE.md: the only four colours
+const RED := 2  ## index of the rust red in PALETTE
+const REDDISH := 50  ## a source pixel may turn rust red only if its red is this much above its green and blue
 
 
 func _initialize() -> void:
@@ -45,9 +48,42 @@ func _initialize() -> void:
 			if file.get_extension() == "png":
 				var image := Image.load_from_file(maps_dir.path_join(file))
 				image.convert(Image.FORMAT_RGB8)
+				_snap_to_palette(image)
 				image.save_png(out_dir.path_join(file))
 				print("%s/%s: %s" % [MAPS_FOLDER, file, image.get_size()])
 	quit()
+
+
+## Every pixel becomes the nearest of the four palette colours (docs/ART_STYLE.md). The Midgard map came in these four
+## colours already; the Jotunheim map came with soft noise (about 230 000 shades), 3.6 MB instead of 0.4 MB.
+## Rust red only where the source is clearly red (tents, banners): a brownish grey at the edge of a black line is
+## nearer to the red than to black or bone and would turn into red specks.
+func _snap_to_palette(image: Image) -> void:
+	var colors: Array[Color] = []
+	for code in PALETTE:
+		colors.append(Color(code))
+	var bytes := image.get_data()
+	var palette := PackedByteArray()
+	for color in colors:
+		palette.append_array([color.r8, color.g8, color.b8])
+	for i in range(0, bytes.size(), 3):
+		var best := 0
+		var best_distance := 1 << 30
+		var reddish := bytes[i] - maxi(bytes[i + 1], bytes[i + 2]) >= REDDISH
+		for k in colors.size():
+			if k == RED and not reddish:
+				continue
+			var dr := bytes[i] - palette[k * 3]
+			var dg := bytes[i + 1] - palette[k * 3 + 1]
+			var db := bytes[i + 2] - palette[k * 3 + 2]
+			var distance := dr * dr + dg * dg + db * db
+			if distance < best_distance:
+				best_distance = distance
+				best = k
+		bytes[i] = palette[best * 3]
+		bytes[i + 1] = palette[best * 3 + 1]
+		bytes[i + 2] = palette[best * 3 + 2]
+	image.set_data(image.get_width(), image.get_height(), false, Image.FORMAT_RGB8, bytes)
 
 
 func _normalize(image: Image) -> Image:

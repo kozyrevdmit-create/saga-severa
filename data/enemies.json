@@ -97,6 +97,98 @@
         "interval": 6.0,
         "attack_multiplier": 2.6
       }
+    },
+    {
+      "id": "ice_troll",
+      "name": "Ледяной тролль",
+      "description": "Танк: много HP, медленный, тяжёлый удар",
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 3000,
+      "attack": 110,
+      "attack_interval": 2.4,
+      "art_scale": 1.2,
+      "color": "#3f5a6e",
+      "portrait": {
+        "x": 0.3,
+        "y": 0.3,
+        "size": 0.4
+      }
+    },
+    {
+      "id": "ironwood_wolf",
+      "name": "Волк Железного леса",
+      "description": "Быстрый, сильнее волка Мидгарда",
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 1000,
+      "attack": 38,
+      "attack_interval": 0.7,
+      "art_scale": 1.1,
+      "color": "#3f6a96",
+      "portrait": {
+        "x": 0.17,
+        "y": 0.6,
+        "size": 0.32
+      }
+    },
+    {
+      "id": "carrion_eagle",
+      "name": "Орёл-падальщик",
+      "description": "Мало HP, быстрый; бьёт самого раненого героя заднего ряда",
+      "row": "front",
+      "action": "attack_back_row_weakest",
+      "hp": 600,
+      "attack": 40,
+      "attack_interval": 0.9,
+      "art_scale": 1.1,
+      "color": "#2a3a4a",
+      "portrait": {
+        "x": 0.24,
+        "y": 0.56,
+        "size": 0.3
+      }
+    },
+    {
+      "id": "thjazi",
+      "name": "Тьяцци",
+      "description": "Босс: великан, раз в 6 с — «Ледяное копьё»; на половине HP обращается в орла",
+      "boss": true,
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 5000,
+      "attack": 90,
+      "attack_interval": 1.6,
+      "art_scale": 1.5,
+      "color": "#2a3f5a",
+      "special": {
+        "name": "Ледяное копьё",
+        "type": "hit_one",
+        "target": "front_row",
+        "interval": 6.0,
+        "attack_multiplier": 3.0
+      },
+      "phases": [
+        {
+          "at_hp_fraction": 0.5,
+          "picture": "thjazi_eagle",
+          "announcement": "Тьяцци обращается в орла!",
+          "action": "attack_back_row_weakest",
+          "attack_interval_multiplier": 0.7,
+          "special": {
+            "name": "Пике",
+            "type": "hit_one",
+            "target": "back_row_weakest",
+            "interval": 5.0,
+            "attack_multiplier": 2.5
+          }
+        }
+      ],
+      "portrait": {
+        "x": 0.5,
+        "y": 0.21,
+        "size": 0.3
+      }
     }
   ]
 }

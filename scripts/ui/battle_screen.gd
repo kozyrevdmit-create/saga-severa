@@ -8,6 +8,7 @@
 ## Progress is saved after every stage.
 ## Saga scenes: a hero's scene right after their «Новый герой» window is closed; the boss's last scene after «Победа!»
 ## (on the way to the map). Both are queued by the first win (Progress.apply_victory).
+## A boss with phases (Thjazi) changes its picture when it enters the next one.
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -33,6 +34,8 @@ const ULTIMATE_COLOR := Color("#ffd84a")
 const SPECIAL_COLOR := Color("#ff9a3c")
 const HEAL_COLOR := Color("#6bff8a")
 const POPUP_STACK_STEP := 36.0
+const PHASE_FONT_SIZE := 34
+const PHASE_SECONDS := 2.2
 const NEW_HERO_PORTRAIT_SIZE := 260.0
 const MARK_HINT_TEXT := "Нажми на врага, чтобы отряд бил его первым"
 
@@ -145,7 +148,9 @@ func _show_wave() -> void:
 
 
 ## Pictures as big as the field allows: a normal fighter fits between its row's top and the next row,
-## and a full row fits across. A bigger fighter (the boss) stands on the same ground line and grows upwards.
+## and a full row fits across: three normal fighters, or the widest enemy row of any wave of this battle with its
+## bigger fighters (a troll and two Iron Wood wolves), so the size does not change from wave to wave.
+## A bigger fighter (the boss) stands on the same ground line and grows upwards.
 func _layout_fighters() -> void:
 	var field_size: Vector2 = %Field.size
 	var tops: Array = ROW_TOP.values()
@@ -155,6 +160,11 @@ func _layout_fighters() -> void:
 	for i in tops.size() - 1:
 		row_height = minf(row_height, (tops[i + 1] - tops[i]) * field_size.y - ROW_PADDING)
 	var art_size := minf(FighterView.art_size_for(row_height), (field_size.x - (MAX_ROW_SIZE - 1) * ROW_GAP) / MAX_ROW_SIZE)
+	for row in _enemy_rows():
+		var scales := 0.0
+		for enemy_id in row:
+			scales += float(GameState.data.get_enemy(enemy_id)["art_scale"])
+		art_size = minf(art_size, (field_size.x - (row.size() - 1) * ROW_GAP) / scales)
 	art_size = minf(art_size, MAX_ART_SIZE)
 	for view in _views.values():
 		view.set_art_size(art_size)
@@ -174,6 +184,19 @@ func _layout_fighters() -> void:
 		for view in views:
 			view.position = Vector2(x, ground - view.size.y)
 			x += view.size.x + ROW_GAP
+
+
+## Every enemy row of every wave of this battle (enemy ids), from the data.
+func _enemy_rows() -> Array:
+	var data = GameState.data
+	var waves: Array = [data.get_pack(_pack_id)["enemies"]] if _pack_id != "" else data.get_stage(_stage_id)["waves"]
+	var rows := []
+	for wave in waves:
+		for row in ["front", "back"]:
+			var ids: Array = wave.filter(func(id): return data.get_enemy(id)["row"] == row)
+			if not ids.is_empty():
+				rows.append(ids)
+	return rows
 
 
 func _show_event(event: Dictionary) -> void:
@@ -199,6 +222,8 @@ func _show_event(event: Dictionary) -> void:
 		"special":
 			_animate(event["unit"], "lunge")
 			_popup(event["unit"], event["name"], SPECIAL_COLOR, 30, 1.4)
+		"phase":
+			_show_phase(event["unit"], event["phase"])
 		"mark":
 			if event["unit"] >= 0:
 				_hide_mark_hint()
@@ -207,6 +232,17 @@ func _show_event(event: Dictionary) -> void:
 			_banner("Волна %d" % (event["index"] + 1))
 		"end":
 			_finish_stage(event["victory"], event.get("retreat", false))
+
+
+## A boss enters a new phase (enemies.json phases[]): its new picture with a flash and the announcement over it
+## («Тьяцци обращается в орла!»).
+func _show_phase(unit_id: int, phase: int) -> void:
+	if not _views.has(unit_id):
+		return
+	var enemy: Dictionary = GameState.data.get_enemy(_battle.units[unit_id].def_id)
+	var entered: Dictionary = enemy["phases"][phase - 1]
+	_views[unit_id].change_picture(Art.enemy_picture(entered["picture"]))
+	_popup(unit_id, entered["announcement"], SPECIAL_COLOR, PHASE_FONT_SIZE, PHASE_SECONDS)
 
 
 ## Calls the fighter view's animation ("lunge" or "hit") if the fighter is on screen.

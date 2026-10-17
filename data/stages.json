@@ -4,6 +4,12 @@
       "id": 1,
       "name": "Мидгард",
       "map": "map_midgard"
+    },
+    {
+      "id": 2,
+      "name": "Ётунхейм",
+      "map": "map_jotunheim",
+      "enemy_power_growth_per_stage": 0.055
     }
   ],
   "stages": [
@@ -155,6 +161,156 @@
         ["draugr", "draugr", "wolf"],
         ["draugr", "wolf", "draugr_archer"],
         ["draugr_king"]
+      ]
+    },
+    {
+      "id": 11,
+      "chapter": 2,
+      "recommended_power": 16050,
+      "map_point": { "x": 0.5, "y": 0.8, "label": "left" },
+      "reward": {
+        "silver": 880,
+        "experience": 220
+      },
+      "waves": [
+        ["ironwood_wolf"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ironwood_wolf", "ironwood_wolf"]
+      ]
+    },
+    {
+      "id": 12,
+      "chapter": 2,
+      "recommended_power": 16750,
+      "map_point": { "x": 0.47, "y": 0.73, "label": "right" },
+      "reward": {
+        "silver": 951,
+        "experience": 240
+      },
+      "waves": [
+        ["ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ironwood_wolf", "ironwood_wolf"]
+      ]
+    },
+    {
+      "id": 13,
+      "chapter": 2,
+      "recommended_power": 17650,
+      "map_point": { "x": 0.45, "y": 0.66, "label": "left" },
+      "reward": {
+        "silver": 1028,
+        "experience": 260
+      },
+      "waves": [
+        ["ironwood_wolf", "ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ice_troll", "carrion_eagle"]
+      ]
+    },
+    {
+      "id": 14,
+      "chapter": 2,
+      "recommended_power": 18700,
+      "map_point": { "x": 0.55, "y": 0.59, "label": "right" },
+      "reward": {
+        "silver": 1111,
+        "experience": 280
+      },
+      "waves": [
+        ["ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ironwood_wolf", "ironwood_wolf"]
+      ]
+    },
+    {
+      "id": 15,
+      "chapter": 2,
+      "recommended_power": 20200,
+      "map_point": { "x": 0.57, "y": 0.52, "label": "left" },
+      "reward": {
+        "silver": 1201,
+        "experience": 300
+      },
+      "waves": [
+        ["ironwood_wolf", "ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ice_troll", "carrion_eagle"]
+      ]
+    },
+    {
+      "id": 16,
+      "chapter": 2,
+      "recommended_power": 20850,
+      "map_point": { "x": 0.5, "y": 0.45, "label": "right" },
+      "reward": {
+        "silver": 1298,
+        "experience": 320
+      },
+      "waves": [
+        ["ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ironwood_wolf", "ironwood_wolf"]
+      ]
+    },
+    {
+      "id": 17,
+      "chapter": 2,
+      "recommended_power": 22250,
+      "map_point": { "x": 0.53, "y": 0.38, "label": "right" },
+      "reward": {
+        "silver": 1403,
+        "experience": 340
+      },
+      "waves": [
+        ["ironwood_wolf", "ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ice_troll", "carrion_eagle"]
+      ]
+    },
+    {
+      "id": 18,
+      "chapter": 2,
+      "recommended_power": 23100,
+      "map_point": { "x": 0.6, "y": 0.31, "label": "left" },
+      "reward": {
+        "silver": 1517,
+        "experience": 360
+      },
+      "waves": [
+        ["ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ironwood_wolf", "ironwood_wolf"]
+      ]
+    },
+    {
+      "id": 19,
+      "chapter": 2,
+      "recommended_power": 24600,
+      "map_point": { "x": 0.62, "y": 0.235, "label": "left" },
+      "reward": {
+        "silver": 1640,
+        "experience": 380
+      },
+      "waves": [
+        ["ironwood_wolf", "ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["ice_troll", "ice_troll", "carrion_eagle"]
+      ]
+    },
+    {
+      "id": 20,
+      "chapter": 2,
+      "recommended_power": 25950,
+      "map_point": { "x": 0.62, "y": 0.13, "label": "left" },
+      "reward": {
+        "silver": 1773,
+        "experience": 400
+      },
+      "waves": [
+        ["ironwood_wolf", "carrion_eagle"],
+        ["ice_troll", "ironwood_wolf"],
+        ["thjazi"]
       ]
     }
   ]

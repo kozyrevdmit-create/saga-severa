@@ -75,9 +75,22 @@ func jump_to_stage(data, stage_id: int) -> void:
 
 # --- stages and rewards -------------------------------------------------------
 
-## The first stage not won yet, or the last one once the chapter is done.
+## The first stage not won yet, or the last one once every chapter is done.
 func next_stage_id(data) -> int:
 	return mini(cleared_stage + 1, data.stage_count())
+
+
+# --- chapters -------------------------------------------------------------------
+
+## Chapter 1 is open from the start; the next chapter opens with the first win over the previous chapter's boss.
+## (A save that has already beaten chapter 1 has chapter 2 open at once.)
+func is_chapter_open(data, chapter_id: int) -> bool:
+	return is_stage_open(data, data.chapter_stage_ids(chapter_id)[0])
+
+
+## The chapter the map opens on: the one with the next stage to win (the last chapter once everything is won).
+func current_chapter(data) -> int:
+	return data.chapter_of_stage(next_stage_id(data))
 
 
 ## Won stages can be replayed; the next one can be fought; later ones are locked.
@@ -135,12 +148,23 @@ func queued_scene(data, when := "", subject = null) -> String:
 	return ""
 
 
-## The scene shown before the battle on a stage (the boss's first scene), or "": only while the stage has not been
-## won and only once per game (not again after a defeat or a retreat).
-func scene_before_battle(data, stage_id: int) -> String:
-	if is_replay(stage_id):
-		return ""
-	for scene_id in data.scene_ids_shown_at("before_first_battle", stage_id):
+## The scenes shown before the battle on a stage (pack_id "") or with a beast pack, in order, each once per game
+## (not again after a defeat or a retreat): the boss's first scene, only while the stage has not been won; the scene
+## of an enemy's first battle (the carrion eagles), on a stage or a pack where that enemy fights.
+func scenes_before_battle(data, stage_id: int, pack_id := "") -> Array[String]:
+	var ids: Array[String] = []
+	if pack_id == "" and not is_replay(stage_id):
+		ids.append_array(data.scene_ids_shown_at("before_first_battle", stage_id))
+	for enemy in data.enemies["enemies"]:
+		var fights: bool = data.pack_has_enemy(pack_id, enemy["id"]) if pack_id != "" else data.stage_has_enemy(stage_id, enemy["id"])
+		if fights:
+			ids.append_array(data.scene_ids_shown_at("before_battle_with", enemy["id"]))
+	return ids.filter(func(scene_id): return not scene_id in seen_scenes)
+
+
+## The scene shown the first time the chapter's map is shown (Jotunheim's), or "" (also once it has been seen).
+func scene_on_chapter_map(data, chapter_id: int) -> String:
+	for scene_id in data.scene_ids_shown_at("chapter_map", chapter_id):
 		if not scene_id in seen_scenes:
 			return scene_id
 	return ""

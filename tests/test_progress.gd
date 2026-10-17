@@ -1,4 +1,5 @@
-## Progress rules: levelling, rewards and replays, hero unlocks, formation, jarl level, offline income, beast packs, saves.
+## Progress rules: levelling, rewards and replays, hero unlocks, formation, jarl level, offline income, beast packs, saves,
+## chapters (M11).
 ## Expected numbers come from data/*.json.
 extends "res://tests/base_test.gd"
 
@@ -46,6 +47,79 @@ func test_enemy_power_grows_per_stage() -> void:
 	var growth := float(data.balance["enemy_power_growth_per_stage"])
 	assert_near(data.enemy_power_multiplier(1), 1.0, 0.0001, "stage 1")
 	assert_near(data.enemy_power_multiplier(10) / data.enemy_power_multiplier(9), 1.0 + growth, 0.0001, "stage 10 over stage 9")
+	assert_eq(data.enemy_power_multiplier(10), pow(1.0 + growth, 9), "chapter 1 exactly as before M11")
+
+
+## M11 (Dmitriy's choice, 17.10.2026): chapter 2's enemies grow by their own, slower step (stages.json →
+## chapters[].enemy_power_growth_per_stage); stage 11 grows from stage 10 by it.
+func test_chapter_two_enemies_grow_by_their_own_step() -> void:
+	var growth: float = data.enemy_power_growth(2)
+	assert_eq(growth, float(data.get_chapter(2)["enemy_power_growth_per_stage"]), "from stages.json")
+	assert_true(growth > 0.0 and growth < float(data.balance["enemy_power_growth_per_stage"]), "slower than chapter 1")
+	assert_eq(data.enemy_power_growth(1), float(data.balance["enemy_power_growth_per_stage"]), "chapter 1: balance.json")
+	assert_near(data.enemy_power_multiplier(11) / data.enemy_power_multiplier(10), 1.0 + growth, 0.0001, "stage 11 over stage 10")
+	for stage in range(12, 21):
+		assert_near(data.enemy_power_multiplier(stage) / data.enemy_power_multiplier(stage - 1), 1.0 + growth, 0.0001,
+				"stage %d over the stage before" % stage)
+
+
+# --- chapters (M11) -------------------------------------------------------------
+
+## Chapter 2 opens with the first win over the last stage of chapter 1; the map opens on the chapter of the next
+## stage to win, on the last chapter once everything is won.
+func test_chapter_two_opens_after_the_first_boss() -> void:
+	var progress = Progress.new_game(data)
+	assert_true(progress.is_chapter_open(data, 1), "chapter 1 is open from the start")
+	assert_true(not progress.is_chapter_open(data, 2), "chapter 2 is closed")
+	assert_eq(progress.current_chapter(data), 1, "the map opens on chapter 1")
+	win_stages(progress, 9)
+	assert_true(not progress.is_chapter_open(data, 2), "still closed before the boss")
+	assert_true(not progress.is_stage_open(data, 11), "and so is stage 11")
+	win_stages(progress, 10)
+	assert_true(progress.is_chapter_open(data, 2), "open after the first win on stage 10")
+	assert_eq(progress.current_chapter(data), 2, "the map opens on chapter 2")
+	assert_eq(progress.next_stage_id(data), 11, "the next battle is stage 11")
+	assert_true(progress.is_stage_open(data, 11) and not progress.is_stage_open(data, 12), "stage 11 open, 12 not yet")
+	assert_true(progress.is_replay(3), "chapter 1 stays open for replays")
+	win_stages(progress, 20)
+	assert_eq(progress.current_chapter(data), 2, "everything won: the last chapter")
+	assert_eq(progress.next_stage_id(data), 20, "the last stage")
+
+
+## Dmitriy's save from before M11 (chapter 1 won): chapter 2 is open at once and the map opens on it.
+func test_an_old_save_with_chapter_one_won_opens_chapter_two() -> void:
+	var old := {"version": 2, "silver": 500, "cleared_stage": 10, "hero_levels": {"torvald": 12}}
+	var progress = Progress.from_dict(old, data)
+	assert_eq(progress.cleared_stage, 10, "the won stages stay")
+	assert_true(progress.is_chapter_open(data, 2), "chapter 2 is open")
+	assert_eq(progress.current_chapter(data), 2, "the map opens on it")
+	var far := {"version": 2, "cleared_stage": 20}
+	assert_eq(Progress.from_dict(far, data).cleared_stage, 20, "a save may hold stages up to 20")
+
+
+## Chapter 2's packs: the Iron Wood wolves with chapter 2, the troll after stage 13, the scavengers after 16; like any
+## pack they fight at the strength of the last stage won and pay its share. Midgard's packs grow with it too.
+func test_chapter_two_packs() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 9)
+	for pack_id in data.pack_ids(2):
+		assert_true(not progress.is_pack_available(data, pack_id, NOW), "%s is not on the map before chapter 2" % pack_id)
+	win_stages(progress, 10)
+	assert_true(progress.is_pack_available(data, "ironwood_wolves", NOW), "the Iron Wood wolves with chapter 2")
+	assert_true(not progress.is_pack_available(data, "troll", NOW), "not the troll yet")
+	win_stages(progress, 13)
+	assert_true(progress.is_pack_available(data, "troll", NOW), "the troll after stage 13")
+	assert_true(not progress.is_pack_available(data, "scavengers", NOW), "not the scavengers yet")
+	win_stages(progress, 16)
+	assert_true(progress.is_pack_available(data, "scavengers", NOW), "the scavengers after stage 16")
+	assert_eq(progress.pack_stage(), 16, "at the strength of stage 16")
+	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
+	assert_eq(progress.pack_reward(data)["silver"],
+			roundi(float(data.get_stage(16)["reward"]["silver"]) * share * progress.silver_multiplier(data)), "a share of stage 16")
+	progress.apply_pack_victory(data, "scavengers", NOW)
+	assert_eq(progress.pack_seconds_left(data, "scavengers", NOW), data.pack_respawn_seconds(), "its own timer")
+	assert_true(progress.is_pack_available(data, "troll", NOW), "the other packs stay")
+	assert_true(progress.is_pack_available(data, "bear", NOW), "Midgard's packs too")
 
 
 func test_level_up_spends_silver() -> void:
@@ -248,6 +322,18 @@ func test_full_absence_pays_set_number_of_first_wins_of_current_stage() -> void:
 	assert_eq(progress.offline_income(data, 1000000 + 30 * 60), cap * 30 / max_minutes, "30 minutes away")
 	assert_eq(progress.offline_income(data, 1000000 + 30 * 60 + 59), cap * 30 / max_minutes, "whole minutes only")
 	assert_eq(progress.offline_income(data, 1000000 - 3600), 0, "clock moved back")
+
+
+## M11: on stages 11–20 the income follows the current stage of chapter 2 the same way.
+func test_offline_income_on_chapter_two() -> void:
+	var progress = Progress.new_game(data)
+	for stage in range(10, 20):
+		win_stages(progress, stage)
+		var current: int = progress.next_stage_id(data)
+		assert_eq(current, stage + 1, "after stage %d the current stage is %d" % [stage, stage + 1])
+		assert_eq(progress.offline_income_cap(data), expected_offline_cap(progress), "stage %d: 2.5 first wins of stage %d" % [stage, current])
+		assert_true(progress.offline_income_cap(data) > roundi(2.0 * float(data.get_stage(current)["reward"]["silver"])),
+				"stage %d: more than two first wins of stage %d" % [stage, current])
 
 
 func test_offline_income_follows_the_current_stage_up_to_the_last() -> void:
@@ -604,7 +690,7 @@ func test_pack_timers_are_saved_and_old_saves_have_every_pack_on_the_map() -> vo
 	var old_save: Dictionary = progress.to_dict()
 	old_save.erase("pack_respawn_unix")
 	restored = Progress.from_dict(old_save, data)
-	for pack_id in data.pack_ids():
+	for pack_id in data.pack_ids(1):
 		assert_true(restored.is_pack_available(data, pack_id, NOW), "a save from before M9: %s is on the map" % pack_id)
 	old_save["pack_respawn_unix"] = {"bear": "soon", "nobody": NOW}
 	restored = Progress.from_dict(old_save, data)

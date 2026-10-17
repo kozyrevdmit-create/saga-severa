@@ -25,6 +25,8 @@ var special: Dictionary = {}  ## periodic ability (boss), empty for most units
 var special_timer := 0.0
 var first_strike: Dictionary = {}  ## the first attack hits harder (the boar's charge), empty for most units
 var first_strike_used := false
+var phases: Array = []  ## later phases of a boss (Thjazi turns into an eagle), each starts at its HP share; empty for most units
+var phase := 0  ## phases entered so far (0 = the first form)
 var energy := 0
 
 var buffs: Array[Dictionary] = []  ## {stat, multiplier, remaining, source}
@@ -68,6 +70,7 @@ static func from_enemy(enemy: Dictionary, power_multiplier := 1.0) -> RefCounted
 	unit.action = enemy["action"]
 	unit.special = enemy.get("special", {})
 	unit.first_strike = enemy.get("first_strike", {})
+	unit.phases = enemy.get("phases", [])
 	return unit
 
 
@@ -95,6 +98,24 @@ func has_first_strike() -> bool:
 
 func has_special() -> bool:
 	return not special.is_empty()
+
+
+## The next phase (enemies.json phases[]) once HP has dropped to its share, else an empty dictionary.
+func due_phase() -> Dictionary:
+	if phase >= phases.size() or not is_alive():
+		return {}
+	var next: Dictionary = phases[phase]
+	return next if hp_fraction() <= float(next["at_hp_fraction"]) else {}
+
+
+## Enters the next phase: a new action, a faster (or slower) attack and a new special ability on a fresh timer.
+## HP stays as it is.
+func enter_phase(next: Dictionary) -> void:
+	phase += 1
+	action = next["action"]
+	attack_interval *= float(next["attack_interval_multiplier"])
+	special = next["special"]
+	special_timer = 0.0
 
 
 func is_stunned() -> bool:

@@ -1,7 +1,8 @@
 {
   "speakers": {
     "hugin": {"name": "Хугин", "portrait": {"x": 0.6, "y": 0.22, "size": 0.45}},
-    "munin": {"name": "Мунин", "portrait": {"x": 0.4, "y": 0.24, "size": 0.45}}
+    "munin": {"name": "Мунин", "portrait": {"x": 0.4, "y": 0.24, "size": 0.45}},
+    "thjazi": {"name": "Тьяцци", "enemy": "thjazi"}
   },
   "captions": {
     "hugin": "ворон Одина · Мысль",
@@ -11,7 +12,8 @@
     "eyvind": "скальд дружины",
     "angrboda": "вёльва из Ётунхейма",
     "skadi": "охотница из Ётунхейма",
-    "hrungnir": "каменный великан"
+    "hrungnir": "каменный великан",
+    "thjazi": "великан, отец Скади"
   },
   "scenes": [
     {
@@ -106,6 +108,67 @@
         {"view": "dialog", "speaker": "eyvind", "text": "Значит, на восток. Ярл, какой дорогой пойдём? Мне нужно знать — для песни."}
       ],
       "end_card": "Сага продолжится. Глава 2 — Ётунхейм"
+    },
+    {
+      "id": "ch2_intro",
+      "title": "Железный лес",
+      "show": {"when": "chapter_map", "chapter": 2},
+      "lines": [
+        {"view": "page", "speaker": "hugin", "text": "Ты прошёл Мидгард, ярл. Твоя нить всё ещё светится — и её видят не только друзья."},
+        {"view": "page", "speaker": "munin", "text": "Это Ярнвид, Железный лес. Здесь деревья старше богов и твёрже кованого железа."},
+        {"view": "page", "speaker": "munin", "text": "Когда-то здесь жили великаны. Теперь здесь лежат их кости."},
+        {"view": "page", "speaker": "hugin", "text": "Наверху, в гнезде на мёртвом дереве, ждёт тот, кто не помнит своей смерти."},
+        {"view": "dialog", "speaker": "torvald", "text": "Лагерь поставили. Дальше тропа уходит в чащу. Не нравится мне этот лес."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Лес не любит чужих, щитоносец. Но меня он помнит."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Ты здесь жила, вёльва? Тогда скажи, что нас ждёт."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Голодные звери. Тролли. И птицы, которые первыми находят раненых."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Ярл, сколько дней пути до гнезда? Хочу знать, сколько куплетов сочинять."},
+        {"view": "dialog", "speaker": "skadi", "text": "…Пойдём. Чем быстрее, тем лучше."}
+      ]
+    },
+    {
+      "id": "ch2_eagles",
+      "title": "Падальщики",
+      "show": {"when": "before_battle_with", "enemy": "carrion_eagle"},
+      "lines": [
+        {"view": "dialog", "speaker": "skadi", "text": "Сверху! Падальщики. Они бьют не тех, кто впереди, а тех, кто слабее."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Они чуют кровь. Первым делом — раненых в заднем ряду."},
+        {"view": "dialog", "speaker": "torvald", "text": "Щит их не остановит. Ярл, отметь птиц — пусть дружина бьёт их первыми."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Наконец-то враг, который сам лезет под топор."}
+      ]
+    },
+    {
+      "id": "ch2_boss_before",
+      "title": "Гнездо",
+      "show": {"when": "before_first_battle", "stage": 20},
+      "lines": [
+        {"view": "dialog", "speaker": "munin", "text": "Помнишь его, Скади? Я помню. Тьяцци, великан из Трюмхейма. Его убили боги."},
+        {"view": "dialog", "speaker": "skadi", "text": "Отец."},
+        {"view": "dialog", "speaker": "torvald", "text": "Твой отец?.. Ты знала, что он здесь."},
+        {"view": "dialog", "speaker": "skadi", "text": "Знала. Поэтому и пошла с вами. Ярл, твоя нить ещё пишется. Перепиши его нить. Верни мне его."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Мёртвых не вернуть, Скади. Даже нитью ярла. Уж я-то знаю."},
+        {"view": "dialog", "speaker": "munin", "text": "Он и при жизни умел обращаться в орла. Смерть этого не забрала."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Значит, будем бить и великана, и птицу."},
+        {"view": "dialog", "speaker": "skadi", "text": "Сначала упокоим. А потом — посмотрим."}
+      ]
+    },
+    {
+      "id": "ch2_boss_after",
+      "title": "Хранитель",
+      "show": {"when": "first_victory", "stage": 20},
+      "lines": [
+        {"view": "dialog", "speaker": "skadi", "text": "Отец…"},
+        {"view": "dialog", "speaker": "thjazi", "text": "Скади? Холодно… Почему так холодно, дочь?"},
+        {"view": "dialog", "speaker": "skadi", "text": "Ярл. Прошу тебя."},
+        {"view": "page", "speaker": "hugin", "text": "Нить ярла дрогнула. Переписать смерть она не может."},
+        {"view": "page", "speaker": "munin", "text": "Но может удержать память. Дух Тьяцци не уйдёт к Хель."},
+        {"view": "page", "speaker": "hugin", "text": "Он пойдёт за вами и будет стеречь ваш очаг, пока горит огонь."},
+        {"view": "dialog", "speaker": "thjazi", "text": "Я буду стеречь твой дом, дочь. Как стерёг его всегда."},
+        {"view": "dialog", "speaker": "skadi", "text": "Спасибо, ярл. Я этого не забуду."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Ярл, а дальше куда? Мне правда нужно знать. Для песни."},
+        {"view": "dialog", "speaker": "hrungnir", "text": "Вниз. Под землю. Туда, где куют гномы."}
+      ],
+      "end_card": "Сага продолжится. Глава 3 — Свартальфхейм"
     }
   ]
 }

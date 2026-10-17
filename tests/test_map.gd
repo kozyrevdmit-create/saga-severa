@@ -1,6 +1,7 @@
 ## M9: the chapter map is the painted map scaled to the screen height, the stages stand on their points of the trail,
 ## the beast packs off it. On a tall and a short phone every marker is on the screen, between the paper bars, and no
 ## two markers overlap; the stage states, the red recommended power and the three looks of a pack are shown.
+## M11: two chapters; the map opens on the current one, the arrows switch, an arrow to a closed chapter is dimmed.
 extends "res://tests/base_test.gd"
 
 const Progress := preload("res://scripts/save/progress.gd")
@@ -16,9 +17,12 @@ var _saved_window_size: Vector2i
 ## lands on its own marker (the topmost button under the finger).
 func test_markers_fit_the_screen_without_overlapping() -> void:
 	for window in [PHONE_SIZE, BASE_SIZE]:
-		for cleared in [0, 4, 10]:
-			var screen = await _open_map(window, cleared, ["wolves"])
-			var where := "%s, %d stages won" % [window, cleared]
+		for shown in [[0, 1], [4, 1], [10, 1], [10, 2], [14, 2], [17, 2], [20, 2]]:
+			var cleared: int = shown[0]
+			var screen = await _open_map(window, cleared, ["wolves", "ironwood_wolves"])
+			screen.show_chapter(shown[1])
+			await (Engine.get_main_loop() as SceneTree).process_frame
+			var where := "%s, chapter %d, %d stages won" % [window, shown[1], cleared]
 			var screen_rect: Rect2 = screen.get_viewport_rect()
 			var free_area := Rect2(0, screen.get_node("%TopBar").get_global_rect().end.y, screen_rect.size.x,
 					screen.get_node("%BottomBar").get_global_rect().position.y - screen.get_node("%TopBar").get_global_rect().end.y)
@@ -71,7 +75,49 @@ func test_stage_states_and_red_recommended_power() -> void:
 		assert_eq(number.text, str(data.recommended_power(stage_id)), "stage %d: recommended power" % stage_id)
 		var red: bool = number.get_theme_color("font_color") == screen.TOO_WEAK_COLOR
 		assert_eq(red, progress.is_below_recommended(data, stage_id), "stage %d: red only while the squad is weaker" % stage_id)
-	assert_true(data.get_enemy("draugr_king")["name"] in _texts(screen._stage_buttons[data.stage_count()]), "the boss is named")
+	assert_true(data.get_enemy("draugr_king")["name"] in _texts(screen._stage_buttons[10]), "the boss is named")
+	assert_eq(screen._stage_buttons.keys(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "only chapter 1's stages")
+	_close(screen)
+
+
+## M11: the map opens on the chapter of the next stage to win (the last chapter once everything is won); chapter 2
+## opens with the first win on stage 10; the arrows switch between open chapters, an arrow to a closed chapter is
+## dimmed and does nothing, there is no arrow where there is no chapter.
+func test_two_chapters_and_the_switch() -> void:
+	var screen = await _open_map(PHONE_SIZE, 9, [])
+	assert_eq(screen.shown_chapter(), 1, "chapter 1 while stage 10 is not won")
+	assert_eq(screen.get_node("%Title").text, "Глава 1 · Мидгард", "its title")
+	assert_true(screen._next_arrow.disabled and screen._next_arrow.modulate.a > 0.0, "the arrow to chapter 2 is there but dimmed")
+	assert_true(screen._previous_arrow.modulate.a == 0.0, "no arrow back from chapter 1")
+	screen.show_chapter(2)
+	assert_eq(screen.shown_chapter(), 1, "a closed chapter does not open")
+	_close(screen)
+
+	screen = await _open_map(PHONE_SIZE, 10, [])
+	var data = screen.get_node("/root/GameState").data
+	assert_eq(screen.shown_chapter(), 2, "after the first win over the draugr king: chapter 2")
+	assert_eq(screen.get_node("%Title").text, "Глава 2 · Ётунхейм", "its title")
+	assert_eq(screen._stage_buttons.keys(), data.chapter_stage_ids(2), "stages 11–20")
+	assert_true("Этап 11 · в бой!" in _texts(screen._stage_buttons[11]), "the numbers go on")
+	assert_eq(screen._pack_markers.keys(), data.pack_ids(2), "Jotunheim's packs")
+	assert_true(data.get_enemy("thjazi")["name"] in _texts(screen._stage_buttons[20]), "Thjazi is named on stage 20")
+	var crown = load("res://scripts/ui/map_screen.gd").CrownIcon
+	assert_true(screen._stage_buttons[20].find_children("*", "Control", true, false).any(func(node): return is_instance_of(node, crown)),
+			"with a crown")
+	assert_true(not screen._previous_arrow.disabled, "the arrow back to chapter 1 works")
+	assert_true(screen._next_arrow.modulate.a == 0.0, "there is no chapter 3 yet")
+	screen._previous_arrow.pressed.emit()
+	await (Engine.get_main_loop() as SceneTree).process_frame
+	assert_eq(screen.shown_chapter(), 1, "back to Midgard")
+	assert_eq(screen._stage_buttons.keys(), data.chapter_stage_ids(1), "its stages, all can be replayed")
+	assert_true(screen._stage_buttons.values().all(func(button): return not button.disabled), "every won stage opens")
+	assert_eq(screen._pack_markers.keys(), data.pack_ids(1), "Midgard's packs stay on its map")
+	screen._next_arrow.pressed.emit()
+	assert_eq(screen.shown_chapter(), 2, "and forward again")
+	_close(screen)
+
+	screen = await _open_map(PHONE_SIZE, 20, [])
+	assert_eq(screen.shown_chapter(), 2, "everything won: the last chapter")
 	_close(screen)
 
 
@@ -120,6 +166,7 @@ func _open_map(window: Vector2i, cleared: int, beaten: Array) -> Control:
 		progress.cleared_stage = cleared
 	for pack_id in beaten:
 		progress.apply_pack_victory(game_state.data, pack_id, game_state.now())
+	progress.mark_all_scenes_seen(game_state.data)  # no saga scene over the map
 	game_state.progress = progress
 	_saved_window_size = tree.root.size
 	tree.root.size = window

@@ -3,7 +3,7 @@ extends "res://tests/base_test.gd"
 
 const GameData := preload("res://scripts/data/game_data.gd")
 
-const KNOWN_ACTIONS := ["attack_front_row", "attack_lowest_hp", "heal_or_attack"]
+const KNOWN_ACTIONS := ["attack_front_row", "attack_lowest_hp", "heal_or_attack", "attack_back_row_weakest"]
 const KNOWN_EFFECTS := ["buff_allies", "hits", "damage", "heal_allies"]
 const KNOWN_TARGETS := ["front_row_single", "front_row_all", "all_enemies"]
 const KNOWN_PASSIVES := ["attack_per_missing_hp", "damage_taken_reduction"]
@@ -85,18 +85,72 @@ func test_three_enemy_types_and_the_boss() -> void:
 		assert_true(enemy["action"] in KNOWN_ACTIONS, "%s action" % enemy["id"])
 		assert_true(enemy["hp"] > 0 and enemy["attack"] > 0 and enemy["attack_interval"] > 0, "%s stats positive" % enemy["id"])
 		assert_true(Color.html_is_valid(enemy["color"]), "%s color" % enemy["id"])
-	assert_eq(regular, ["draugr", "wolf", "draugr_archer", "boar", "bear"], "regular enemy ids (boar and bear: beast packs, M9)")
-	assert_eq(bosses, ["draugr_king"], "boss ids")
+	assert_eq(regular, ["draugr", "wolf", "draugr_archer", "boar", "bear", "ice_troll", "ironwood_wolf", "carrion_eagle"],
+			"regular enemy ids (boar and bear: beast packs, M9; troll, Iron Wood wolf and carrion eagle: chapter 2, M11)")
+	assert_eq(bosses, ["draugr_king", "thjazi"], "boss ids")
 	var special: Dictionary = data.get_enemy("draugr_king")["special"]
 	assert_eq(special["type"], "hit_all", "boss strikes the whole squad")
 	assert_true(special["interval"] > 0 and special["attack_multiplier"] > 0, "boss strike numbers positive")
 
 
-func test_ten_stages_of_three_waves() -> void:
+## M11: chapter 2's enemies (LORE.md «Глава 2 — Ётунхейм, подробно», TZ M11 section 3).
+func test_chapter_two_enemies() -> void:
+	var troll: Dictionary = data.get_enemy("ice_troll")
+	var wolf: Dictionary = data.get_enemy("ironwood_wolf")
+	var eagle: Dictionary = data.get_enemy("carrion_eagle")
+	for enemy in [troll, wolf, eagle]:
+		assert_eq(enemy["row"], "front", "%s stands in the enemies' front row" % enemy["id"])
+	assert_eq(troll["action"], "attack_front_row", "the troll hits the front row")
+	assert_true(troll["hp"] > wolf["hp"] * 2 and troll["hp"] > eagle["hp"] * 2, "the troll has a lot of HP")
+	assert_true(troll["attack_interval"] > wolf["attack_interval"] and troll["attack"] > wolf["attack"] * 2,
+			"the troll is slow and hits hard")
+	var midgard_wolf: Dictionary = data.get_enemy("wolf")
+	assert_true(wolf["attack_interval"] <= midgard_wolf["attack_interval"], "the Iron Wood wolf is fast")
+	assert_true(wolf["hp"] > midgard_wolf["hp"] and wolf["attack"] > midgard_wolf["attack"], "and stronger than the Midgard wolf")
+	assert_eq(eagle["action"], "attack_back_row_weakest", "the carrion eagle goes for the back row")
+	assert_true(eagle["hp"] < wolf["hp"] and eagle["attack_interval"] < troll["attack_interval"], "the eagle has little HP and is fast")
+
+
+## Thjazi (M11): a giant with «Ледяное копьё» on the front row, an eagle from half HP: faster, at the weakest of the
+## back row, with «Пике». The numbers are data.
+func test_thjazi_has_two_phases() -> void:
+	var thjazi: Dictionary = data.get_enemy("thjazi")
+	assert_eq(thjazi["name"], "Тьяцци", "the name")
+	var spear: Dictionary = thjazi["special"]
+	assert_eq([spear["name"], spear["type"], spear["target"]], ["Ледяное копьё", "hit_one", "front_row"], "the ice spear")
+	assert_near(float(spear["interval"]), 6.0, 0.001, "every 6 s")
+	assert_true(float(spear["attack_multiplier"]) > 1.0, "the spear hits harder than a blow")
+	assert_eq(thjazi["phases"].size(), 1, "one change of form")
+	var eagle: Dictionary = thjazi["phases"][0]
+	assert_near(float(eagle["at_hp_fraction"]), 0.5, 0.001, "at half HP")
+	assert_eq(eagle["picture"], "thjazi_eagle", "the eagle's picture")
+	assert_true(ResourceLoader.exists("res://assets/art/enemies/thjazi_eagle.png"), "the eagle's picture is in the game")
+	assert_eq(eagle["announcement"], "Тьяцци обращается в орла!", "the announcement")
+	assert_eq(eagle["action"], "attack_back_row_weakest", "the eagle goes for the back row")
+	assert_true(float(eagle["attack_interval_multiplier"]) < 1.0, "and attacks faster")
+	var dive: Dictionary = eagle["special"]
+	assert_eq([dive["name"], dive["type"], dive["target"]], ["Пике", "hit_one", "back_row_weakest"], "the dive")
+	assert_near(float(dive["interval"]), 5.0, 0.001, "every 5 s")
+	assert_true(float(dive["attack_multiplier"]) > 1.0, "the dive hits harder than a blow")
+
+
+## Two chapters of ten stages, the numbers go on (chapter 2 is stages 11–20); each chapter's boss stands alone in the
+## last wave of its last stage; a chapter's stages bring only its own enemies (M11: chapter 2 only the troll, the Iron
+## Wood wolf and the carrion eagle, and Thjazi).
+func test_two_chapters_of_ten_stages_of_three_waves() -> void:
 	var known := []
 	for enemy in data.enemies["enemies"]:
 		known.append(enemy["id"])
-	assert_eq(data.stage_count(), 10, "stage count")
+	assert_eq(data.chapter_ids(), [1, 2] as Array[int], "two chapters")
+	assert_eq(data.get_chapter(2)["name"], "Ётунхейм", "chapter 2")
+	assert_eq(data.stage_count(), 20, "stage count")
+	assert_eq(data.chapter_stage_ids(1), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as Array[int], "chapter 1: stages 1–10")
+	assert_eq(data.chapter_stage_ids(2), [11, 12, 13, 14, 15, 16, 17, 18, 19, 20] as Array[int], "chapter 2: stages 11–20")
+	var chapter_enemies := {
+		1: ["draugr", "wolf", "draugr_archer", "draugr_king"],
+		2: ["ice_troll", "ironwood_wolf", "carrion_eagle", "thjazi"],
+	}
+	var bosses := {10: "draugr_king", 20: "thjazi"}
 	for i in data.stage_count():
 		var stage: Dictionary = data.stages["stages"][i]
 		assert_eq(int(stage["id"]), i + 1, "stage ids in order")
@@ -108,8 +162,13 @@ func test_ten_stages_of_three_waves() -> void:
 			assert_true(not wave.is_empty(), "stage %s wave %d not empty" % [stage["id"], w + 1])
 			for enemy_id in wave:
 				assert_true(enemy_id in known, "stage %s enemy %s known" % [stage["id"], enemy_id])
-				var is_boss_slot: bool = int(stage["id"]) == 10 and w == 2
-				assert_eq(data.get_enemy(enemy_id).get("boss", false), is_boss_slot, "boss only in stage 10 wave 3 (stage %s wave %d)" % [stage["id"], w + 1])
+				assert_true(enemy_id in chapter_enemies[int(stage["chapter"])], "stage %s: %s belongs to its chapter" % [stage["id"], enemy_id])
+				var is_boss_slot: bool = bosses.has(int(stage["id"])) and w == 2
+				assert_eq(data.get_enemy(enemy_id).get("boss", false), is_boss_slot, "boss only in stage 10 and 20 wave 3 (stage %s wave %d)" % [stage["id"], w + 1])
+			if bosses.has(int(stage["id"])) and w == 2:
+				assert_eq(wave, [bosses[int(stage["id"])]], "stage %s: the boss stands alone" % stage["id"])
+	for stage_id in range(1, data.stage_count() + 1):
+		assert_eq(data.is_boss_stage(stage_id), bosses.has(stage_id), "stage %d: boss stage" % stage_id)
 
 
 func test_leveling_and_growth_present() -> void:
@@ -118,6 +177,7 @@ func test_leveling_and_growth_present() -> void:
 	assert_true(leveling["cost_base"] > 0 and leveling["cost_growth"] >= 1.0, "level cost")
 	assert_true(leveling["stat_growth_per_level"] > 0, "stat growth")
 	assert_true(data.balance["enemy_power_growth_per_stage"] >= 0, "enemy growth")
+	assert_true(data.enemy_power_growth(2) > 0, "chapter 2 has its own enemy growth")
 	assert_true(data.balance["start_silver"] >= 0, "start silver")
 
 
@@ -196,10 +256,13 @@ func test_hit_feedback_is_short_and_spaced() -> void:
 # --- chapter map and beast packs (M9) -------------------------------------------
 
 func test_every_stage_has_a_point_on_the_map_from_the_bottom_up() -> void:
-	var chapter: Dictionary = data.get_chapter(1)
-	assert_true(ResourceLoader.exists("res://assets/art/maps/%s.png" % chapter.get("map", "")), "chapter 1 has a map picture")
+	for chapter_id in data.chapter_ids():
+		var chapter: Dictionary = data.get_chapter(chapter_id)
+		assert_true(ResourceLoader.exists("res://assets/art/maps/%s.png" % chapter.get("map", "")), "chapter %d has a map picture" % chapter_id)
 	var previous_y := 1.0
 	for stage in data.stages["stages"]:
+		if int(stage["id"]) == data.chapter_stage_ids(int(stage["chapter"]))[0]:
+			previous_y = 1.0  # a new chapter's map: from the bottom again
 		var point: Dictionary = stage["map_point"]
 		var where := "stage %d" % int(stage["id"])
 		assert_true(point["x"] > 0.0 and point["x"] < 1.0 and point["y"] > 0.0 and point["y"] < 1.0, "%s: point inside the map" % where)
@@ -208,13 +271,23 @@ func test_every_stage_has_a_point_on_the_map_from_the_bottom_up() -> void:
 		previous_y = float(point["y"])
 
 
-func test_three_beast_packs() -> void:
-	assert_eq(data.pack_ids(), ["wolves", "boars", "bear"], "pack ids")
+func test_three_beast_packs_in_each_chapter() -> void:
+	assert_eq(data.pack_ids(1), ["wolves", "boars", "bear"] as Array[String], "Midgard's packs")
+	assert_eq(data.pack_ids(2), ["ironwood_wolves", "troll", "scavengers"] as Array[String], "Jotunheim's packs (M11)")
+	assert_eq(data.pack_ids(), data.pack_ids(1) + data.pack_ids(2), "all packs")
 	var unlocks: Array = data.packs["packs"].map(func(pack): return int(pack["unlock_after_stage"]))
-	assert_eq(unlocks, [0, 3, 6], "wolves from the start, boars after stage 3, the bear after stage 6")
+	assert_eq(unlocks, [0, 3, 6, 10, 13, 16],
+			"wolves from the start, boars after 3, the bear after 6; Iron Wood wolves with chapter 2, the troll after 13, the scavengers after 16")
 	assert_eq(data.get_pack("wolves")["enemies"].all(func(id): return id == "wolf"), true, "the wolf pack is wolves")
 	assert_eq(data.get_pack("boars")["enemies"].all(func(id): return id == "boar"), true, "the boar pack is boars")
 	assert_eq(data.get_pack("bear")["enemies"], ["bear"], "the bear is alone")
+	assert_eq(data.get_pack("ironwood_wolves")["enemies"], ["ironwood_wolf", "ironwood_wolf", "ironwood_wolf"], "three Iron Wood wolves")
+	assert_eq(data.get_pack("troll")["enemies"][0], "ice_troll", "the troll (maybe with a wolf)")
+	assert_true(data.get_pack("troll")["enemies"].slice(1).all(func(id): return id == "ironwood_wolf"), "the troll's only company is a wolf")
+	assert_eq(data.get_pack("scavengers")["enemies"], ["carrion_eagle", "carrion_eagle", "carrion_eagle"], "three carrion eagles")
+	assert_eq(data.get_pack("ironwood_wolves")["name"], "Волки Железного леса", "names from the TZ")
+	assert_eq(data.get_pack("troll")["name"], "Тролль", "names from the TZ")
+	assert_eq(data.get_pack("scavengers")["name"], "Падальщики", "names from the TZ")
 	for pack in data.packs["packs"]:
 		var who: String = pack["id"]
 		assert_true(not str(pack["name"]).is_empty(), "%s has a name" % who)
