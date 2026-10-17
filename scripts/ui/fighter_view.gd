@@ -1,7 +1,8 @@
 ## Fighter on the battlefield: HP/energy bars above the character's picture, the name below it.
 ## The battle screen sets the picture size to fit the field (set_art_size); a fighter with art_scale (the boss)
 ## is that much bigger. Simple tweened animation, no extra drawings: breathing while alive, a lunge towards the
-## enemy on every attack (lunge), a bright flash and a small shake when hit (hit), fading out on death.
+## enemy on every attack (lunge), a bright flash and a small shake when hit (hit), fading out on death; a boss that
+## changes form gets its new picture with a flash (change_picture).
 ## The hit feedback's colour, strength and timing come from data/visual.json; a fighter hit again soon after
 ## (hit_min_gap_seconds, real time, so x2 does not double it) does not flash or shake again.
 extends Control
@@ -192,6 +193,13 @@ func hit() -> bool:
 	if _alive_shown:
 		_shake_picture()
 	return true
+
+
+## A boss changes form (Thjazi turns into an eagle): the new picture with a flash, even right after a hit.
+func change_picture(picture: Texture2D) -> void:
+	_art.texture = picture
+	_last_hit_msec = Time.get_ticks_msec()
+	_flash_picture()
 
 
 ## Full strength for hold_seconds, then fades out in fade_seconds.

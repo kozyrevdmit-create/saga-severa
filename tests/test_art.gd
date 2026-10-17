@@ -1,5 +1,6 @@
 ## M7: character art instead of rectangles. Every hero and enemy has a picture of one format, every hero a portrait,
 ## the boss is drawn bigger, and the battlefield fits the pictures on a phone screen (5 heroes, 4 enemies, the boss).
+## M11: chapter 2's enemies, Thjazi's eagle form (its picture replaces his when he changes form) and Jotunheim's map.
 extends "res://tests/base_test.gd"
 
 const Art := preload("res://scripts/ui/art.gd")
@@ -20,6 +21,8 @@ func test_every_character_has_a_square_picture_of_one_size() -> void:
 		pictures.append([hero["id"], Art.hero_picture(hero["id"])])
 	for enemy in _data.enemies["enemies"]:
 		pictures.append([enemy["id"], Art.enemy_picture(enemy["id"])])
+		for phase in enemy.get("phases", []):
+			pictures.append([phase["picture"], Art.enemy_picture(phase["picture"])])
 	for entry in pictures:
 		var picture: Texture2D = entry[1]
 		assert_true(picture != null, "%s has a picture" % entry[0])
@@ -42,7 +45,7 @@ func test_every_hero_has_a_portrait_inside_the_picture() -> void:
 
 ## The boss is half as big again (M7), the bear 1.3 times, the boar a bit smaller than a draugr-sized picture (M9).
 func test_the_boss_is_drawn_half_as_big_again() -> void:
-	var scales := {"draugr_king": 1.5, "bear": 1.3, "boar": 0.9}
+	var scales := {"draugr_king": 1.5, "bear": 1.3, "boar": 0.9, "thjazi": 1.5, "ice_troll": 1.2, "ironwood_wolf": 1.1, "carrion_eagle": 1.1}
 	for enemy in _data.enemies["enemies"]:
 		var expected: float = scales.get(enemy["id"], 1.0)
 		assert_near(float(enemy["art_scale"]), expected, 0.001, "%s: art_scale" % enemy["id"])
@@ -57,10 +60,11 @@ func test_pack_beasts_have_a_head_portrait_inside_the_picture() -> void:
 
 
 func test_the_chapter_map_is_a_tall_picture() -> void:
-	var picture: Texture2D = Art.map_picture(_data.get_chapter(1)["map"])
-	assert_true(picture != null, "the map picture loads")
-	if picture != null:
-		assert_eq(picture.get_size(), Vector2(1024, 1536), "the map keeps its full 1024×1536 size (it fills the phone's height)")
+	for chapter_id in _data.chapter_ids():
+		var picture: Texture2D = Art.map_picture(_data.get_chapter(chapter_id)["map"])
+		assert_true(picture != null, "chapter %d: the map picture loads" % chapter_id)
+		if picture != null:
+			assert_eq(picture.get_size(), Vector2(1024, 1536), "chapter %d: the map keeps its full 1024×1536 size (it fills the phone's height)" % chapter_id)
 
 
 func test_five_heroes_and_four_enemies_fit_the_phone_field() -> void:
@@ -83,6 +87,39 @@ func test_the_boss_stands_bigger_on_the_field() -> void:
 		assert_near(boss_view.size.x / hero_view.size.x, 1.5, 0.01, "%s: the boss picture is 1.5 times wider" % window)
 		_check_field(screen, "boss at %s" % window)
 		_close(screen)
+
+
+## M11: chapter 2's widest waves fit the field; Thjazi stands as big as the draugr king and, at half HP, his picture
+## becomes the eagle's, with the announcement over him.
+func test_chapter_two_on_the_field_and_thjazis_change_of_form() -> void:
+	for window in [PHONE_SIZE, BASE_SIZE]:
+		for stage_id in _data.chapter_stage_ids(2):
+			var screen = await _open_battle(stage_id, window)
+			for wave_index in _data.get_stage(stage_id)["waves"].size():
+				await _reach_wave(screen, wave_index)
+				_check_field(screen, "stage %d wave %d at %s" % [stage_id, wave_index + 1, window])
+			_close(screen)
+	var stage_18 = await _open_battle(18, PHONE_SIZE)
+	var hero_size: float = stage_18._views[stage_18._battle.heroes()[0].id].size.x
+	await _reach_wave(stage_18, 2)
+	assert_eq(stage_18._views[stage_18._battle.heroes()[0].id].size.x, hero_size, "the heroes keep their size from wave to wave")
+	_close(stage_18)
+	var screen = await _open_battle(20, PHONE_SIZE)
+	await _reach_wave(screen, 2)
+	var thjazi = screen._battle.enemies()[0]
+	assert_eq(thjazi.def_id, "thjazi", "Thjazi in the last wave")
+	var view = screen._views[thjazi.id]
+	var hero_view = screen._views[screen._battle.heroes()[0].id]
+	assert_near(view.size.x / hero_view.size.x, 1.5, 0.01, "Thjazi is 1.5 times wider")
+	assert_eq(view._art.texture, Art.enemy_picture("thjazi"), "a giant first")
+	thjazi.hp = thjazi.max_hp / 2 + 1
+	screen._battle.battle._deal_damage(screen._battle.heroes()[0], thjazi, 0.0, "attack")
+	screen._battle._collect_battle_events()
+	screen._process(0.0)
+	assert_eq(view._art.texture, Art.enemy_picture("thjazi_eagle"), "an eagle from half HP")
+	var texts: Array = screen.get_node("%Field").find_children("*", "Label", true, false).map(func(label): return label.text)
+	assert_true("Тьяцци обращается в орла!" in texts, "the announcement")
+	_close(screen)
 
 
 func test_fighters_lunge_flash_shake_and_fade() -> void:

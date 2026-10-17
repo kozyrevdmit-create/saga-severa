@@ -7,8 +7,8 @@ const DATA_DIR := "res://data/"
 
 var heroes: Dictionary  ## heroes.json: classes, clans, heroes
 var enemies: Dictionary  ## enemies.json
-var stages: Dictionary  ## stages.json: chapters (with their map picture), stages (with their point on the map)
-var packs: Dictionary  ## packs.json: beast packs on the chapter map (enemies, unlock, point on the map)
+var stages: Dictionary  ## stages.json: chapters (map picture, enemy growth), stages (chapter, point on the map)
+var packs: Dictionary  ## packs.json: beast packs on a chapter's map (chapter, enemies, unlock, point on the map)
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
 var story: Dictionary  ## story.json: saga scenes (lines, when shown), the ravens who speak in them, speakers' captions
@@ -89,7 +89,9 @@ func scene_ids() -> Array[String]:
 
 
 ## Scenes shown at the moment `when` (story.json → scenes[].show.when): "new_game", "hero_joined" (subject = hero id),
-## "before_first_battle" or "first_victory" (subject = stage id). In story order.
+## "before_first_battle" or "first_victory" (subject = stage id), "chapter_map" (subject = chapter id: the first time
+## the chapter's map is shown), "before_battle_with" (subject = enemy id: before the first battle where it fights).
+## In story order.
 func scene_ids_shown_at(when: String, subject = null) -> Array[String]:
 	var ids: Array[String] = []
 	for scene in story.get("scenes", []):
@@ -98,16 +100,24 @@ func scene_ids_shown_at(when: String, subject = null) -> Array[String]:
 			continue
 		if show.has("hero") and show["hero"] != subject:
 			continue
-		if show.has("stage") and not ((subject is int or subject is float) and int(show["stage"]) == int(subject)):
+		if show.has("enemy") and show["enemy"] != subject:
+			continue
+		if show.has("stage") and not _is_number(subject, show["stage"]):
+			continue
+		if show.has("chapter") and not _is_number(subject, show["chapter"]):
 			continue
 		ids.append(scene["id"])
 	return ids
 
 
-## The name over a line: a raven (story.json → speakers) or a hero (heroes.json).
+static func _is_number(subject, number) -> bool:
+	return (subject is int or subject is float) and int(number) == int(subject)
+
+
+## The name over a line: a raven or an enemy who speaks (story.json → speakers) or a hero (heroes.json).
 func speaker_name(speaker_id: String) -> String:
-	var ravens: Dictionary = story.get("speakers", {})
-	return ravens[speaker_id]["name"] if ravens.has(speaker_id) else get_hero(speaker_id)["name"]
+	var speakers: Dictionary = story.get("speakers", {})
+	return speakers[speaker_id]["name"] if speakers.has(speaker_id) else get_hero(speaker_id)["name"]
 
 
 ## The short caption under the name, «кто есть кто» (story.json → captions, word for word from docs/LORE.md, 6а).
@@ -116,7 +126,12 @@ func speaker_caption(speaker_id: String) -> String:
 
 
 func is_raven(speaker_id: String) -> bool:
-	return story.get("speakers", {}).has(speaker_id)
+	return story.get("speakers", {}).has(speaker_id) and speaker_enemy(speaker_id) == ""
+
+
+## The enemy (enemies.json id) whose head is the speaker's portrait (Thjazi in chapter 2), or "".
+func speaker_enemy(speaker_id: String) -> String:
+	return story.get("speakers", {}).get(speaker_id, {}).get("enemy", "")
 
 
 func get_pack(pack_id: String) -> Dictionary:
@@ -127,11 +142,12 @@ func get_pack(pack_id: String) -> Dictionary:
 	return {}
 
 
-## Beast pack ids in data order.
-func pack_ids() -> Array[String]:
+## Beast pack ids in data order (all chapters, or only `chapter_id`'s).
+func pack_ids(chapter_id := 0) -> Array[String]:
 	var ids: Array[String] = []
 	for pack in packs.get("packs", []):
-		ids.append(pack["id"])
+		if chapter_id == 0 or int(pack["chapter"]) == chapter_id:
+			ids.append(pack["id"])
 	return ids
 
 
@@ -150,6 +166,41 @@ func get_chapter(chapter_id: int) -> Dictionary:
 			return chapter
 	push_error("Unknown chapter: %d" % chapter_id)
 	return {}
+
+
+## Chapter ids in data order (1, 2, …).
+func chapter_ids() -> Array[int]:
+	var ids: Array[int] = []
+	for chapter in stages.get("chapters", []):
+		ids.append(int(chapter["id"]))
+	return ids
+
+
+func chapter_of_stage(stage_id: int) -> int:
+	return int(get_stage(stage_id)["chapter"])
+
+
+## The chapter's stage ids in order. Stage numbers go on from chapter to chapter (chapter 2 is stages 11–20).
+func chapter_stage_ids(chapter_id: int) -> Array[int]:
+	var ids: Array[int] = []
+	for stage in stages.get("stages", []):
+		if int(stage["chapter"]) == chapter_id:
+			ids.append(int(stage["id"]))
+	return ids
+
+
+## The chapter's last stage: the boss.
+func is_boss_stage(stage_id: int) -> bool:
+	return chapter_stage_ids(chapter_of_stage(stage_id)).back() == stage_id
+
+
+## The enemy appears in one of the stage's waves.
+func stage_has_enemy(stage_id: int, enemy_id: String) -> bool:
+	return get_stage(stage_id)["waves"].any(func(wave): return enemy_id in wave)
+
+
+func pack_has_enemy(pack_id: String, enemy_id: String) -> bool:
+	return enemy_id in get_pack(pack_id)["enemies"]
 
 
 func max_level() -> int:
@@ -183,9 +234,24 @@ func recommended_power(stage_id: int) -> int:
 	return int(get_stage(stage_id)["recommended_power"])
 
 
-## Enemy HP and attack multiplier on a stage: each stage adds enemy_power_growth_per_stage on top of the previous one.
+## Enemy HP and attack multiplier on a stage: each stage adds its chapter's growth on top of the previous stage
+## (stage 11 grows from stage 10 by chapter 2's growth). A chapter's growth is stages.json → chapters[].enemy_power_growth_per_stage,
+## or balance.json → enemy_power_growth_per_stage when the chapter has none (chapter 1).
 func enemy_power_multiplier(stage_id: int) -> float:
-	return pow(1.0 + float(balance["enemy_power_growth_per_stage"]), stage_id - 1)
+	var multiplier := 1.0
+	for chapter_id in chapter_ids():
+		var steps := 0  ## stages of this chapter after stage 1, up to stage_id
+		for id in chapter_stage_ids(chapter_id):
+			if id > 1 and id <= stage_id:
+				steps += 1
+		multiplier *= pow(1.0 + enemy_power_growth(chapter_id), steps)
+	return multiplier
+
+
+func enemy_power_growth(chapter_id: int) -> float:
+	var chapter: Dictionary = get_chapter(chapter_id)
+	return float(chapter["enemy_power_growth_per_stage"] if chapter.has("enemy_power_growth_per_stage") \
+			else balance["enemy_power_growth_per_stage"])
 
 
 func front_slot_count() -> int:

@@ -1,5 +1,7 @@
 ## Chapter map: the chapter's painted map (stages.json → chapters[].map) fills the screen height, the sides that do
-## not fit are cut off. The stages stand on the trail from the bottom up (stages.json → stages[].map_point: x, y as
+## not fit are cut off. The map opens on the current chapter (the one with the next stage to win); the arrows in the
+## top bar switch to the previous or the next chapter («‹ Глава 2 · Ётунхейм ›»), an arrow to a chapter not open yet
+## is dimmed and does not react. Stage numbers go on from chapter to chapter (chapter 2 is stages 11–20). The stages stand on the trail from the bottom up (stages.json → stages[].map_point: x, y as
 ## shares of the picture, the side of the caption). Won stages are marked and can be replayed, the next stage is
 ## highlighted, later ones are locked; the last stage shows the boss. Each caption shows the stage's
 ## «Рекомендуемая сила», in red while the squad is weaker than that; the squad's «Сила» is in the top bar.
@@ -7,7 +9,9 @@
 ## a beaten pack is away (it comes back by itself, the screen follows the clock), dimmed until it is unlocked.
 ## The top bar and the «Назад» button lie on a see-through paper strip so they read over the picture.
 ## The first tap on the boss stage (not won yet) plays the saga scene before the battle (story.json →
-## before_first_battle), once per game; the battle starts right after it.
+## before_first_battle), once per game; so does the first tap on a stage or a pack where the carrion eagles fight
+## (before_battle_with); the battle starts right after them. The first time a chapter's map is shown, its scene
+## plays over it (chapter_map: Jotunheim's, also for a save that had won chapter 1 before chapter 2 came out).
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
@@ -38,6 +42,8 @@ const LOCKED_COLOR := Color(0.102, 0.102, 0.102, 0.85)
 const BOSS_LOCKED_COLOR := Color("#4a1a14")
 const TOO_WEAK_COLOR := Color("#c81e1e")  ## a red that reads on the paper caption
 const CROWN_COLOR := Color("#e8c547")
+const ARROW_SIZE := 96.0  ## spec: buttons at least 96 px
+const ARROW_LOCKED_ALPHA := 0.3
 
 
 ## Boss icon: a crown over the last stage.
@@ -53,6 +59,29 @@ class CrownIcon extends Control:
 		draw_polyline(crown, INK, 3.0, true)
 
 
+## «‹» / «›» in the top bar, drawn (the game's font has no arrows). Dimmed while the chapter it leads to is closed.
+class ChapterArrow extends Button:
+	var points_left := true
+
+	func _init(left: bool) -> void:
+		points_left = left
+		flat = true
+		focus_mode = Control.FOCUS_NONE
+		custom_minimum_size = Vector2(ARROW_SIZE, ARROW_SIZE)
+		for state_name in ["normal", "hover", "pressed", "disabled", "focus"]:
+			add_theme_stylebox_override(state_name, StyleBoxEmpty.new())
+
+	func _draw() -> void:
+		var c := size / 2.0
+		var w := size.x * 0.16
+		var h := size.y * 0.26
+		var tip := c + Vector2(-w if points_left else w, 0)
+		var back := c + Vector2(w if points_left else -w, 0)
+		var chevron := PackedVector2Array([Vector2(back.x, c.y - h), tip, Vector2(back.x, c.y + h)])
+		draw_polyline(chevron, Color(INK, ARROW_LOCKED_ALPHA if disabled else 1.0), 9.0, true)
+
+
+var _chapter := 0  ## the chapter on the map now
 var _map_size := Vector2.ONE  ## the map picture's own size
 var _markers: Array[Dictionary] = []  ## {button, token, caption, side, point (shares of the picture)}
 var _stage_buttons := {}  ## stage id -> Button
@@ -61,27 +90,69 @@ var _map_origin := Vector2.ZERO  ## where the map picture's corner is on the scr
 var _map_shown := Vector2.ONE  ## the map picture's size on the screen
 var _marker_scale := 1.0
 var _clock := Timer.new()
+var _previous_arrow := ChapterArrow.new(true)
+var _next_arrow := ChapterArrow.new(false)
+var _story: Control  ## the saga scene on screen, if any
 
 
 func _ready() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
-	var chapter: Dictionary = data.get_chapter(int(data.get_stage(1)["chapter"]))
-	%Title.text = "Глава %d · %s" % [int(chapter["id"]), chapter["name"]]
 	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
-	%MapPicture.texture = Art.map_picture(chapter["map"])
-	_map_size = %MapPicture.texture.get_size()
-	for stage_id in range(1, data.stage_count() + 1):
-		_add_stage(stage_id)
-	for pack_id in data.pack_ids():
-		_add_pack(pack_id)
+	%ChapterRow.add_child(_previous_arrow)
+	%ChapterRow.move_child(_previous_arrow, 0)
+	%ChapterRow.add_child(_next_arrow)
+	_previous_arrow.pressed.connect(func(): show_chapter(_chapter - 1))
+	_next_arrow.pressed.connect(func(): show_chapter(_chapter + 1))
 	%BackButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 	%Board.resized.connect(_layout)
 	_clock.wait_time = 1.0
 	_clock.timeout.connect(_refresh_packs)
 	add_child(_clock)
 	_clock.start()
+	show_chapter(progress.current_chapter(data))
+
+
+## Puts the chapter's map, stages and packs on the board (only an open chapter); its scene plays the first time.
+func show_chapter(chapter_id: int) -> void:
+	var data = GameState.data
+	var progress = GameState.progress
+	if not chapter_id in data.chapter_ids() or not progress.is_chapter_open(data, chapter_id):
+		return
+	_chapter = chapter_id
+	for marker in _markers:
+		marker["button"].queue_free()
+	_markers.clear()
+	_stage_buttons.clear()
+	_pack_markers.clear()
+	var chapter: Dictionary = data.get_chapter(chapter_id)
+	%Title.text = "Глава %d · %s" % [chapter_id, chapter["name"]]
+	%MapPicture.texture = Art.map_picture(chapter["map"])
+	_map_size = %MapPicture.texture.get_size()
+	for stage_id in data.chapter_stage_ids(chapter_id):
+		_add_stage(stage_id)
+	for pack_id in data.pack_ids(chapter_id):
+		_add_pack(pack_id)
+	_refresh_arrows()
 	_layout()
+	var scene_id: String = progress.scene_on_chapter_map(data, chapter_id)
+	if scene_id != "" and not is_instance_valid(_story):
+		_story = StoryPlayer.play(self, scene_id)
+
+
+func shown_chapter() -> int:
+	return _chapter
+
+
+## An arrow is hidden where there is no chapter at all and dimmed (not tappable) where the chapter is not open yet.
+func _refresh_arrows() -> void:
+	var data = GameState.data
+	for arrow in [_previous_arrow, _next_arrow]:
+		var target: int = _chapter + (-1 if arrow == _previous_arrow else 1)
+		var exists: bool = target in data.chapter_ids()
+		arrow.modulate.a = 1.0 if exists else 0.0
+		arrow.disabled = not exists or not GameState.progress.is_chapter_open(data, target)
+		arrow.queue_redraw()
 
 
 # --- stages -------------------------------------------------------------------
@@ -89,7 +160,7 @@ func _ready() -> void:
 func _add_stage(stage_id: int) -> void:
 	var data = GameState.data
 	var progress = GameState.progress
-	var is_boss: bool = stage_id == data.stage_count()
+	var is_boss: bool = data.is_boss_stage(stage_id)
 	var cleared: bool = progress.is_replay(stage_id)
 	var open: bool = progress.is_stage_open(data, stage_id)
 	var current := open and not cleared
@@ -153,11 +224,17 @@ func _add_stage(stage_id: int) -> void:
 func _on_stage_pressed(stage_id: int) -> void:
 	GameState.selected_stage = stage_id
 	GameState.selected_pack = ""
-	var scene_id: String = GameState.progress.scene_before_battle(GameState.data, stage_id)
-	if scene_id != "":
-		StoryPlayer.play(self, scene_id).finished.connect(_start_battle, CONNECT_DEFERRED)
-	else:
+	_play_then_battle(GameState.progress.scenes_before_battle(GameState.data, stage_id))
+
+
+## The scenes due before this battle one after another, then the battle.
+func _play_then_battle(scene_ids: Array[String]) -> void:
+	if scene_ids.is_empty():
 		_start_battle()
+		return
+	var scene_id: String = scene_ids.pop_front()
+	_story = StoryPlayer.play(self, scene_id)
+	_story.finished.connect(_play_then_battle.bind(scene_ids), CONNECT_DEFERRED)
 
 
 func _start_battle() -> void:
@@ -199,7 +276,7 @@ func _on_pack_pressed(pack_id: String) -> void:
 		_refresh_packs()
 		return
 	GameState.selected_pack = pack_id
-	get_tree().change_scene_to_file(BATTLE_SCENE)
+	_play_then_battle(GameState.progress.scenes_before_battle(GameState.data, 0, pack_id))
 
 
 func _refresh_packs() -> void:

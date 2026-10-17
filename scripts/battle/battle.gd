@@ -82,7 +82,7 @@ func _set_mark(unit_id: int) -> void:
 	_events.append({"type": "mark", "unit": unit_id})
 
 
-## Events since the last call: damage, heal, death, mark, ultimate, special, end. Used by the screen for effects.
+## Events since the last call: damage, heal, death, mark, ultimate, special, phase, end. Used by the screen for effects.
 func take_events() -> Array[Dictionary]:
 	var events := _events
 	_events = []
@@ -146,6 +146,8 @@ func _perform_action(unit) -> void:
 			_attack(unit, _pick_front_row_target(unit))
 		"attack_lowest_hp":
 			_attack(unit, _pick_lowest_hp_target(unit))
+		"attack_back_row_weakest":
+			_attack(unit, _pick_back_row_weakest_target(unit))
 		"heal_or_attack":
 			# Heals the ally with the lowest HP share if it is below the threshold, otherwise attacks.
 			var ally = _pick_most_wounded_ally(unit)
@@ -172,14 +174,32 @@ func _attack(unit, target) -> void:
 	_gain_energy(unit, int(_energy["per_attack"]))
 
 
+## "hit_all": the whole opposing side (Гнев конунга); "hit_one": one target picked like the unit's attack of that kind
+## (special.target: "front_row" — by the target weights, «Ледяное копьё»; "back_row_weakest" — as the carrion eagle, «Пике»).
 func _perform_special(unit) -> void:
 	match unit.special["type"]:
 		"hit_all":
 			_events.append({"type": "special", "unit": unit.id, "name": unit.special["name"]})
 			for target in _alive(_opponents_of(unit)):
 				_deal_damage(unit, target, float(unit.special["attack_multiplier"]), "special")
+		"hit_one":
+			var target = _pick_special_target(unit, unit.special["target"])
+			if target == null:
+				return
+			_events.append({"type": "special", "unit": unit.id, "name": unit.special["name"]})
+			_deal_damage(unit, target, float(unit.special["attack_multiplier"]), "special")
 		_:
 			push_error("Unknown special ability: %s" % unit.special["type"])
+
+
+func _pick_special_target(unit, target_kind: String):
+	match target_kind:
+		"front_row":
+			return _pick_front_row_target(unit)
+		"back_row_weakest":
+			return _pick_back_row_weakest_target(unit)
+	push_error("Unknown special target: %s" % target_kind)
+	return null
 
 
 func _apply_effect(unit, effect: Dictionary) -> void:
@@ -229,10 +249,22 @@ func _deal_damage(source, target, multiplier: float, kind: String) -> void:
 	})
 	if target.is_alive():
 		_gain_energy(target, int(_energy["per_hit_taken"]))
+		_enter_due_phases(target)
 	else:
 		_events.append({"type": "death", "unit": target.id})
 		if target.id == marked_target_id:
 			_set_mark(-1)
+
+
+## A boss whose HP has dropped to a phase's share enters it: {"type": "phase", "unit", "phase"} (1 = the first change,
+## the screen shows the phase's picture and announcement from enemies.json). HP is not restored. A blow that drops HP
+## past two shares at once enters both, in order.
+func _enter_due_phases(unit) -> void:
+	var next: Dictionary = unit.due_phase()
+	while not next.is_empty():
+		unit.enter_phase(next)
+		_events.append({"type": "phase", "unit": unit.id, "phase": unit.phase})
+		next = unit.due_phase()
 
 
 func _heal(source, target, amount: int) -> void:
@@ -261,6 +293,17 @@ func _pick_front_row_target(unit):
 	for candidate in candidates:
 		weights.append(_target_weight(candidate))
 	return candidates[_rng.rand_weighted(weights)]
+
+
+## The carrion eagle (and Thjazi as an eagle) goes for the back row: the hero there with the lowest share of HP,
+## a random one of them on a tie. With nobody left in the back row it hits the front row like everyone else.
+func _pick_back_row_weakest_target(unit):
+	var back := _alive(_opponents_of(unit)).filter(func(u): return u.row == "back")
+	if back.is_empty():
+		return _pick_front_row_target(unit)
+	var lowest: float = back.map(func(u): return u.hp_fraction()).min()
+	var weakest := back.filter(func(u): return u.hp_fraction() == lowest)
+	return weakest[_rng.randi_range(0, weakest.size() - 1)]
 
 
 func _target_weight(target) -> float:

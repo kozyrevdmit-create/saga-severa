@@ -3,6 +3,7 @@
     {
       "id": "wolves",
       "name": "Волчья стая",
+      "chapter": 1,
       "enemies": [
         "wolf",
         "wolf",
@@ -18,6 +19,7 @@
     {
       "id": "boars",
       "name": "Кабаны",
+      "chapter": 1,
       "enemies": [
         "boar",
         "boar"
@@ -32,6 +34,7 @@
     {
       "id": "bear",
       "name": "Медведь",
+      "chapter": 1,
       "enemies": [
         "bear"
       ],
@@ -40,6 +43,52 @@
       "map_point": {
         "x": 0.735,
         "y": 0.273
+      }
+    },
+    {
+      "id": "ironwood_wolves",
+      "name": "Волки Железного леса",
+      "chapter": 2,
+      "enemies": [
+        "ironwood_wolf",
+        "ironwood_wolf",
+        "ironwood_wolf"
+      ],
+      "icon": "ironwood_wolf",
+      "unlock_after_stage": 10,
+      "map_point": {
+        "x": 0.72,
+        "y": 0.79
+      }
+    },
+    {
+      "id": "troll",
+      "name": "Тролль",
+      "chapter": 2,
+      "enemies": [
+        "ice_troll"
+      ],
+      "icon": "ice_troll",
+      "unlock_after_stage": 13,
+      "map_point": {
+        "x": 0.24,
+        "y": 0.37
+      }
+    },
+    {
+      "id": "scavengers",
+      "name": "Падальщики",
+      "chapter": 2,
+      "enemies": [
+        "carrion_eagle",
+        "carrion_eagle",
+        "carrion_eagle"
+      ],
+      "icon": "carrion_eagle",
+      "unlock_after_stage": 16,
+      "map_point": {
+        "x": 0.75,
+        "y": 0.2
       }
     }
   ]

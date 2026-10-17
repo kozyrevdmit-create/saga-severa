@@ -29,7 +29,9 @@
 ## 4. Offline income for a full absence on every stage, in first wins of the current stage.
 ## 5. (--sensitivity) The campaign again with all heroes' HP and attack and all stage silver rewards at −10% and +10%.
 ## 6. (--recommend) «Рекомендуемая сила» per stage: the squad power at which the human player wins
-##    simulation.recommended_power_win_share of the fights (for stages.json → recommended_power).
+##    simulation.recommended_power_win_share of the fights (for stages.json → recommended_power). For a chapter's
+##    boss stage also how long the human's battle lasts at that power: the whole stage and the boss's wave alone.
+## The campaigns go through every chapter (stages 1–20); a chapter's enemies grow by its own step (M11).
 ## 7. (--packs) Beast packs (M9). Tables 1–5 leave the packs out: the worst case, a player who never fights them.
 ##    Here the human player comes back every respawn time (balance.json → beast_packs.respawn_hours) and first beats
 ##    every pack on the map, then fights stages as in table 1 (an attempt at the next stage, a replay of the previous
@@ -168,6 +170,8 @@ func _initialize() -> void:
 		var totals := _totals(results[policy])
 		print("Всего (%s): боёв %s, время боёв %s мин, дошли до конца %d%%" % [
 			POLICY_NAMES[policy], totals["fights"], totals["minutes"], totals["finished_share"]])
+		print("  повторов в среднем за главу: " + ", ".join(data.chapter_ids().map(func(chapter_id): return "%d — %.1f" % [
+			chapter_id, _chapter_replays(results[policy], chapter_id)])))
 
 	print("")
 	print("Уровни героев при первой победе (медиана по прохождениям; «—» — героя ещё нет):")
@@ -690,6 +694,15 @@ func _stage_summary(campaigns: Array, stage: int) -> Dictionary:
 	}
 
 
+## The sum over the chapter's stages (up to --until) of the average replays per stage.
+func _chapter_replays(campaigns: Array, chapter_id: int) -> float:
+	var total := 0.0
+	for stage in data.chapter_stage_ids(chapter_id):
+		if stage <= _last_stage:
+			total += _average(_stage_summary(campaigns, stage)["replays"])
+	return total
+
+
 func _average(values: Array) -> float:
 	var total := 0.0
 	for value in values:
@@ -864,6 +877,7 @@ func _print_recommended() -> void:
 	print("Этап | уровни | побед | сила | округлено | сейчас в stages.json")
 	var found := []
 	var unreachable := []
+	var boss_lines := []
 	for stage in range(1, data.stage_count() + 1):
 		var progress = Progress.new_game(data)
 		for won in range(1, stage):
@@ -898,12 +912,46 @@ func _print_recommended() -> void:
 		found.append(rounded)
 		print("%4d | %6s | %4d%% | %4d | %9d | %d" % [stage, _levels_text(progress.squad(data)), roundi(rate * 100), power, rounded,
 				data.recommended_power(stage)])
+		if data.is_boss_stage(stage):
+			boss_lines.append(_boss_time_text(stage, progress.squad(data), fights))
 	if not unreachable.is_empty():
 		print("Числа для stages.json не выводятся: этапы %s не набирают %d%% побед даже на максимальном уровне — поправьте баланс." % [
 				", ".join(unreachable.map(func(v): return str(v))), roundi(share * 100)])
 		_variant_failed = true
 		return
 	print("Для stages.json: " + ", ".join(found.map(func(v): return str(v))))
+	print("")
+	print("Бой с боссом у человека на рекомендуемой силе (%d боёв; время боя, не настоящее: на x2 вдвое быстрее):" % fights)
+	for line in boss_lines:
+		print(line)
+
+
+## The human's battles on a boss stage with this squad: the share won, the average time of the whole stage and of the
+## boss's wave (the last one) in the won battles, the longest won battle.
+func _boss_time_text(stage: int, squad: Array, fights: int) -> String:
+	var wins := 0
+	var stage_time := 0.0
+	var boss_time := 0.0
+	var longest := 0.0
+	for run in fights:
+		var battle = StageBattle.from_data(data, stage, squad, run * 7919 + stage)
+		var boss_start := 0.0
+		var ready_since := {}
+		battle.auto_ultimates = false
+		while not battle.finished and battle.time <= _stall_seconds:
+			if battle.wave_index < battle.wave_count - 1:
+				boss_start = battle.time
+			battle.step()
+			_human_step(battle, ready_since)
+		if battle.victory:
+			wins += 1
+			stage_time += battle.time
+			boss_time += battle.time - boss_start
+			longest = maxf(longest, battle.time)
+	var won := float(maxi(1, wins))
+	return "  этап %d (%s): побед %d%%, весь этап в среднем %d с (самый долгий %d с), волна босса %d с" % [
+		stage, data.get_enemy(data.get_stage(stage)["waves"].back()[0])["name"], roundi(100.0 * wins / fights),
+		roundi(stage_time / won), roundi(longest), roundi(boss_time / won)]
 
 
 func _levels_text(squad: Array) -> String:

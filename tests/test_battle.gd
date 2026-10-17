@@ -521,3 +521,164 @@ func test_first_strike_hits_harder_once() -> void:
 	assert_eq(specials[0]["name"], data.get_enemy("boar")["first_strike"]["name"], "named from enemies.json")
 	assert_eq(hits[1]["amount"], roundi(boar.base_attack), "the next attack is a normal one")
 	assert_eq(hits[1]["kind"], "attack", "a normal attack")
+
+
+# --- chapter 2 (M11): the carrion eagle and Thjazi ---------------------------------
+
+## The carrion eagle hits the back-row hero with the lowest share of HP (HP / max HP), not the lowest HP.
+func test_eagle_hits_the_most_wounded_hero_of_the_back_row() -> void:
+	var eagle = BattleUnit.from_enemy(data.get_enemy("carrion_eagle"))
+	var tank = make_unit(HEROES, "front", 100000, 1, 1000.0)
+	tank.hp = 100  # the front row is nearly dead: the eagle still flies past it
+	var big = make_unit(HEROES, "back", 100000, 1, 1000.0)
+	big.hp = 40000  # 40% of max HP, but more HP than the small one
+	var small = make_unit(HEROES, "back", 1000, 1, 1000.0)
+	small.hp = 600  # 60%
+	var battle = make_battle([tank, big, small], [eagle])
+	var targets := []
+	while targets.size() < 3:
+		battle.step()
+		for event in events_of(battle.take_events(), "damage"):
+			if event["source"] == eagle.id:
+				targets.append(event["target"])
+	assert_eq(targets, [big.id, big.id, big.id], "the lowest share of HP in the back row, every time")
+
+
+## On a tie the eagle picks one of the equally wounded back-row heroes at random (both get hit over many tries).
+func test_eagle_picks_a_random_one_of_equally_wounded() -> void:
+	var hit := {}
+	for rng_seed in 30:
+		var eagle = BattleUnit.from_enemy(data.get_enemy("carrion_eagle"))
+		var a = make_unit(HEROES, "back", 100000, 1, 1000.0)
+		var b = make_unit(HEROES, "back", 100000, 1, 1000.0)
+		var battle = make_battle([a, b], [eagle], rng_seed)
+		while not hit.has(rng_seed):
+			battle.step()
+			for event in events_of(battle.take_events(), "damage"):
+				if event["source"] == eagle.id:
+					hit[rng_seed] = "a" if event["target"] == a.id else "b"
+	assert_true("a" in hit.values() and "b" in hit.values(), "both full-HP heroes get picked")
+
+
+## With nobody left in the back row (empty or fallen) the eagle hits the front row by the usual target weights.
+func test_eagle_hits_the_front_row_when_the_back_row_is_gone() -> void:
+	var eagle = BattleUnit.from_enemy(data.get_enemy("carrion_eagle"))
+	var tank = make_unit(HEROES, "front", 100000, 1, 1000.0)
+	var battle = make_battle([tank], [eagle])
+	battle.run_to_end(3.0)
+	assert_true(tank.hp < tank.max_hp, "an empty back row: the front row is hit")
+	eagle = BattleUnit.from_enemy(data.get_enemy("carrion_eagle"))
+	tank = make_unit(HEROES, "front", 100000, 1, 1000.0)
+	var fallen = make_unit(HEROES, "back", 100, 1, 1000.0)
+	fallen.hp = 0
+	battle = make_battle([tank, fallen], [eagle])
+	battle.run_to_end(3.0)
+	assert_true(tank.hp < tank.max_hp, "a fallen back row: the front row is hit")
+
+
+## The shieldbearer's passive still cuts the eagle's blow when the eagle hits a shieldbearer.
+func test_shieldbearer_passive_cuts_the_eagles_blow() -> void:
+	var eagle = BattleUnit.from_enemy(data.get_enemy("carrion_eagle"))
+	var hrungnir = hero_from_data("hrungnir")
+	hrungnir.row = "back"  # a shieldbearer put in the back row
+	hrungnir.attack_interval = 1000.0
+	var battle = make_battle([hrungnir], [eagle])
+	var hits := []
+	while hits.is_empty():
+		battle.step()
+		hits = events_of(battle.take_events(), "damage").filter(func(e): return e["source"] == eagle.id)
+	var passive := float(data.get_hero("hrungnir")["passive"]["damage_taken_multiplier"])
+	assert_eq(hits[0]["amount"], roundi(eagle.base_attack * passive), "less damage on the shieldbearer")
+
+
+func _thjazi_battle(hero_units: Array, rng_seed := 1) -> Dictionary:
+	var thjazi = BattleUnit.from_enemy(data.get_enemy("thjazi"))
+	return {"battle": make_battle(hero_units, [thjazi], rng_seed), "thjazi": thjazi}
+
+
+## Phase 1: «Ледяное копьё» every 6 s on one front-row hero, the multiplier from enemies.json.
+func test_thjazi_throws_the_ice_spear_at_the_front_row() -> void:
+	var tank = make_unit(HEROES, "front", 10000000, 1, 1000.0)
+	var back = make_unit(HEROES, "back", 10000000, 1, 1000.0)
+	var setup := _thjazi_battle([tank, back])
+	var battle = setup["battle"]
+	var thjazi = setup["thjazi"]
+	var spear: Dictionary = data.get_enemy("thjazi")["special"]
+	var specials := []
+	var spear_hits := []
+	while battle.time < 12.5:
+		battle.step()
+		for event in battle.take_events():
+			if event["type"] == "special":
+				specials.append([event["name"], battle.time])
+			elif event["type"] == "damage" and event["kind"] == "special":
+				spear_hits.append(event)
+	assert_eq(specials.size(), 2, "twice in 12.5 s")
+	assert_eq(specials[0][0], "Ледяное копьё", "named from enemies.json")
+	assert_near(specials[0][1], float(spear["interval"]), 0.06, "the first after 6 s")
+	assert_eq(spear_hits.size(), 2, "one hero each time")
+	for hit in spear_hits:
+		assert_eq(hit["target"], tank.id, "the front row")
+		assert_eq(hit["amount"], roundi(thjazi.base_attack * float(spear["attack_multiplier"])), "the spear's multiplier")
+	assert_eq(back.hp, back.max_hp, "the back row untouched in phase 1")
+
+
+## At half HP Thjazi turns into an eagle: a "phase" event once, HP is not restored, the attack gets faster
+## (interval × attack_interval_multiplier), he goes for the most wounded back-row hero and dives («Пике») every 5 s.
+func test_thjazi_turns_into_an_eagle_at_half_hp() -> void:
+	var enemy: Dictionary = data.get_enemy("thjazi")
+	var eagle_phase: Dictionary = enemy["phases"][0]
+	var tank = make_unit(HEROES, "front", 10000000, 1, 1000.0)
+	var healthy = make_unit(HEROES, "back", 10000000, 1, 1000.0)
+	var wounded = make_unit(HEROES, "back", 10000000, 1, 1000.0)
+	wounded.hp = wounded.max_hp / 2
+	var setup := _thjazi_battle([tank, healthy, wounded])
+	var battle = setup["battle"]
+	var thjazi = setup["thjazi"]
+	var interval: float = thjazi.attack_interval
+	var half := roundi(thjazi.max_hp * float(eagle_phase["at_hp_fraction"]))
+	thjazi.hp = half + 1
+	battle._deal_damage(tank, thjazi, 0.0, "attack")  # a blow of 1 HP: down to exactly half
+	var phases := events_of(battle.take_events(), "phase")
+	assert_eq(phases.size(), 1, "one phase event")
+	assert_eq(phases[0]["unit"], thjazi.id, "for Thjazi")
+	assert_eq(phases[0]["phase"], 1, "the first change of form")
+	assert_eq(thjazi.hp, half, "HP stays at half, not restored")
+	assert_near(thjazi.attack_interval, interval * float(eagle_phase["attack_interval_multiplier"]), 0.0001, "attacks faster")
+	assert_eq(thjazi.action, "attack_back_row_weakest", "goes for the back row")
+	battle._deal_damage(tank, thjazi, 0.0, "attack")
+	assert_eq(events_of(battle.take_events(), "phase").size(), 0, "only once")
+	var blows := []
+	var dives := []
+	var start: float = battle.time
+	while battle.time - start < 5.2:
+		battle.step()
+		for event in battle.take_events():
+			if event["type"] == "damage" and event["source"] == thjazi.id:
+				(dives if event["kind"] == "special" else blows).append(event)
+			elif event["type"] == "special":
+				assert_eq(event["name"], "Пике", "the dive, named from enemies.json")
+	assert_true(blows.size() >= 2, "several blows")
+	assert_true(blows.all(func(e): return e["target"] == wounded.id), "every blow at the most wounded back-row hero")
+	assert_eq(dives.size(), 1, "one dive in the first 5 s of the eagle")
+	assert_eq(dives[0]["target"], wounded.id, "at the same target")
+	assert_eq(dives[0]["amount"], roundi(thjazi.base_attack * float(eagle_phase["special"]["attack_multiplier"])), "the dive's multiplier")
+	assert_eq(tank.hp, tank.max_hp, "the front row is left alone while the back row stands")
+
+
+## A blow that takes Thjazi from above half straight to death brings no change of form; the mark works in both forms.
+func test_thjazi_phase_edge_cases() -> void:
+	var tank = make_unit(HEROES, "front", 10000000, 1, 1000.0)
+	var setup := _thjazi_battle([tank])
+	var battle = setup["battle"]
+	var thjazi = setup["thjazi"]
+	assert_true(battle.toggle_mark(thjazi.id), "Thjazi can be marked as a giant")
+	thjazi.hp = thjazi.max_hp / 2 + 1
+	battle._deal_damage(tank, thjazi, 0.0, "attack")
+	assert_eq(battle.marked_target_id, thjazi.id, "the mark stays on the eagle")
+	setup = _thjazi_battle([make_unit(HEROES, "front", 10000000, 100000000, 1000.0)])
+	battle = setup["battle"]
+	thjazi = setup["thjazi"]
+	battle._deal_damage(battle.heroes()[0], thjazi, 1.0, "attack")
+	assert_true(not thjazi.is_alive(), "killed in one blow")
+	assert_eq(events_of(battle.take_events(), "phase").size(), 0, "no change of form for the dead")
