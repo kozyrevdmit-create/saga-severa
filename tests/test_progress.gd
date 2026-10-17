@@ -325,6 +325,27 @@ func test_full_absence_pays_set_number_of_first_wins_of_current_stage() -> void:
 
 
 ## M11: on stages 11–20 the income follows the current stage of chapter 2 the same way.
+## M11.1: the rule is general — with a third chapter in the data, Jotunheim's packs pay the smaller share as soon as
+## chapter 3 opens (its first stage can be fought), the full share before.
+func test_packs_of_any_passed_chapter_pay_the_smaller_share() -> void:
+	var three = GameData.load_all()
+	three.stages["chapters"].append({"id": 3, "name": "Свартальфхейм", "map": "map_jotunheim"})
+	three.stages["stages"].append({"id": 21, "chapter": 3, "recommended_power": 1, "map_point": {"x": 0.5, "y": 0.5, "label": "left"},
+			"reward": {"silver": 5000, "experience": 500}, "waves": [["ice_troll"]]})
+	var share := float(three.balance["beast_packs"]["reward_share_of_first_win"])
+	var past_share := float(three.balance["beast_packs"]["reward_share_once_the_next_chapter_is_open"])
+	var progress = Progress.new_game(three)
+	progress.cleared_stage = 19
+	assert_eq(progress.pack_reward(three, "troll")["silver"],
+			roundi(float(three.get_stage(19)["reward"]["silver"]) * share * progress.silver_multiplier(three)), "chapter 2 is current: full share")
+	progress.cleared_stage = 20
+	assert_true(progress.is_chapter_open(three, 3), "chapter 3 opens after stage 20")
+	assert_eq(progress.pack_reward(three, "troll")["silver"],
+			roundi(float(three.get_stage(20)["reward"]["silver"]) * past_share * progress.silver_multiplier(three)), "chapter 2 is passed: smaller share")
+	assert_eq(progress.pack_reward(three, "wolves")["silver"],
+			roundi(float(three.get_stage(10)["reward"]["silver"]) * past_share * progress.silver_multiplier(three)), "and so is chapter 1")
+
+
 func test_offline_income_on_chapter_two() -> void:
 	var progress = Progress.new_game(data)
 	for stage in range(10, 20):
@@ -627,8 +648,9 @@ func test_pack_strength_and_reward_follow_the_last_stage_won() -> void:
 
 
 ## M11.1 (Dmitriy, 17.10.2026): a pack follows the last stage won in ITS chapter. Midgard's packs stop at stage 10
-## (their strength and reward do not grow in chapter 2); Jotunheim's follow stages 11–20 and, before the first win in
-## chapter 2, are as strong as stage 11. The share of the reward stays the same.
+## (their strength and reward do not grow in chapter 2) and, once chapter 2 is open, pay the smaller share
+## (beast_packs.reward_share_once_the_next_chapter_is_open); Jotunheim's follow stages 11–20 and, before the first win
+## in chapter 2, are as strong as stage 11.
 func test_packs_follow_the_last_stage_won_in_their_own_chapter() -> void:
 	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
 	var progress = Progress.new_game(data)
@@ -637,10 +659,14 @@ func test_packs_follow_the_last_stage_won_in_their_own_chapter() -> void:
 		assert_eq(progress.pack_stage(data, pack_id), 10, "%s: stage 10 after chapter 1" % pack_id)
 	assert_eq(progress.pack_stage(data, "ironwood_wolves"), 11, "Jotunheim's wolves before the first win there: stage 11")
 	win_stages(progress, 15)
+	var past_share := float(data.balance["beast_packs"]["reward_share_once_the_next_chapter_is_open"])
+	assert_true(past_share < share, "the chapter behind pays a smaller share")
 	for pack_id in data.pack_ids(1):
 		assert_eq(progress.pack_stage(data, pack_id), 10, "%s: still stage 10 in chapter 2" % pack_id)
-		var midgard := roundi(float(data.get_stage(10)["reward"]["silver"]) * share * progress.silver_multiplier(data))
-		assert_eq(progress.pack_reward(data, pack_id)["silver"], midgard, "%s pays a share of stage 10" % pack_id)
+		var midgard: Dictionary = data.get_stage(10)["reward"]
+		assert_eq(progress.pack_reward(data, pack_id), {
+			"silver": roundi(float(midgard["silver"]) * past_share * progress.silver_multiplier(data)),
+			"experience": roundi(float(midgard["experience"]) * past_share)}, "%s pays the smaller share of stage 10" % pack_id)
 	for pack_id in data.pack_ids(2):
 		assert_eq(progress.pack_stage(data, pack_id), 15, "%s: stage 15" % pack_id)
 	var jotunheim := roundi(float(data.get_stage(15)["reward"]["silver"]) * share * progress.silver_multiplier(data))
@@ -648,9 +674,17 @@ func test_packs_follow_the_last_stage_won_in_their_own_chapter() -> void:
 	var before: int = progress.silver
 	progress.apply_pack_victory(data, "bear", NOW)
 	assert_eq(progress.silver - before,
-			roundi(float(data.get_stage(10)["reward"]["silver"]) * share * progress.silver_multiplier(data)), "the bear pays as at stage 10")
+			roundi(float(data.get_stage(10)["reward"]["silver"]) * past_share * progress.silver_multiplier(data)), "the bear pays as at stage 10")
 	win_stages(progress, 20)
 	assert_eq(progress.pack_stage(data, "scavengers"), 20, "Jotunheim's packs up to stage 20")
+	assert_eq(progress.pack_reward(data, "scavengers")["silver"],
+			roundi(float(data.get_stage(20)["reward"]["silver"]) * share * progress.silver_multiplier(data)),
+			"the last chapter's packs keep the full share after its boss")
+	var midgard_only = Progress.new_game(data)
+	win_stages(midgard_only, 9)
+	assert_eq(midgard_only.pack_reward(data, "bear")["silver"],
+			roundi(float(data.get_stage(9)["reward"]["silver"]) * share * midgard_only.silver_multiplier(data)),
+			"before chapter 2 opens Midgard's packs pay the full share")
 	assert_eq(progress.pack_stage(data, "boars"), 10, "Midgard's stay at stage 10")
 
 

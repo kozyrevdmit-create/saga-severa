@@ -791,7 +791,8 @@ func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
 	print("7. Стаи зверей (игрок «%s», %d прохождений на вариант). В таблицах 1–5 стай нет — это худший случай." % [POLICY_NAMES[policy], campaigns])
 	print("Заход раз в %s ч: сначала все стаи на карте (по одному бою), потом бои этапов как в таблице 1 —" % _number(float(packs["respawn_hours"])))
 	print("попытка следующего этапа, после поражения повтор предыдущего, — пока не кончатся бои этапов захода.")
-	print("Награда стаи — %d%% первой победы последнего пройденного этапа (balance.json → beast_packs)." % roundi(float(packs["reward_share_of_first_win"]) * 100))
+	print("Награда стаи — %d%% первой победы последнего пройденного этапа её главы, у стай пройденной главы — %d%% (balance.json → beast_packs)." % [
+		roundi(float(packs["reward_share_of_first_win"]) * 100), roundi(float(packs["reward_share_once_the_next_chapter_is_open"]) * 100)])
 	var variants := [0] + visit_fights
 	var results := {}
 	for fights in variants:

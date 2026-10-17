@@ -226,8 +226,16 @@ func is_pack_available(data, pack_id: String, now_unix: int) -> bool:
 
 ## The reward for beating a pack: balance.json → beast_packs.reward_share_of_first_win of the first-win reward
 ## of pack_stage(data, pack_id), silver with the jarl bonus. Returns {silver, experience}.
+## The packs of a chapter already passed (the player has opened the next chapter) pay less:
+## beast_packs.reward_share_once_the_next_chapter_is_open; the packs of the current chapter pay the full share (M11.1;
+## the rule holds for any chapter: Midgard's packs in chapter 2, Jotunheim's once a chapter 3 opens). Otherwise the
+## easy packs of the chapters behind would take away most replays of the current chapter.
 func pack_reward(data, pack_id: String) -> Dictionary:
-	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
+	var packs: Dictionary = data.balance["beast_packs"]
+	var share := float(packs["reward_share_of_first_win"])
+	var next_chapter := int(data.get_pack(pack_id)["chapter"]) + 1
+	if next_chapter in data.chapter_ids() and is_chapter_open(data, next_chapter):
+		share = float(packs["reward_share_once_the_next_chapter_is_open"])
 	var base: Dictionary = data.get_stage(pack_stage(data, pack_id))["reward"]
 	return {
 		"silver": roundi(float(base["silver"]) * share * silver_multiplier(data)),
