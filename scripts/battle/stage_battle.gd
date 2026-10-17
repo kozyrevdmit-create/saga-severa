@@ -47,7 +47,7 @@ static func from_data(data, stage: int, squad: Array, rng_seed: int) -> RefCount
 
 
 ## A beast pack (packs.json): one wave of its beasts, scaled by the power of `power_stage`
-## (the last stage won, Progress.pack_stage).
+## (the last stage won in the pack's chapter, Progress.pack_stage).
 static func from_pack(data, pack_id: String, power_stage: int, squad: Array, rng_seed: int) -> RefCounted:
 	return _build(data, power_stage, [data.get_pack(pack_id)["enemies"]], squad, rng_seed)
 

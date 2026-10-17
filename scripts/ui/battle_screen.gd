@@ -56,7 +56,7 @@ func _ready() -> void:
 	var progress = GameState.progress
 	if GameState.selected_pack != "" and progress.is_pack_available(data, GameState.selected_pack, GameState.now()):
 		_pack_id = GameState.selected_pack
-		_battle = StageBattle.from_pack(data, _pack_id, progress.pack_stage(), progress.squad(data), randi())
+		_battle = StageBattle.from_pack(data, _pack_id, progress.pack_stage(data, _pack_id), progress.squad(data), randi())
 	else:
 		_stage_id = GameState.selected_stage if progress.is_stage_open(data, GameState.selected_stage) else progress.next_stage_id(data)
 		_battle = StageBattle.from_data(data, _stage_id, progress.squad(data), randi())

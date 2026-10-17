@@ -199,10 +199,12 @@ func mark_all_scenes_seen(data) -> void:
 
 # --- beast packs ----------------------------------------------------------------
 
-## Beast packs fight at the strength of the last stage won and pay a share of its first-win reward
-## (stage 1 before the first win).
-func pack_stage() -> int:
-	return maxi(1, cleared_stage)
+## A beast pack fights at the strength of the last stage won in ITS chapter and pays a share of that stage's first-win
+## reward (M11.1): Midgard's packs at most at stage 10, Jotunheim's at stages 11–20. Before the first win in its chapter
+## a pack is as strong as the chapter's first stage (stage 1, stage 11).
+func pack_stage(data, pack_id: String) -> int:
+	var stages: Array[int] = data.chapter_stage_ids(int(data.get_pack(pack_id)["chapter"]))
+	return clampi(cleared_stage, stages[0], stages.back())
 
 
 func is_pack_unlocked(data, pack_id: String) -> bool:
@@ -223,10 +225,18 @@ func is_pack_available(data, pack_id: String, now_unix: int) -> bool:
 
 
 ## The reward for beating a pack: balance.json → beast_packs.reward_share_of_first_win of the first-win reward
-## of pack_stage(), silver with the jarl bonus. Returns {silver, experience}.
-func pack_reward(data) -> Dictionary:
-	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
-	var base: Dictionary = data.get_stage(pack_stage())["reward"]
+## of pack_stage(data, pack_id), silver with the jarl bonus. Returns {silver, experience}.
+## The packs of a chapter already passed (the player has opened the next chapter) pay less:
+## beast_packs.reward_share_once_the_next_chapter_is_open; the packs of the current chapter pay the full share (M11.1;
+## the rule holds for any chapter: Midgard's packs in chapter 2, Jotunheim's once a chapter 3 opens). Otherwise the
+## easy packs of the chapters behind would take away most replays of the current chapter.
+func pack_reward(data, pack_id: String) -> Dictionary:
+	var packs: Dictionary = data.balance["beast_packs"]
+	var share := float(packs["reward_share_of_first_win"])
+	var next_chapter := int(data.get_pack(pack_id)["chapter"]) + 1
+	if next_chapter in data.chapter_ids() and is_chapter_open(data, next_chapter):
+		share = float(packs["reward_share_once_the_next_chapter_is_open"])
+	var base: Dictionary = data.get_stage(pack_stage(data, pack_id))["reward"]
 	return {
 		"silver": roundi(float(base["silver"]) * share * silver_multiplier(data)),
 		"experience": roundi(float(base["experience"]) * share),
@@ -236,7 +246,7 @@ func pack_reward(data) -> Dictionary:
 ## Pays the pack reward and sends the pack away for balance.json → beast_packs.respawn_hours.
 ## A defeat or a retreat changes nothing: the pack stays on the map. Returns {silver, experience}.
 func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
-	var reward := pack_reward(data)
+	var reward := pack_reward(data, pack_id)
 	silver += int(reward["silver"])
 	experience += int(reward["experience"])
 	update_pack_timers(data, now_unix)

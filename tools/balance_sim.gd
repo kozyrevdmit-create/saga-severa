@@ -424,7 +424,7 @@ func _pack_visit(progress, policy: String, packs: Dictionary) -> void:
 		if not progress.is_pack_available(data, pack_id, now):
 			continue
 		_spend(progress, policy, progress.next_stage_id(data))
-		var fight := _fight(progress.pack_stage(), progress.squad(data), false, "campaign", policy, pack_id)
+		var fight := _fight(progress.pack_stage(data, pack_id), progress.squad(data), false, "campaign", policy, pack_id)
 		packs["fights"] += 1
 		if fight["victory"]:
 			packs["wins"] += 1
@@ -791,7 +791,8 @@ func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
 	print("7. Стаи зверей (игрок «%s», %d прохождений на вариант). В таблицах 1–5 стай нет — это худший случай." % [POLICY_NAMES[policy], campaigns])
 	print("Заход раз в %s ч: сначала все стаи на карте (по одному бою), потом бои этапов как в таблице 1 —" % _number(float(packs["respawn_hours"])))
 	print("попытка следующего этапа, после поражения повтор предыдущего, — пока не кончатся бои этапов захода.")
-	print("Награда стаи — %d%% первой победы последнего пройденного этапа (balance.json → beast_packs)." % roundi(float(packs["reward_share_of_first_win"]) * 100))
+	print("Награда стаи — %d%% первой победы последнего пройденного этапа её главы, у стай пройденной главы — %d%% (balance.json → beast_packs)." % [
+		roundi(float(packs["reward_share_of_first_win"]) * 100), roundi(float(packs["reward_share_once_the_next_chapter_is_open"]) * 100)])
 	var variants := [0] + visit_fights
 	var results := {}
 	for fights in variants:
@@ -814,10 +815,17 @@ func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
 		for stage in range(1, _last_stage + 1):
 			total += _average(_stage_summary(results[fights], stage)["replays"])
 		totals[fights] = total
-	var line := "Всего повторов за главу | %.1f" % totals[0]
+	var line := "Всего повторов | %.1f" % totals[0]
 	for fights in visit_fights:
 		line += " | %.1f (−%d%%)" % [totals[fights], roundi(100.0 * (1.0 - totals[fights] / maxf(0.01, totals[0])))]
 	print(line)
+	for chapter_id in data.chapter_ids():
+		var base := _chapter_replays(results[0], chapter_id)
+		var chapter_line := "  глава %d | %.1f" % [chapter_id, base]
+		for fights in visit_fights:
+			var with_packs := _chapter_replays(results[fights], chapter_id)
+			chapter_line += " | %.1f (−%d%%)" % [with_packs, roundi(100.0 * (1.0 - with_packs / maxf(0.01, base)))]
+		print(chapter_line)
 	for fights in visit_fights:
 		var visits := []
 		var pack_fights := 0.0
@@ -841,10 +849,12 @@ func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
 
 	print("")
 	print("Победы над стаями (%d боёв) и средняя длина боя: отряд и уровни — как у человека при первой победе этапа" % runs)
-	print("(медиана, без стай), стая — на силе этого этапа. «—» — стая ещё закрыта.")
+	print("(медиана, без стай), стая — на силе этого этапа (своей главы: Мидгард — не выше 10). «—» — стая ещё закрыта.")
 	print("Этап | " + " | ".join(data.pack_ids().map(func(id): return "%12s" % data.get_pack(id)["name"])))
+	var won = Progress.new_game(data)  ## only its cleared_stage matters: the pack's strength by Progress.pack_stage
 	for stage in range(1, _last_stage + 1):
 		var squad := _squad_for(stage + 1, _median_levels(results[0], stage), 1)
+		won.cleared_stage = stage
 		var cells := []
 		for pack_id in data.pack_ids():
 			if int(data.get_pack(pack_id)["unlock_after_stage"]) > stage:
@@ -853,7 +863,7 @@ func _print_packs(campaigns: int, runs: int, visit_fights: Array) -> void:
 			var wins := 0
 			var seconds := 0.0
 			for run in runs:
-				var battle = StageBattle.from_pack(data, pack_id, stage, squad, run * 7919 + stage)
+				var battle = StageBattle.from_pack(data, pack_id, won.pack_stage(data, pack_id), squad, run * 7919 + stage)
 				_run(battle, "human")
 				seconds += battle.time
 				if battle.victory:

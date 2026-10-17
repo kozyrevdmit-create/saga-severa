@@ -301,6 +301,9 @@ func test_three_beast_packs_in_each_chapter() -> void:
 	assert_eq(data.pack_respawn_seconds(), roundi(float(packs["respawn_hours"]) * 3600.0), "respawn time from balance.json")
 	assert_true(float(packs["reward_share_of_first_win"]) > 0.0 and float(packs["reward_share_of_first_win"]) < 1.0,
 			"a pack pays less than a first win")
+	assert_true(float(packs["reward_share_once_the_next_chapter_is_open"]) > 0.0
+			and float(packs["reward_share_once_the_next_chapter_is_open"]) < float(packs["reward_share_of_first_win"]),
+			"a pack of a passed chapter pays less than one of the current chapter (M11.1)")
 
 
 func test_boar_and_bear() -> void:
