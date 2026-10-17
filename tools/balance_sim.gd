@@ -70,7 +70,8 @@ var _human_delay := 0.0  ## balance.json → simulation.human_ultimate_delay_sec
 var _table2_policy := ""
 var _charges_policy := ""
 var _score_fights := 12  ## test fights per squad when the sensible player picks a level-up
-var _score_cache := {}  ## "stage|hero:level,..." -> score; test fights use fixed seeds, so a score never changes
+var _score_cache := {}  ## "stage|hero:level:row:hp:attack,..." -> score; test fights use fixed seeds, so a score never changes
+var _now := 0  ## the campaign's clock (unix seconds) for pack timers: moves on by the respawn time at every visit (table 7)
 
 
 func _initialize() -> void:
@@ -373,6 +374,7 @@ func _stalled_text(stalled: Dictionary) -> String:
 ## visit_fights stage fights before leaving until the next visit (table 7). 0: no packs (tables 1–5).
 func _campaign(policy: String, visit_fights := 0) -> Dictionary:
 	var progress = Progress.new_game(data)
+	_now = 0
 	var stages := []
 	var fights := 0
 	var battle_time := 0.0
@@ -429,6 +431,7 @@ func _campaign(policy: String, visit_fights := 0) -> Dictionary:
 func _pack_visit(progress, policy: String, packs: Dictionary) -> void:
 	packs["visits"] += 1
 	var now: int = packs["visits"] * data.pack_respawn_seconds()
+	_now = now
 	for pack_id in data.pack_ids():
 		if not progress.is_pack_available(data, pack_id, now):
 			continue
@@ -483,7 +486,8 @@ func _best_upgrade(progress, goal: int) -> String:
 
 
 func _squad_score(stage: int, squad: Array) -> float:
-	var key := "%d|%s" % [stage, ",".join(squad.map(func(m): return "%s:%d:%s" % [m["id"], m["level"], m["row"]]))]
+	var key := "%d|%s" % [stage, ",".join(squad.map(func(m): return "%s:%d:%s:%s:%s" % [m["id"], m["level"], m["row"],
+			m.get("bonus", {}).get("hp", 0.0), m.get("bonus", {}).get("attack", 0.0)]))]  # the settlement's bonuses change the fight
 	if _score_cache.has(key):
 		return _score_cache[key]
 	var total := 0.0
@@ -535,7 +539,7 @@ func _build(progress) -> void:
 			if progress.is_building_open(data, building_id) and not progress.is_building_max_level(data, building_id) \
 					and (next == "" or progress.building_level(building_id) < progress.building_level(next)):
 				next = building_id
-		if next == "" or not progress.build(data, next):
+		if next == "" or not progress.build(data, next, _now):
 			return
 
 

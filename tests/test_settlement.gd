@@ -71,9 +71,9 @@ func test_construction_opens_with_chapter_one_won_with_supplies_for_one_building
 	assert_true(progress.is_construction_open(data), "open after the first win over the Draugr king")
 	assert_eq(int(reward["supplies"]), 0, "the boss's win brings the starting supplies, not a first-win share")
 	assert_eq(progress.supplies, data.building_cost(0), "exactly enough for one building of level 1")
-	assert_true(progress.build(data, "shrine"), "one building can be built at once")
+	assert_true(progress.build(data, "shrine", NOW), "one building can be built at once")
 	assert_eq(progress.supplies, 0, "and that is all")
-	assert_true(not progress.build(data, "pier"), "not a second one")
+	assert_true(not progress.build(data, "pier", NOW), "not a second one")
 	progress.apply_victory(data, 10)
 	assert_eq(progress.supplies, 0, "a replay of the boss does not bring the starting supplies again")
 	for building_id in OPEN_BUILDINGS:
@@ -112,8 +112,8 @@ func test_supplies_and_buildings_are_saved() -> void:
 	var progress = Progress.new_game(data)
 	win_stages(progress, 12)
 	progress.supplies = 1234
-	progress.build(data, "pier")
-	progress.build(data, "pier")
+	progress.build(data, "pier", NOW)
+	progress.build(data, "pier", NOW)
 	var loaded = Progress.from_dict(progress.to_dict(), data)
 	assert_eq(loaded.supplies, progress.supplies, "supplies")
 	assert_eq(loaded.building_levels, {"pier": 2}, "the pier's level")
@@ -129,7 +129,7 @@ func test_supplies_and_buildings_are_saved() -> void:
 func test_reset_forgets_the_settlement() -> void:
 	var progress = Progress.new_game(data)
 	win_stages(progress, 12)
-	progress.build(data, "shrine")
+	progress.build(data, "shrine", NOW)
 	progress.supplies = 500
 	progress.reset(data, NOW)
 	assert_eq(progress.supplies, 0, "no supplies")
@@ -197,16 +197,16 @@ func test_prices_grow_with_the_level_up_to_the_top() -> void:
 	for level in range(1, data.building_max_level() + 1):
 		var cost: int = progress.building_cost(data, "shrine")
 		assert_eq(cost, int(data.buildings["level_costs"][level - 1]), "level %d's price" % level)
-		assert_true(progress.build(data, "shrine"), "level %d built" % level)
+		assert_true(progress.build(data, "shrine", NOW), "level %d built" % level)
 		paid += cost
 		assert_eq(progress.building_level("shrine"), level, "level %d" % level)
 	assert_eq(progress.supplies, 100000 - paid, "every level paid")
 	assert_true(progress.is_building_max_level(data, "shrine"), "the top level")
 	assert_true(not progress.can_build(data, "shrine"), "no higher")
-	assert_true(not progress.build(data, "shrine"), "building does nothing")
+	assert_true(not progress.build(data, "shrine", NOW), "building does nothing")
 	progress.supplies = progress.building_cost(data, "pier") - 1
 	assert_true(not progress.can_build(data, "pier"), "not without enough supplies")
-	assert_true(not progress.build(data, "thjazi_barrow"), "a closed building can not be built")
+	assert_true(not progress.build(data, "thjazi_barrow", NOW), "a closed building can not be built")
 	assert_eq(progress.building_level("thjazi_barrow"), 0, "still nothing")
 
 
@@ -290,6 +290,20 @@ func test_pier_adds_battle_silver_but_not_offline_income() -> void:
 			* progress.silver_multiplier(data) * 1.15), "+15% for a pack")
 	assert_eq(int(pack["experience"]), roundi(float(data.get_stage(12)["reward"]["experience"]) * float(packs["reward_share_of_first_win"])),
 			"experience as it was")
+
+
+## Codex (PR #29): building the barrow while a pack is away cuts its saved return time, not only the time shown, so the
+## pack is really back after the new respawn time from the moment of building.
+func test_building_the_barrow_cuts_the_wait_of_a_pack_already_away() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 20)
+	progress.apply_pack_victory(data, "wolves", NOW)
+	progress.supplies = 100000
+	for level in data.building_max_level():
+		assert_true(progress.build(data, "thjazi_barrow", NOW + 60), "barrow level %d" % (level + 1))
+	assert_eq(int(progress.pack_respawn_unix["wolves"]), NOW + 60 + 3600, "the saved return time is cut to 1 h from building")
+	assert_true(not progress.is_pack_available(data, "wolves", NOW + 60 + 3599), "not before that")
+	assert_true(progress.is_pack_available(data, "wolves", NOW + 60 + 3600), "back an hour after building")
 
 
 func test_thjazis_barrow_brings_packs_back_sooner() -> void:

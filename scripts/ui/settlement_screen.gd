@@ -180,7 +180,7 @@ func _on_window_input(event: InputEvent) -> void:
 
 
 func _on_build_pressed() -> void:
-	if GameState.progress.build(GameState.data, _window_building):
+	if GameState.progress.build(GameState.data, _window_building, GameState.now()):
 		GameState.save()
 	_refresh()
 

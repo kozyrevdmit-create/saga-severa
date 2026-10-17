@@ -238,7 +238,7 @@ func is_pack_unlocked(data, pack_id: String) -> bool:
 
 ## Seconds until a beaten pack comes back; 0 = it is on the map. Counted by the clock, so the time while the game
 ## is closed counts too. Never more than the respawn time (pack_respawn_seconds), even if the device clock was turned
-## back; a level of Thjazi's barrow built while a pack is away shortens its wait too.
+## back (a level of Thjazi's barrow cuts the saved times themselves, see build).
 func pack_seconds_left(data, pack_id: String, now_unix: int) -> int:
 	if not pack_respawn_unix.has(pack_id):
 		return 0
@@ -295,7 +295,8 @@ func apply_pack_victory(data, pack_id: String, now_unix: int) -> Dictionary:
 ## Keeps the saved pack times honest when the device clock jumps back: every saved time moves back by as much as
 ## the clock went back since the last check, so the real wait stays the respawn time; a pack never waits longer than
 ## the respawn time from now; a pack that has come back is forgotten (turning the clock back does not send it away
-## again). Called when the game starts or comes back, while the map is open and when a pack is beaten.
+## again). Called when the game starts or comes back, while the map is open, when a pack is beaten and when a building
+## is built (Thjazi's barrow shortens the respawn time).
 func update_pack_timers(data, now_unix: int) -> void:
 	var went_back := maxi(0, pack_clock_unix - now_unix)
 	pack_clock_unix = now_unix
@@ -502,11 +503,14 @@ func can_build(data, building_id: String) -> bool:
 
 
 ## «Построить» / «Улучшить»: the building gets its next level at once for its cost in supplies.
-func build(data, building_id: String) -> bool:
+## A level of Thjazi's barrow shortens the wait of the packs that are away right now: their saved return time is cut
+## to `now_unix` + the new respawn time (update_pack_timers), so they really come back that soon.
+func build(data, building_id: String, now_unix: int) -> bool:
 	if not can_build(data, building_id):
 		return false
 	supplies -= building_cost(data, building_id)
 	building_levels[building_id] = building_level(building_id) + 1
+	update_pack_timers(data, now_unix)
 	return true
 
 
