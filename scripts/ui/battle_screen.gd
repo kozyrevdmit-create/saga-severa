@@ -6,6 +6,8 @@
 ## Tapping an enemy marks it as the target (tap again to remove the mark). The player's first battle shows a hint
 ## about it, once per game (Progress.mark_hint_shown), until the first mark or for balance.json → mark_hint.seconds.
 ## Progress is saved after every stage.
+## Saga scenes: a hero's scene right after their «Новый герой» window is closed; the boss's last scene after «Победа!»
+## (on the way to the map). Both are queued by the first win (Progress.apply_victory).
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -14,6 +16,7 @@ const FighterView := preload("res://scripts/ui/fighter_view.gd")
 const HeroCard := preload("res://scripts/ui/hero_card.gd")
 const Art := preload("res://scripts/ui/art.gd")
 const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
+const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 
 const MAP_SCENE := "res://scenes/map.tscn"
 
@@ -41,6 +44,7 @@ var _views := {}  ## unit id -> FighterView (enemy ids are reused by every wave)
 var _popups_this_frame := {}  ## unit id -> popups already shown this frame (stacked, not overlapped)
 var _cards := {}  ## unit id -> HeroCard
 var _new_heroes: Array[String] = []  ## heroes still to announce after a win
+var _announced_hero := ""  ## the hero in the «Новый герой» window
 var _mark_hint: PanelContainer  ## null unless the hint is on screen
 
 
@@ -71,8 +75,8 @@ func _ready() -> void:
 	%AutoButton.toggled.connect(_on_auto_toggled)
 	%SpeedButton.pressed.connect(_on_speed_pressed)
 	%RetreatButton.pressed.connect(_battle.retreat)
-	%MenuButton.pressed.connect(func(): get_tree().change_scene_to_file(MAP_SCENE))
-	%NewHeroButton.pressed.connect(_show_next_new_hero)
+	%MenuButton.pressed.connect(_on_to_map_pressed)
+	%NewHeroButton.pressed.connect(_on_new_hero_closed)
 	%Field.resized.connect(_layout_fighters)
 	if not progress.mark_hint_shown:
 		_show_mark_hint()
@@ -319,13 +323,39 @@ static func _hours_text(seconds: int) -> String:
 	return "%d ч" % hours if hours > 0 else "%d мин" % minutes
 
 
+## «На карту»: the boss's last scene first, after the first win over him.
+func _on_to_map_pressed() -> void:
+	var progress = GameState.progress
+	var scene_id: String = "" if _pack_id != "" else progress.queued_scene(GameState.data, "first_victory", _stage_id)
+	if scene_id != "":
+		StoryPlayer.play(self, scene_id).finished.connect(_go_to_map, CONNECT_DEFERRED)
+	else:
+		_go_to_map()
+
+
+func _go_to_map() -> void:
+	get_tree().change_scene_to_file(MAP_SCENE)
+
+
+## «Отлично!»: the window closes, the hero's saga scene plays (if it has not been seen), then the next new hero.
+func _on_new_hero_closed() -> void:
+	%NewHeroOverlay.visible = false
+	var scene_id: String = GameState.progress.queued_scene(GameState.data, "hero_joined", _announced_hero)
+	if scene_id != "":
+		StoryPlayer.play(self, scene_id).finished.connect(_show_next_new_hero, CONNECT_DEFERRED)
+	else:
+		_show_next_new_hero()
+
+
 ## «Новый герой присоединился к дружине» for each hero this win unlocked, one after another.
 func _show_next_new_hero() -> void:
 	if _new_heroes.is_empty():
 		%NewHeroOverlay.visible = false
+		_announced_hero = ""
 		return
 	var data = GameState.data
 	var hero_id: String = _new_heroes.pop_front()
+	_announced_hero = hero_id
 	var hero: Dictionary = data.get_hero(hero_id)
 	var hero_class: Dictionary = data.get_hero_class(hero)
 	for old in %NewHeroPortrait.get_children():

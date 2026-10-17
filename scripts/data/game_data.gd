@@ -1,5 +1,6 @@
-## Loads game content (heroes, enemies, stages, beast packs, balance, visual) from JSON files in res://data/.
-## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback.
+## Loads game content (heroes, enemies, stages, beast packs, balance, visual, saga scenes) from JSON files in res://data/.
+## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback;
+## story.json holds the texts of the saga scenes (word for word from docs/STORY_M10.md) and when each scene is shown.
 extends RefCounted
 
 const DATA_DIR := "res://data/"
@@ -10,6 +11,7 @@ var stages: Dictionary  ## stages.json: chapters (with their map picture), stage
 var packs: Dictionary  ## packs.json: beast packs on the chapter map (enemies, unlock, point on the map)
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
+var story: Dictionary  ## story.json: saga scenes (lines, when shown) and the ravens who speak in them
 
 
 static func load_all() -> RefCounted:
@@ -20,6 +22,7 @@ static func load_all() -> RefCounted:
 	data.packs = load_json("packs.json")
 	data.balance = load_json("balance.json")
 	data.visual = load_json("visual.json")
+	data.story = load_json("story.json")
 	return data
 
 
@@ -61,6 +64,54 @@ func get_stage(stage_id: int) -> Dictionary:
 			return stage
 	push_error("Unknown stage: %d" % stage_id)
 	return {}
+
+
+# --- saga scenes (story.json) --------------------------------------------------
+
+func get_scene(scene_id: String) -> Dictionary:
+	for scene in story.get("scenes", []):
+		if scene["id"] == scene_id:
+			return scene
+	push_error("Unknown saga scene: %s" % scene_id)
+	return {}
+
+
+func has_scene(scene_id: String) -> bool:
+	return story.get("scenes", []).any(func(scene): return scene["id"] == scene_id)
+
+
+## Scene ids in story order.
+func scene_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for scene in story.get("scenes", []):
+		ids.append(scene["id"])
+	return ids
+
+
+## Scenes shown at the moment `when` (story.json → scenes[].show.when): "new_game", "hero_joined" (subject = hero id),
+## "before_first_battle" or "first_victory" (subject = stage id). In story order.
+func scene_ids_shown_at(when: String, subject = null) -> Array[String]:
+	var ids: Array[String] = []
+	for scene in story.get("scenes", []):
+		var show: Dictionary = scene["show"]
+		if show["when"] != when:
+			continue
+		if show.has("hero") and show["hero"] != subject:
+			continue
+		if show.has("stage") and not ((subject is int or subject is float) and int(show["stage"]) == int(subject)):
+			continue
+		ids.append(scene["id"])
+	return ids
+
+
+## The name over a line: a raven (story.json → speakers) or a hero (heroes.json).
+func speaker_name(speaker_id: String) -> String:
+	var ravens: Dictionary = story.get("speakers", {})
+	return ravens[speaker_id]["name"] if ravens.has(speaker_id) else get_hero(speaker_id)["name"]
+
+
+func is_raven(speaker_id: String) -> bool:
+	return story.get("speakers", {}).has(speaker_id)
 
 
 func get_pack(pack_id: String) -> Dictionary:

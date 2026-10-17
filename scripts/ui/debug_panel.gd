@@ -1,5 +1,6 @@
 ## Debug panel (spec 5.6), opened by a long press on the silver counter of the main screen:
-## add silver, unlock all heroes, jump to stage N, skip time, reset the progress («Точно сбросить?» first).
+## add silver, unlock all heroes, jump to stage N, mark all saga scenes seen, skip time, reset the progress
+## («Точно сбросить?» first). Unlocking heroes and jumping to a stage play no saga scenes.
 ## Amounts come from balance.json → debug_panel.
 extends Control
 
@@ -16,6 +17,7 @@ func _ready() -> void:
 	%SkipTimeButton.text = "Промотать время на %s ч" % _number(float(debug["skip_time_hours"]))
 	%AddSilverButton.pressed.connect(_on_add_silver)
 	%UnlockHeroesButton.pressed.connect(_on_unlock_heroes)
+	%UnlockScenesButton.pressed.connect(_on_unlock_scenes)
 	%StageDownButton.pressed.connect(_change_jump_stage.bind(-1))
 	%StageUpButton.pressed.connect(_change_jump_stage.bind(1))
 	%JumpButton.pressed.connect(_on_jump)
@@ -48,6 +50,12 @@ func _on_unlock_heroes() -> void:
 	GameState.debug_unlock_all_heroes()
 	var joined: int = GameState.progress.hero_levels.size() - before
 	_done("Открыто героев: %d" % joined if joined > 0 else "Все герои уже в дружине")
+
+
+## «Открыть все сцены»: all saga scenes can be watched from «Настройки» → «Сцены саги».
+func _on_unlock_scenes() -> void:
+	GameState.debug_mark_all_scenes_seen()
+	_done("Сцены — в «Настройки» → «Сцены саги»")
 
 
 func _change_jump_stage(step: int) -> void:

@@ -103,6 +103,11 @@ func _add_row(hero_id: String) -> void:
 ## Head and shoulders of the hero on old paper (the picture's own background colour, docs/ART_STYLE.md).
 ## Also used by the formation screen.
 static func make_portrait(hero: Dictionary, side: float) -> Control:
+	return make_portrait_frame(Art.hero_portrait(hero), side)
+
+
+## A portrait picture on its paper frame (also a raven's in the saga scenes).
+static func make_portrait_frame(texture: Texture2D, side: float) -> Control:
 	var frame := PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = PORTRAIT_PAPER
@@ -113,7 +118,7 @@ static func make_portrait(hero: Dictionary, side: float) -> Control:
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var picture := TextureRect.new()
-	picture.texture = Art.hero_portrait(hero)
+	picture.texture = texture
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	picture.custom_minimum_size = Vector2(side, side)

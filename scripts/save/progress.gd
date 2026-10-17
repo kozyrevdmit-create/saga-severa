@@ -1,5 +1,6 @@
 ## Player progress: silver, experience (jarl level), won stages, unlocked heroes with their levels,
-## the squad formation, the time the game was last open (for offline income) and when beaten beast packs come back.
+## the squad formation, the time the game was last open (for offline income), when beaten beast packs come back
+## and which saga scenes have been seen.
 ## Rules only; reading and writing the save file lives in save_storage.gd.
 extends RefCounted
 
@@ -16,6 +17,8 @@ var offline_bank := 0  ## offline income collected on return, waiting for «За
 var mark_hint_shown := false  ## the battle hint about the target mark was shown (once per game; a reset shows it again)
 var pack_respawn_unix := {}  ## beaten beast pack id -> when it comes back to the map (unix time)
 var pack_clock_unix := 0  ## when the pack timers were last checked against the clock (to notice it turned back); 0 = never
+var seen_scenes: Array[String] = []  ## saga scenes (story.json ids) that have started: each is shown once per game
+var scene_queue: Array[String] = []  ## scenes whose moment has come but that have not started yet (saved, so closing the game does not lose them)
 
 
 static func new_game(data) -> RefCounted:
@@ -25,11 +28,13 @@ static func new_game(data) -> RefCounted:
 	for hero_id in data.starting_hero_ids():
 		progress.hero_levels[hero_id] = 1
 		progress.formation_add(data, hero_id)
+	progress._queue_scenes(data, "new_game")
 	return progress
 
 
 ## Debug panel «Сбросить прогресс»: everything back to a new game (stages, heroes and their levels, squad,
-## silver, jarl experience, offline bank, the target mark hint, beast pack timers). The offline clock restarts now, so the time before the reset earns nothing.
+## silver, jarl experience, offline bank, the target mark hint, beast pack timers, seen saga scenes: the intro is due
+## again). The offline clock restarts now, so the time before the reset earns nothing.
 func reset(data, now_unix: int) -> void:
 	var fresh = new_game(data)
 	silver = fresh.silver
@@ -41,11 +46,13 @@ func reset(data, now_unix: int) -> void:
 	mark_hint_shown = fresh.mark_hint_shown
 	pack_respawn_unix = fresh.pack_respawn_unix
 	pack_clock_unix = fresh.pack_clock_unix
+	seen_scenes = fresh.seen_scenes
+	scene_queue = fresh.scene_queue
 	last_seen_unix = now_unix
 
 
 ## Debug panel «Открыть всех героев»: every locked hero joins like a new hero (at the join level,
-## into a free slot if there is one). Returns the heroes that joined.
+## into a free slot if there is one), but without their saga scene. Returns the heroes that joined.
 func unlock_all_heroes(data) -> Array[String]:
 	var joined: Array[String] = []
 	var level := _join_level(data)
@@ -57,7 +64,7 @@ func unlock_all_heroes(data) -> Array[String]:
 
 
 ## Debug panel «Перейти к этапу N»: stages before N count as won (without rewards), N is the next battle.
-## Heroes earned by those stages join; heroes already unlocked stay.
+## Heroes earned by those stages join (without their saga scenes); heroes already unlocked stay.
 func jump_to_stage(data, stage_id: int) -> void:
 	cleared_stage = clampi(stage_id, 1, data.stage_count()) - 1
 	var level := _join_level(data)
@@ -83,8 +90,8 @@ func is_replay(stage_id: int) -> bool:
 
 
 ## Pays the reward (a replay pays replay_reward_share of it; the jarl bonus adds silver),
-## marks the stage won and unlocks heroes (at the join level, see _join_level).
-## Returns {silver, experience, replay, new_heroes}.
+## marks the stage won and unlocks heroes (at the join level, see _join_level). A first win queues the saga scenes
+## of the heroes who joined and of the stage's first victory. Returns {silver, experience, replay, new_heroes}.
 func apply_victory(data, stage_id: int) -> Dictionary:
 	var replay := is_replay(stage_id)
 	var base: Dictionary = data.get_stage(stage_id)["reward"]
@@ -101,7 +108,69 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 			if not hero_levels.has(hero_id):
 				_join(data, hero_id, level)
 				new_heroes.append(hero_id)
+				_queue_scenes(data, "hero_joined", hero_id)
+		_queue_scenes(data, "first_victory", stage_id)
 	return {"silver": silver_gain, "experience": experience_gain, "replay": replay, "new_heroes": new_heroes}
+
+
+# --- saga scenes (data/story.json) ----------------------------------------------
+
+## Queues the scenes shown at `when` (for this hero or stage, see GameData.scene_ids_shown_at) that have not been
+## seen or queued yet. A screen plays a queued scene at its place: the intro on the main screen, a hero's scene
+## after the «Новый герой» window, the boss's last scene after «Победа!». One left when the game was closed is
+## played on the main screen next time.
+func _queue_scenes(data, when: String, subject = null) -> void:
+	for scene_id in data.scene_ids_shown_at(when, subject):
+		if not scene_id in seen_scenes and not scene_id in scene_queue:
+			scene_queue.append(scene_id)
+
+
+## The first queued scene shown at `when` (for this hero or stage), or any queued scene when `when` is "";
+## "" if there is none.
+func queued_scene(data, when := "", subject = null) -> String:
+	var wanted: Array[String] = data.scene_ids_shown_at(when, subject) if when != "" else scene_queue
+	for scene_id in scene_queue:
+		if scene_id in wanted:
+			return scene_id
+	return ""
+
+
+## The scene shown before the battle on a stage (the boss's first scene), or "": only while the stage has not been
+## won and only once per game (not again after a defeat or a retreat).
+func scene_before_battle(data, stage_id: int) -> String:
+	if is_replay(stage_id):
+		return ""
+	for scene_id in data.scene_ids_shown_at("before_first_battle", stage_id):
+		if not scene_id in seen_scenes:
+			return scene_id
+	return ""
+
+
+## A scene counts as seen as soon as it starts (also when it is skipped).
+func start_scene(scene_id: String) -> void:
+	if not scene_id in seen_scenes:
+		seen_scenes.append(scene_id)
+	scene_queue.erase(scene_id)
+
+
+func is_scene_seen(scene_id: String) -> bool:
+	return scene_id in seen_scenes
+
+
+## Seen scenes in story order (the «Сцены саги» list in «Настройки»).
+func seen_scene_ids(data) -> Array[String]:
+	var ids: Array[String] = []
+	for scene_id in data.scene_ids():
+		if scene_id in seen_scenes:
+			ids.append(scene_id)
+	return ids
+
+
+## Debug panel «Открыть все сцены»: every scene counts as seen (and none is played), so all can be watched
+## from «Сцены саги».
+func mark_all_scenes_seen(data) -> void:
+	for scene_id in data.scene_ids():
+		start_scene(scene_id)
 
 
 # --- beast packs ----------------------------------------------------------------
@@ -396,6 +465,8 @@ func to_dict() -> Dictionary:
 		"mark_hint_shown": mark_hint_shown,
 		"pack_respawn_unix": pack_respawn_unix.duplicate(),
 		"pack_clock_unix": pack_clock_unix,
+		"seen_scenes": seen_scenes.duplicate(),
+		"scene_queue": scene_queue.duplicate(),
 	}
 
 
@@ -422,6 +493,21 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 			if at > 0:
 				progress.pack_respawn_unix[pack_id] = at
 	progress.pack_clock_unix = maxi(0, _to_int(saved.get("pack_clock_unix"), 0))
+	# A save from before M10 has no scene lists: it keeps the intro queued by new_game (shown once, as on a first start);
+	# the heroes and stages it already has bring no scenes.
+	var seen = saved.get("seen_scenes")
+	if seen is Array:
+		progress.seen_scenes.clear()
+		progress.scene_queue.clear()
+		for scene_id in data.scene_ids():
+			if scene_id in seen:
+				progress.seen_scenes.append(scene_id)
+		var queue = saved.get("scene_queue")
+		if queue is Array:
+			for scene_id in queue:
+				if scene_id is String and data.has_scene(scene_id) and not progress.is_scene_seen(scene_id) \
+						and not scene_id in progress.scene_queue:
+					progress.scene_queue.append(scene_id)
 
 	# Every hero earned by the won stages is unlocked, so a version 1 save gets the heroes it has earned;
 	# a hero without a saved level joins like a new hero (at the join level counted over the heroes with a saved
