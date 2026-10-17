@@ -25,6 +25,10 @@ var _balance: Dictionary
 var _events: Array[Dictionary] = []
 var _time_accumulator := 0.0
 var _time_before_wave := 0.0
+var _met_enemy_ids := {}  ## enemy id -> true for every enemy that has been on the field (waves reached so far)
+## enemy action -> true for every way of attacking seen on the field: each enemy's action when its wave arrives,
+## and a boss's new action when it enters a later phase (Thjazi as an eagle attacks the back row).
+var _met_enemy_actions := {}
 
 
 func _init(stage: int, hero_units: Array, waves: Array, balance: Dictionary, rng_seed: int) -> void:
@@ -178,18 +182,43 @@ func take_events() -> Array[Dictionary]:
 	return events
 
 
+## The tips (hints.json → defeat) whose condition this stage has met, in file order. A tip's "when" has one key:
+## "enemy_action" — an enemy attacking this way has been on the field (for a boss: in a phase it has entered),
+## "enemy" — this enemy (enemies.json id) has been on the field.
+func defeat_hints(hints: Array) -> Array[String]:
+	var texts: Array[String] = []
+	for hint in hints:
+		if _has_met(hint["when"]):
+			texts.append(hint["text"])
+	return texts
+
+
+func _has_met(when: Dictionary) -> bool:
+	if when.has("enemy_action"):
+		return _met_enemy_actions.has(when["enemy_action"])
+	if when.has("enemy"):
+		return _met_enemy_ids.has(when["enemy"])
+	push_error("Unknown hint condition: %s" % str(when))
+	return false
+
+
 func _start_wave(index: int) -> void:
 	if battle != null:
 		_time_before_wave += battle.time
 	wave_index = index
 	battle = Battle.new(_heroes, _waves[index], _balance, _wave_seeds[index])
 	battle.auto_ultimates = auto_ultimates
+	for enemy in battle.enemies():
+		_met_enemy_ids[enemy.def_id] = true
+		_met_enemy_actions[enemy.action] = true
 	if index > 0:
 		_events.append({"type": "wave", "index": index})
 
 
 func _collect_battle_events() -> void:
 	for event in battle.take_events():
+		if event["type"] == "phase":
+			_met_enemy_actions[battle.units[event["unit"]].action] = true
 		if event["type"] != "end":
 			_events.append(event)
 	if not battle.finished:

@@ -1,4 +1,4 @@
-## Loads game content (heroes, enemies, stages, beast packs, balance, visual, saga scenes) from JSON files in res://data/.
+## Loads game content (heroes, enemies, stages, beast packs, balance, visual, saga scenes, hints) from JSON files in res://data/.
 ## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback;
 ## story.json holds the texts of the saga scenes (word for word from docs/STORY_M10.md) and when each scene is shown.
 extends RefCounted
@@ -12,6 +12,7 @@ var packs: Dictionary  ## packs.json: beast packs on a chapter's map (chapter, e
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
 var story: Dictionary  ## story.json: saga scenes (lines, when shown), the ravens who speak in them, speakers' captions
+var hints: Dictionary  ## hints.json: tips under «Дружина пала» (defeat: [{when, text}], see StageBattle.defeat_hints)
 
 
 static func load_all() -> RefCounted:
@@ -23,6 +24,7 @@ static func load_all() -> RefCounted:
 	data.balance = load_json("balance.json")
 	data.visual = load_json("visual.json")
 	data.story = load_json("story.json")
+	data.hints = load_json("hints.json")
 	return data
 
 
