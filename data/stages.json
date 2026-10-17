@@ -301,7 +301,7 @@
     {
       "id": 20,
       "chapter": 2,
-      "recommended_power": 25950,
+      "recommended_power": 25450,
       "map_point": { "x": 0.62, "y": 0.13, "label": "left" },
       "reward": {
         "silver": 1773,

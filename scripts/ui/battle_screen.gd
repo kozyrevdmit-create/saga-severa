@@ -9,6 +9,8 @@
 ## Saga scenes: a hero's scene right after their «Новый герой» window is closed; the boss's last scene after «Победа!»
 ## (on the way to the map). Both are queued by the first win (Progress.apply_victory).
 ## A boss with phases (Thjazi) changes its picture when it enters the next one.
+## A defeat (or a retreat) adds the tips of data/hints.json → defeat whose condition the battle met (StageBattle.defeat_hints),
+## every time.
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -345,6 +347,8 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 		%ResultHint.text = "Подсказка: прокачай героев или поменяй расстановку отряда."
 		if retreat:
 			%ResultHint.text = "Бой засчитан поражением.\n" + %ResultHint.text
+		for tip in _battle.defeat_hints(GameState.data.hints["defeat"]):
+			%ResultHint.text += "\n\n" + tip
 	GameState.save()
 	%ResultOverlay.visible = true
 	_show_next_new_hero()

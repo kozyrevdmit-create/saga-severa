@@ -174,13 +174,13 @@
           "picture": "thjazi_eagle",
           "announcement": "Тьяцци обращается в орла!",
           "action": "attack_back_row_weakest",
-          "attack_interval_multiplier": 0.7,
+          "attack_interval_multiplier": 0.8,
           "special": {
             "name": "Пике",
             "type": "hit_one",
             "target": "back_row_weakest",
             "interval": 5.0,
-            "attack_multiplier": 2.5
+            "attack_multiplier": 2.0
           }
         }
       ],
