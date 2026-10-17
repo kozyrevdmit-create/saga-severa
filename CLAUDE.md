@@ -46,8 +46,8 @@
 
 ```bash
 godot --headless --path . --script res://tests/run_tests.gd        # тесты
-godot --headless --path . --script res://tools/balance_sim.gd      # симуляция баланса (~1 мин)
-godot --headless --path . --script res://tools/balance_sim.gd -- --until=6   # быстро: только этапы 1–6
+godot --headless --path . --script res://tools/balance_sim.gd      # симуляция баланса (~15 мин; -- --players=human — ~1.5 мин)
+godot --headless --path . --script res://tools/balance_sim.gd -- --until=6   # быстро: только этапы 1–6 (глава 2 — этапы 11–20)
 ```
 
 Шаблонов веб-экспорта локально нет (интернет медленный): веб-сборку собирает GitHub Actions.
