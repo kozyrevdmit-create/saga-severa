@@ -112,9 +112,9 @@ func test_chapter_two_packs() -> void:
 	assert_true(not progress.is_pack_available(data, "scavengers", NOW), "not the scavengers yet")
 	win_stages(progress, 16)
 	assert_true(progress.is_pack_available(data, "scavengers", NOW), "the scavengers after stage 16")
-	assert_eq(progress.pack_stage(), 16, "at the strength of stage 16")
+	assert_eq(progress.pack_stage(data, "scavengers"), 16, "at the strength of stage 16")
 	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
-	assert_eq(progress.pack_reward(data)["silver"],
+	assert_eq(progress.pack_reward(data, "scavengers")["silver"],
 			roundi(float(data.get_stage(16)["reward"]["silver"]) * share * progress.silver_multiplier(data)), "a share of stage 16")
 	progress.apply_pack_victory(data, "scavengers", NOW)
 	assert_eq(progress.pack_seconds_left(data, "scavengers", NOW), data.pack_respawn_seconds(), "its own timer")
@@ -613,23 +613,51 @@ func test_packs_unlock_after_their_stage() -> void:
 func test_pack_strength_and_reward_follow_the_last_stage_won() -> void:
 	var progress = Progress.new_game(data)
 	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
-	assert_eq(progress.pack_stage(), 1, "before the first win the packs are as strong as stage 1")
-	assert_eq(progress.pack_reward(data)["silver"], roundi(float(data.get_stage(1)["reward"]["silver"]) * share), "and pay a share of stage 1")
+	assert_eq(progress.pack_stage(data, "wolves"), 1, "before the first win the packs are as strong as stage 1")
+	assert_eq(progress.pack_reward(data, "wolves")["silver"], roundi(float(data.get_stage(1)["reward"]["silver"]) * share), "and pay a share of stage 1")
 	win_stages(progress, 6)
-	assert_eq(progress.pack_stage(), 6, "after stage 6: stage 6 strength")
+	assert_eq(progress.pack_stage(data, "wolves"), 6, "after stage 6: stage 6 strength")
 	var reward: Dictionary = data.get_stage(6)["reward"]
 	var expected := {
 		"silver": roundi(float(reward["silver"]) * share * progress.silver_multiplier(data)),
 		"experience": roundi(float(reward["experience"]) * share),
 	}
-	assert_eq(progress.pack_reward(data), expected, "a share of stage 6's first win, silver with the jarl bonus")
+	assert_eq(progress.pack_reward(data, "wolves"), expected, "a share of stage 6's first win, silver with the jarl bonus")
 	assert_true(progress.silver_multiplier(data) > 1.0, "the jarl bonus is really in play here")
+
+
+## M11.1 (Dmitriy, 17.10.2026): a pack follows the last stage won in ITS chapter. Midgard's packs stop at stage 10
+## (their strength and reward do not grow in chapter 2); Jotunheim's follow stages 11–20 and, before the first win in
+## chapter 2, are as strong as stage 11. The share of the reward stays the same.
+func test_packs_follow_the_last_stage_won_in_their_own_chapter() -> void:
+	var share := float(data.balance["beast_packs"]["reward_share_of_first_win"])
+	var progress = Progress.new_game(data)
+	win_stages(progress, 10)
+	for pack_id in data.pack_ids(1):
+		assert_eq(progress.pack_stage(data, pack_id), 10, "%s: stage 10 after chapter 1" % pack_id)
+	assert_eq(progress.pack_stage(data, "ironwood_wolves"), 11, "Jotunheim's wolves before the first win there: stage 11")
+	win_stages(progress, 15)
+	for pack_id in data.pack_ids(1):
+		assert_eq(progress.pack_stage(data, pack_id), 10, "%s: still stage 10 in chapter 2" % pack_id)
+		var midgard := roundi(float(data.get_stage(10)["reward"]["silver"]) * share * progress.silver_multiplier(data))
+		assert_eq(progress.pack_reward(data, pack_id)["silver"], midgard, "%s pays a share of stage 10" % pack_id)
+	for pack_id in data.pack_ids(2):
+		assert_eq(progress.pack_stage(data, pack_id), 15, "%s: stage 15" % pack_id)
+	var jotunheim := roundi(float(data.get_stage(15)["reward"]["silver"]) * share * progress.silver_multiplier(data))
+	assert_eq(progress.pack_reward(data, "troll")["silver"], jotunheim, "the troll pays a share of stage 15")
+	var before: int = progress.silver
+	progress.apply_pack_victory(data, "bear", NOW)
+	assert_eq(progress.silver - before,
+			roundi(float(data.get_stage(10)["reward"]["silver"]) * share * progress.silver_multiplier(data)), "the bear pays as at stage 10")
+	win_stages(progress, 20)
+	assert_eq(progress.pack_stage(data, "scavengers"), 20, "Jotunheim's packs up to stage 20")
+	assert_eq(progress.pack_stage(data, "boars"), 10, "Midgard's stay at stage 10")
 
 
 func test_beaten_pack_pays_and_comes_back_after_the_respawn_time() -> void:
 	var progress = Progress.new_game(data)
 	win_stages(progress, 4)
-	var expected: Dictionary = progress.pack_reward(data)
+	var expected: Dictionary = progress.pack_reward(data, "boars")
 	var silver_before: int = progress.silver
 	var experience_before: int = progress.experience
 	assert_eq(progress.apply_pack_victory(data, "boars", NOW), expected, "the reward is returned")
