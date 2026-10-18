@@ -81,9 +81,23 @@ func test_chapter_two_opens_after_the_first_boss() -> void:
 	assert_eq(progress.next_stage_id(data), 11, "the next battle is stage 11")
 	assert_true(progress.is_stage_open(data, 11) and not progress.is_stage_open(data, 12), "stage 11 open, 12 not yet")
 	assert_true(progress.is_replay(3), "chapter 1 stays open for replays")
+	win_stages(progress, 19)
+	assert_true(not progress.is_chapter_open(data, 3), "chapter 3 is closed before Thjazi")
 	win_stages(progress, 20)
-	assert_eq(progress.current_chapter(data), 2, "everything won: the last chapter")
-	assert_eq(progress.next_stage_id(data), 20, "the last stage")
+	assert_true(progress.is_chapter_open(data, 3), "M13: chapter 3 opens with the first win on stage 20")
+	assert_eq(progress.current_chapter(data), 3, "the map opens on chapter 3")
+	assert_eq(progress.next_stage_id(data), 21, "the next battle is stage 21")
+	win_stages(progress, 30)
+	assert_eq(progress.current_chapter(data), 3, "everything won: the last chapter")
+	assert_eq(progress.next_stage_id(data), 30, "the last stage")
+
+
+## M13: a save from before M13 that has won chapter 2 has chapter 3 open at once.
+func test_an_old_save_with_chapter_two_won_opens_chapter_three() -> void:
+	var old := {"version": 2, "silver": 500, "cleared_stage": 20, "hero_levels": {"torvald": 18}}
+	var progress = Progress.from_dict(old, data)
+	assert_true(progress.is_chapter_open(data, 3), "chapter 3 is open")
+	assert_eq(progress.current_chapter(data), 3, "the map opens on it")
 
 
 ## Dmitriy's save from before M11 (chapter 1 won): chapter 2 is open at once and the map opens on it.
@@ -703,10 +717,21 @@ func test_packs_follow_the_last_stage_won_in_their_own_chapter() -> void:
 	progress.apply_pack_victory(data, "bear", NOW)
 	assert_eq(progress.silver - before,
 			roundi(float(data.get_stage(10)["reward"]["silver"]) * past_share * progress.silver_multiplier(data)), "the bear pays as at stage 10")
-	win_stages(progress, 20)
-	assert_eq(progress.pack_stage(data, "scavengers"), 20, "Jotunheim's packs up to stage 20")
+	win_stages(progress, 19)
+	assert_eq(progress.pack_stage(data, "scavengers"), 19, "Jotunheim's packs follow stages 11–20")
 	assert_eq(progress.pack_reward(data, "scavengers")["silver"],
-			roundi(float(data.get_stage(20)["reward"]["silver"]) * share * progress.silver_multiplier(data)),
+			roundi(float(data.get_stage(19)["reward"]["silver"]) * share * progress.silver_multiplier(data)),
+			"the full share while chapter 2 is the current one")
+	win_stages(progress, 25)
+	assert_eq(progress.pack_stage(data, "scavengers"), 20, "M13: Jotunheim's packs stop at stage 20")
+	assert_eq(progress.pack_reward(data, "scavengers")["silver"],
+			roundi(float(data.get_stage(20)["reward"]["silver"]) * past_share * progress.silver_multiplier(data)),
+			"and pay the smaller share once chapter 3 is open")
+	assert_eq(progress.pack_stage(data, "cave_spiders"), 25, "Svartalfheim's packs follow stages 21–30")
+	win_stages(progress, 30)
+	assert_eq(progress.pack_stage(data, "forge_spirits"), 30, "up to stage 30")
+	assert_eq(progress.pack_reward(data, "forge_spirits")["silver"],
+			roundi(float(data.get_stage(30)["reward"]["silver"]) * share * progress.silver_multiplier(data)),
 			"the last chapter's packs keep the full share after its boss")
 	var midgard_only = Progress.new_game(data)
 	win_stages(midgard_only, 9)

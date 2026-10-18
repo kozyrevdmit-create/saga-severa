@@ -90,6 +90,52 @@
         "x": 0.75,
         "y": 0.2
       }
+    },
+    {
+      "id": "cave_spiders",
+      "name": "Пещерные пауки",
+      "chapter": 3,
+      "enemies": [
+        "cave_spider",
+        "cave_spider",
+        "cave_spider"
+      ],
+      "icon": "cave_spider",
+      "unlock_after_stage": 20,
+      "map_point": {
+        "x": 0.74,
+        "y": 0.7
+      }
+    },
+    {
+      "id": "rune_golem",
+      "name": "Рунный голем",
+      "chapter": 3,
+      "enemies": [
+        "rune_golem"
+      ],
+      "icon": "rune_golem",
+      "unlock_after_stage": 23,
+      "map_point": {
+        "x": 0.26,
+        "y": 0.31
+      }
+    },
+    {
+      "id": "forge_spirits",
+      "name": "Духи горна",
+      "chapter": 3,
+      "enemies": [
+        "forge_spirit",
+        "forge_spirit",
+        "forge_spirit"
+      ],
+      "icon": "forge_spirit",
+      "unlock_after_stage": 26,
+      "map_point": {
+        "x": 0.76,
+        "y": 0.14
+      }
     }
   ]
 }

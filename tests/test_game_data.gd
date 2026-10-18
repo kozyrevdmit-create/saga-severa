@@ -55,12 +55,17 @@ func test_shieldbearers_have_the_tank_passive() -> void:
 					"%s takes less damage" % hero["id"])
 
 
+## The power grows from stage to stage within a chapter. M13: the first stage of chapter 3 asks less than the end of
+## chapter 2: Regin joins with the chapter, and his armour for the front row is not counted in «Сила» (HP and attack only),
+## so the same fight needs less «Сила»; the first stage of a chapter is not compared with the chapter before.
 func test_every_stage_has_a_growing_recommended_power() -> void:
 	var previous := 0
 	for stage in data.stages["stages"]:
-		var power: int = data.recommended_power(int(stage["id"]))
-		assert_true(power > 0, "stage %s has a recommended power" % stage["id"])
-		assert_true(power >= previous, "stage %s needs at least as much power as the one before" % stage["id"])
+		var stage_id := int(stage["id"])
+		var power: int = data.recommended_power(stage_id)
+		assert_true(power > 0, "stage %s has a recommended power" % stage_id)
+		if data.chapter_stage_ids(int(stage["chapter"]))[0] != stage_id:
+			assert_true(power >= previous, "stage %s needs at least as much power as the one before" % stage_id)
 		previous = power
 
 
@@ -139,20 +144,25 @@ func test_thjazi_has_two_phases() -> void:
 ## Two chapters of ten stages, the numbers go on (chapter 2 is stages 11–20); each chapter's boss stands alone in the
 ## last wave of its last stage; a chapter's stages bring only its own enemies (M11: chapter 2 only the troll, the Iron
 ## Wood wolf and the carrion eagle, and Thjazi).
-func test_two_chapters_of_ten_stages_of_three_waves() -> void:
+## M13: chapter 3 «Свартальфхейм», stages 21–30, Fafnir on stage 30.
+func test_three_chapters_of_ten_stages_of_three_waves() -> void:
 	var known := []
 	for enemy in data.enemies["enemies"]:
 		known.append(enemy["id"])
-	assert_eq(data.chapter_ids(), [1, 2] as Array[int], "two chapters")
+	assert_eq(data.chapter_ids(), [1, 2, 3] as Array[int], "three chapters")
 	assert_eq(data.get_chapter(2)["name"], "Ётунхейм", "chapter 2")
-	assert_eq(data.stage_count(), 20, "stage count")
+	assert_eq(data.get_chapter(3)["name"], "Свартальфхейм", "chapter 3")
+	assert_eq(data.get_chapter(3)["map"], "map_svartalfheim", "chapter 3's map")
+	assert_eq(data.stage_count(), 30, "stage count")
 	assert_eq(data.chapter_stage_ids(1), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as Array[int], "chapter 1: stages 1–10")
 	assert_eq(data.chapter_stage_ids(2), [11, 12, 13, 14, 15, 16, 17, 18, 19, 20] as Array[int], "chapter 2: stages 11–20")
+	assert_eq(data.chapter_stage_ids(3), [21, 22, 23, 24, 25, 26, 27, 28, 29, 30] as Array[int], "chapter 3: stages 21–30")
 	var chapter_enemies := {
 		1: ["draugr", "wolf", "draugr_archer", "draugr_king"],
 		2: ["ice_troll", "ironwood_wolf", "carrion_eagle", "thjazi"],
+		3: ["rune_golem", "cave_spider", "forge_spirit", "fafnir"],
 	}
-	var bosses := {10: "draugr_king", 20: "thjazi"}
+	var bosses := {10: "draugr_king", 20: "thjazi", 30: "fafnir"}
 	for i in data.stage_count():
 		var stage: Dictionary = data.stages["stages"][i]
 		assert_eq(int(stage["id"]), i + 1, "stage ids in order")
@@ -166,7 +176,7 @@ func test_two_chapters_of_ten_stages_of_three_waves() -> void:
 				assert_true(enemy_id in known, "stage %s enemy %s known" % [stage["id"], enemy_id])
 				assert_true(enemy_id in chapter_enemies[int(stage["chapter"])], "stage %s: %s belongs to its chapter" % [stage["id"], enemy_id])
 				var is_boss_slot: bool = bosses.has(int(stage["id"])) and w == 2
-				assert_eq(data.get_enemy(enemy_id).get("boss", false), is_boss_slot, "boss only in stage 10 and 20 wave 3 (stage %s wave %d)" % [stage["id"], w + 1])
+				assert_eq(data.get_enemy(enemy_id).get("boss", false), is_boss_slot, "boss only in stage 10, 20 and 30 wave 3 (stage %s wave %d)" % [stage["id"], w + 1])
 			if bosses.has(int(stage["id"])) and w == 2:
 				assert_eq(wave, [bosses[int(stage["id"])]], "stage %s: the boss stands alone" % stage["id"])
 	for stage_id in range(1, data.stage_count() + 1):
@@ -281,10 +291,11 @@ func test_every_stage_has_a_point_on_the_map_from_the_bottom_up() -> void:
 func test_three_beast_packs_in_each_chapter() -> void:
 	assert_eq(data.pack_ids(1), ["wolves", "boars", "bear"] as Array[String], "Midgard's packs")
 	assert_eq(data.pack_ids(2), ["ironwood_wolves", "troll", "scavengers"] as Array[String], "Jotunheim's packs (M11)")
-	assert_eq(data.pack_ids(), data.pack_ids(1) + data.pack_ids(2), "all packs")
+	assert_eq(data.pack_ids(3), ["cave_spiders", "rune_golem", "forge_spirits"] as Array[String], "Svartalfheim's packs (M13)")
+	assert_eq(data.pack_ids(), data.pack_ids(1) + data.pack_ids(2) + data.pack_ids(3), "all packs")
 	var unlocks: Array = data.packs["packs"].map(func(pack): return int(pack["unlock_after_stage"]))
-	assert_eq(unlocks, [0, 3, 6, 10, 13, 16],
-			"wolves from the start, boars after 3, the bear after 6; Iron Wood wolves with chapter 2, the troll after 13, the scavengers after 16")
+	assert_eq(unlocks, [0, 3, 6, 10, 13, 16, 20, 23, 26],
+			"wolves from the start, boars after 3, the bear after 6; Iron Wood wolves with chapter 2, the troll after 13, the scavengers after 16; spiders with chapter 3, the golem after 23, the spirits after 26")
 	assert_eq(data.get_pack("wolves")["enemies"].all(func(id): return id == "wolf"), true, "the wolf pack is wolves")
 	assert_eq(data.get_pack("boars")["enemies"].all(func(id): return id == "boar"), true, "the boar pack is boars")
 	assert_eq(data.get_pack("bear")["enemies"], ["bear"], "the bear is alone")
@@ -295,6 +306,12 @@ func test_three_beast_packs_in_each_chapter() -> void:
 	assert_eq(data.get_pack("ironwood_wolves")["name"], "Волки Железного леса", "names from the TZ")
 	assert_eq(data.get_pack("troll")["name"], "Тролль", "names from the TZ")
 	assert_eq(data.get_pack("scavengers")["name"], "Падальщики", "names from the TZ")
+	assert_eq(data.get_pack("cave_spiders")["enemies"], ["cave_spider", "cave_spider", "cave_spider"], "three cave spiders")
+	assert_eq(data.get_pack("rune_golem")["enemies"][0], "rune_golem", "the golem (maybe with a spider)")
+	assert_true(data.get_pack("rune_golem")["enemies"].slice(1).all(func(id): return id == "cave_spider"), "the golem's only company is a spider")
+	assert_eq(data.get_pack("forge_spirits")["enemies"], ["forge_spirit", "forge_spirit", "forge_spirit"], "three forge spirits")
+	assert_eq([data.get_pack("cave_spiders")["name"], data.get_pack("rune_golem")["name"], data.get_pack("forge_spirits")["name"]],
+			["Пещерные пауки", "Рунный голем", "Духи горна"], "names from the TZ")
 	for pack in data.packs["packs"]:
 		var who: String = pack["id"]
 		assert_true(not str(pack["name"]).is_empty(), "%s has a name" % who)

@@ -1,6 +1,7 @@
 ## M11.2: tips under «Дружина пала» (data/hints.json → defeat). The eagles' tip comes after every defeat or retreat
 ## in a battle where an enemy attacking the back row was on the field (a carrion eagle, Thjazi as an eagle),
-## and never in other battles.
+## and never in other battles. M13: tips about the cave spider, the forge spirit and Fafnir, word for word from the task;
+## when several fit, only the first one in the data is shown.
 extends "res://tests/base_test.gd"
 
 const GameData := preload("res://scripts/data/game_data.gd")
@@ -9,6 +10,9 @@ const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 const Progress := preload("res://scripts/save/progress.gd")
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const EAGLES_TIP := "Совет: орлы бьют задний ряд. Поставь туда того, кто выдержит удар."  ## word for word from the task
+const SPIDER_TIP := "Совет: пауки опутывают героев паутиной. Отметь паука целью — пусть дружина бьёт его первым."
+const SPIRIT_TIP := "Совет: дух горна взрывается при смерти и бьёт весь первый ряд. Береги здоровье щитоносцев."
+const FAFNIR_TIP := "Совет: яд Фафнира бьёт по всей дружине. Лекарь и «Закалка» Регина спасают в бою со змеем."
 
 var data = GameData.load_all()
 var _saved_progress = null
@@ -19,6 +23,37 @@ func test_the_eagles_tip_is_in_the_data_word_for_word() -> void:
 	assert_eq(tips.size(), 1, "the tip is in hints.json")
 	if tips.size() == 1:
 		assert_eq(tips[0]["when"], {"enemy_action": "attack_back_row_weakest"}, "for enemies that attack the back row")
+
+
+## M13: the three tips of chapter 3, word for word from the task, each for its enemy. Fafnir's comes before the spider's
+## and the spirit's: on stage 30 his waves follow theirs, and the tip should be about the boss who beat the squad.
+func test_the_tips_of_chapter_three_are_in_the_data_word_for_word() -> void:
+	var by_text := {}
+	for hint in data.hints["defeat"]:
+		by_text[hint["text"]] = hint["when"]
+	assert_eq(by_text.get(SPIDER_TIP), {"enemy": "cave_spider"}, "the spider's tip")
+	assert_eq(by_text.get(SPIRIT_TIP), {"enemy": "forge_spirit"}, "the forge spirit's tip")
+	assert_eq(by_text.get(FAFNIR_TIP), {"enemy": "fafnir"}, "Fafnir's tip")
+	var texts: Array = data.hints["defeat"].map(func(hint): return hint["text"])
+	assert_true(texts.find(FAFNIR_TIP) < texts.find(SPIDER_TIP) and texts.find(FAFNIR_TIP) < texts.find(SPIRIT_TIP),
+			"Fafnir's tip first")
+
+
+## One tip per battle: the first in the data that fits. A spider and a spirit in one wave — the spider's tip;
+## a retreat from a pack of spirits — the spirit's; Fafnir reached — his, though spiders and spirits were there before.
+func test_one_tip_the_first_that_fits() -> void:
+	var stage = StageBattle.from_data(data, 24, _squad(1), 1)
+	stage.retreat()
+	assert_eq(stage.defeat_hint(data.hints["defeat"]), SPIDER_TIP, "spider and spirit: only the spider's tip")
+	var spirits = StageBattle.from_pack(data, "forge_spirits", 26, _squad(10), 1)
+	spirits.retreat()
+	assert_eq(spirits.defeat_hint(data.hints["defeat"]), SPIRIT_TIP, "the spirits' pack: their tip")
+	var boss = StageBattle.from_data(data, 30, _squad(1), 1)
+	while boss.wave_index < boss.wave_count - 1:
+		boss.battle.enemies().map(func(enemy): enemy.hp = 0)
+		boss.step()
+	boss.retreat()
+	assert_eq(boss.defeat_hint(data.hints["defeat"]), FAFNIR_TIP, "Fafnir reached: his tip only")
 
 
 ## Every tip has a text and one known condition about something that exists in the game.
@@ -48,14 +83,14 @@ func test_a_defeat_with_a_carrion_eagle_brings_the_tip() -> void:
 	stage.auto_ultimates = true
 	stage.run_to_end(600.0)
 	assert_true(stage.finished and not stage.victory, "level 1 loses stage 12")
-	assert_eq(stage.defeat_hints(data.hints["defeat"]), [EAGLES_TIP], "the eagles' tip")
+	assert_eq(stage.defeat_hint(data.hints["defeat"]), EAGLES_TIP, "the eagles' tip")
 
 
 func test_a_retreat_from_stage_twenty_brings_the_tip() -> void:
 	var stage = StageBattle.from_data(data, 20, _squad(17), 1)
 	stage.run_to_end(2.0)
 	assert_true(stage.retreat(), "retreated in the first wave (a carrion eagle)")
-	assert_eq(stage.defeat_hints(data.hints["defeat"]), [EAGLES_TIP], "the eagles' tip after a retreat too")
+	assert_eq(stage.defeat_hint(data.hints["defeat"]), EAGLES_TIP, "the eagles' tip after a retreat too")
 
 
 func test_a_retreat_from_the_eagles_pack_brings_the_tip() -> void:
@@ -64,7 +99,7 @@ func test_a_retreat_from_the_eagles_pack_brings_the_tip() -> void:
 	for pack in eagle_packs:
 		var stage = StageBattle.from_pack(data, pack["id"], 15, _squad(10), 1)
 		stage.retreat()
-		assert_eq(stage.defeat_hints(data.hints["defeat"]), [EAGLES_TIP], "the eagles' tip for «%s»" % pack["name"])
+		assert_eq(stage.defeat_hint(data.hints["defeat"]), EAGLES_TIP, "the eagles' tip for «%s»" % pack["name"])
 
 
 ## Other battles: no eagle on the field (stage 1, the Draugr king's stage 10, stage 11 of chapter 2, a wolf pack).
@@ -74,13 +109,13 @@ func test_no_tip_in_battles_without_eagles() -> void:
 		stage.auto_ultimates = true
 		stage.run_to_end(600.0)
 		assert_true(stage.finished and not stage.victory, "level 1 loses stage %d" % stage_id)
-		assert_eq(stage.defeat_hints(data.hints["defeat"]), [], "no tip on stage %d" % stage_id)
+		assert_eq(stage.defeat_hint(data.hints["defeat"]), "", "no tip on stage %d" % stage_id)
 	var first = StageBattle.from_data(data, 1, _squad(1), 1)
 	first.retreat()
-	assert_eq(first.defeat_hints(data.hints["defeat"]), [], "no tip on stage 1")
+	assert_eq(first.defeat_hint(data.hints["defeat"]), "", "no tip on stage 1")
 	var wolves = StageBattle.from_pack(data, "ironwood_wolves", 15, _squad(10), 1)
 	wolves.retreat()
-	assert_eq(wolves.defeat_hints(data.hints["defeat"]), [], "no tip for the Ironwood wolves")
+	assert_eq(wolves.defeat_hint(data.hints["defeat"]), "", "no tip for the Ironwood wolves")
 
 
 ## Thjazi alone: as a giant he attacks the front row — no tip; once he has turned into an eagle — the tip.
@@ -95,23 +130,23 @@ func test_thjazi_brings_the_tip_only_as_an_eagle() -> void:
 	var thjazi = BattleUnit.from_enemy(data.get_enemy("thjazi"), data.enemy_power_multiplier(20))
 	var stage = StageBattle.new(20, [tank], [[thjazi]], data.balance, 1)
 	stage.run_to_end(1.0)
-	assert_eq(stage.defeat_hints(data.hints["defeat"]), [], "no tip while Thjazi is a giant")
+	assert_eq(stage.defeat_hint(data.hints["defeat"]), "", "no tip while Thjazi is a giant")
 	thjazi.hp = roundi(thjazi.max_hp * float(data.get_enemy("thjazi")["phases"][0]["at_hp_fraction"]))
 	stage.battle._deal_damage(tank, thjazi, 0.0, "attack")
 	stage.step()
 	assert_eq(thjazi.phase, 1, "turned into an eagle")
 	stage.retreat()
-	assert_eq(stage.defeat_hints(data.hints["defeat"]), [EAGLES_TIP], "the tip once he is an eagle")
+	assert_eq(stage.defeat_hint(data.hints["defeat"]), EAGLES_TIP, "the tip once he is an eagle")
 
 
 func test_a_tip_about_one_enemy_by_its_id() -> void:
 	var hints := [{"when": {"enemy": "draugr_archer"}, "text": "лучник"}, {"when": {"enemy": "bear"}, "text": "медведь"}]
 	var stage = StageBattle.from_data(data, 10, _squad(1), 1)
-	assert_eq(stage.defeat_hints(hints), [], "the archer is in the second wave, not reached yet")
+	assert_eq(stage.defeat_hint(hints), "", "the archer is in the second wave, not reached yet")
 	while stage.wave_index == 0:
 		stage.battle.enemies().map(func(enemy): enemy.hp = 0)
 		stage.step()
-	assert_eq(stage.defeat_hints(hints), ["лучник"], "the archer has been on the field; the bear has not")
+	assert_eq(stage.defeat_hint(hints), "лучник", "the archer has been on the field; the bear has not")
 
 
 ## The «Дружина пала» / «Дружина отступила» window shows the tip under the usual text, each time.

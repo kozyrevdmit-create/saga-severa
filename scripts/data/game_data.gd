@@ -14,7 +14,7 @@ var buildings: Dictionary  ## buildings.json: the settlement's buildings (M12): 
 var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
 var story: Dictionary  ## story.json: saga scenes (lines, when shown), the ravens who speak in them, speakers' captions
-var hints: Dictionary  ## hints.json: tips under «Дружина пала» (defeat: [{when, text}], see StageBattle.defeat_hints)
+var hints: Dictionary  ## hints.json: tips under «Дружина пала» (defeat: [{when, text}], see StageBattle.defeat_hint)
 
 
 static func load_all() -> RefCounted:

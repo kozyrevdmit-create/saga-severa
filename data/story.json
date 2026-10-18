@@ -2,7 +2,8 @@
   "speakers": {
     "hugin": {"name": "Хугин", "portrait": {"x": 0.6, "y": 0.22, "size": 0.45}},
     "munin": {"name": "Мунин", "portrait": {"x": 0.4, "y": 0.24, "size": 0.45}},
-    "thjazi": {"name": "Тьяцци", "enemy": "thjazi"}
+    "thjazi": {"name": "Тьяцци", "enemy": "thjazi"},
+    "fafnir": {"name": "Фафнир", "enemy": "fafnir"}
   },
   "captions": {
     "hugin": "ворон Одина · Мысль",
@@ -13,7 +14,9 @@
     "angrboda": "вёльва из Ётунхейма",
     "skadi": "охотница из Ётунхейма",
     "hrungnir": "каменный великан",
-    "thjazi": "великан, отец Скади"
+    "thjazi": "великан, отец Скади",
+    "regin": "кузнец из Свартальфхейма",
+    "fafnir": "змей на золоте"
   },
   "scenes": [
     {
@@ -185,6 +188,71 @@
         {"view": "dialog", "speaker": "eyvind", "text": "А мне — причал. Купцы любят песни. И разносят их дальше."},
         {"view": "dialog", "speaker": "skadi", "text": "Земля здесь холодная. Но на ней можно жить."}
       ]
+    },
+    {
+      "id": "ch3_intro",
+      "title": "Ворота горы",
+      "show": {"when": "chapter_map", "chapter": 3},
+      "lines": [
+        {"view": "page", "speaker": "munin", "text": "Под горами лежит Свартальфхейм. Здесь гномы ковали то, чего боялись даже боги."},
+        {"view": "page", "speaker": "munin", "text": "Молот Тора. Копьё Одина. Цепь, что держала волка."},
+        {"view": "page", "speaker": "hugin", "text": "Теперь горны остыли. Кузнецы мертвы. А в самом низу, на золоте, спит тот, кто не умеет делиться."},
+        {"view": "dialog", "speaker": "regin", "text": "Стойте. Дальше без меня вы заблудитесь — или сгорите."},
+        {"view": "dialog", "speaker": "torvald", "text": "Гном. Живой. Я думал, вы все легли под этой горой."},
+        {"view": "dialog", "speaker": "regin", "text": "Почти все. Я — Регин, кузнец. Знаю здесь каждый мост и каждую трещину."},
+        {"view": "dialog", "speaker": "sigrid", "text": "И чего ты хочешь за дорогу, кузнец?"},
+        {"view": "dialog", "speaker": "regin", "text": "Того же, что и вы: дойти до самого низа. Там мой брат. И то, что он стережёт."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Ты сжимаешь монету, гном. Крепко сжимаешь."},
+        {"view": "dialog", "speaker": "regin", "text": "…Память о доме, вёльва. Не больше."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Ярл, а сколько ярусов вниз? Мне для песни. Правда."}
+      ]
+    },
+    {
+      "id": "ch3_spirits",
+      "title": "Мёртвые горны",
+      "show": {"when": "before_battle_with", "enemy": "forge_spirit"},
+      "lines": [
+        {"view": "dialog", "speaker": "regin", "text": "Этот горн… Я знал того, кто у него стоял. Мы ковали вместе сорок зим."},
+        {"view": "dialog", "speaker": "skadi", "text": "Это больше не он, Регин. Как и мой отец был уже не он."},
+        {"view": "dialog", "speaker": "regin", "text": "Знаю. Огонь помнит руку, а рука — уже нет."},
+        {"view": "dialog", "speaker": "hrungnir", "text": "Тогда погасим его. Камень огня не боится."}
+      ]
+    },
+    {
+      "id": "ch3_boss_before",
+      "title": "Брат",
+      "show": {"when": "before_first_battle", "stage": 30},
+      "lines": [
+        {"view": "dialog", "speaker": "fafnir", "text": "Регин. Ты привёл воров к моему золоту, брат?"},
+        {"view": "dialog", "speaker": "regin", "text": "Я привёл тех, кто положит этому конец, Фафнир."},
+        {"view": "dialog", "speaker": "fafnir", "text": "Хель обещала: моё золото будет лежать вечно. А ты — ты всегда хотел его себе."},
+        {"view": "dialog", "speaker": "regin", "text": "…"},
+        {"view": "dialog", "speaker": "munin", "text": "Он был гномом, ярл. Жадность сделала его змеем. Я помню, как это было."},
+        {"view": "dialog", "speaker": "sigrid", "text": "Хватит слов. Змей есть змей."},
+        {"view": "dialog", "speaker": "regin", "text": "Бейте в голову. Чешуя на брюхе — тоньше. Я сам когда-то ковал ему доспех."}
+      ]
+    },
+    {
+      "id": "ch3_boss_after",
+      "title": "Гора золота",
+      "show": {"when": "first_victory", "stage": 30},
+      "lines": [
+        {"view": "dialog", "speaker": "regin", "text": "Всё это… Целая гора. И никого, кто бы её стерёг."},
+        {"view": "dialog", "speaker": "torvald", "text": "Регин. Отойди от золота."},
+        {"view": "dialog", "speaker": "regin", "text": "Я сорок зим мечтал коснуться его. Брат не делился ни монетой."},
+        {"view": "dialog", "speaker": "angrboda", "text": "Посмотри на него, Регин. Вот что делает золото с теми, кто его любит."},
+        {"view": "dialog", "speaker": "regin", "text": "…"},
+        {"view": "dialog", "speaker": "regin", "text": "Заберите его. Сожгите, утопите — мне всё равно. Я иду с вами."},
+        {"view": "dialog", "speaker": "sigrid", "text": "А монета на шее?"},
+        {"view": "dialog", "speaker": "regin", "text": "Монета — моя. Чтобы помнить, кем я чуть не стал."},
+        {"view": "dialog", "speaker": "regin", "text": "И ещё, ярл. Дай мне угол в твоём поселении. Я сложу тебе настоящую кузню."},
+        {"view": "page", "speaker": "hugin", "text": "Змей мёртв. Но Хель не потеряла ничего — только золото."},
+        {"view": "page", "speaker": "hugin", "text": "Дальше — Нифльхейм, туман и лёд. За ним — её ворота."},
+        {"view": "page", "speaker": "munin", "text": "Там ждёт Гарм, пёс у порога. Он помнит каждого, кто прошёл мимо."},
+        {"view": "dialog", "speaker": "eyvind", "text": "Ворота Хель… Ярл, мы правда пойдём туда?"},
+        {"view": "dialog", "speaker": "angrboda", "text": "Пойдём. Я знаю дорогу."}
+      ],
+      "end_card": "Сага продолжится. Глава 4 — Нифльхейм"
     }
   ]
 }

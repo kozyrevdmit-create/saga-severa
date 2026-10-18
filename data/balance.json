@@ -62,7 +62,8 @@
     "human_ultimate_delay_seconds": 1.5,
     "recommended_power_win_share": 0.7,
     "recommended_power_fights": 100,
-    "recommended_power_round_to": 50
+    "recommended_power_round_to": 50,
+    "new_hero_takes_the_place_of": { "regin": "eyvind" }
   },
   "balance_check": {
     "max_average_replays_per_stage": 5,
