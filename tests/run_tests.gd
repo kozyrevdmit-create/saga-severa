@@ -1,6 +1,7 @@
 ## Headless test runner. Runs every test_* method in tests/test_*.gd:
 ##   godot --headless --path . --script res://tests/run_tests.gd
 ## Exit code 0 = all passed, 1 = something failed.
+## `-- --only=map` runs only the test files whose name contains "map".
 ## Any engine/script error printed during a test also fails that test.
 ## A test may wait for frames (await): screen tests need the layout to settle.
 extends SceneTree
@@ -25,10 +26,14 @@ func _initialize() -> void:
 	var passed := 0
 	var failed := 0
 
+	var only := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--only="):
+			only = arg.trim_prefix("--only=")
 	var files := Array(DirAccess.get_files_at("res://tests"))
 	files.sort()
 	for file: String in files:
-		if not (file.begins_with("test_") and file.ends_with(".gd")):
+		if not (file.begins_with("test_") and file.ends_with(".gd")) or not (only == "" or file.contains(only)):
 			continue
 		catcher.errors.clear()
 		var script: GDScript = load("res://tests/" + file)

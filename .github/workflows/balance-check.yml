@@ -1,0 +1,65 @@
+# The balance simulation smoke check: every player profile through every stage, 2 runs × 2 campaigns (~11 min).
+# Split off the web build (deploy-web.yml) in M13.1 so the build and deploy stay ~2 min.
+# Runs by itself when a pull request or a push to main changes the game data, the battle or progress rules,
+# or the simulation; any time by hand: Actions → Balance check → Run workflow (pick the branch).
+name: Balance check
+
+on:
+  pull_request:
+    paths:
+      - "data/**"
+      - "scripts/battle/**"
+      - "scripts/data/**"
+      - "scripts/save/progress.gd"
+      - "tools/balance_sim.gd"
+      - ".github/workflows/balance-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "scripts/battle/**"
+      - "scripts/data/**"
+      - "scripts/save/progress.gd"
+      - "tools/balance_sim.gd"
+      - ".github/workflows/balance-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: balance-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  simulate:
+    name: Balance simulation (smoke check)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/godot-sim
+          key: godot-${{ env.GODOT_VERSION }}-editor
+
+      - name: Download Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot-sim
+          curl -fsSL --retry 3 -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot-sim
+          mv ~/godot-sim/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-sim/godot
+
+      - name: Import project
+        run: ~/godot-sim/godot --headless --path . --import
+
+      - name: Balance simulation runs (smoke check)
+        run: ~/godot-sim/godot --headless --path . --script res://tools/balance_sim.gd -- --runs=2 --campaigns=2

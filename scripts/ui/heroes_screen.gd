@@ -1,5 +1,6 @@
 ## Heroes screen: every unlocked hero's portrait, role, level, stats, «Сила», ultimate and passive; level-up for silver
 ## (the button shows the power the level adds). Saves after every level-up.
+## M13.1: under the role line, what the role does (heroes.json → classes[].role_description).
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
@@ -80,6 +81,10 @@ func _add_row(hero_id: String) -> void:
 	info.add_child(_make_wrapping_label("%s · %s" % [hero["name"], data.get_hero_class(hero)["name"]], 30))
 	var level_label := _make_wrapping_label("", 22)
 	info.add_child(level_label)
+	var role_label := _make_wrapping_label(data.get_hero_class(hero)["role_description"], 20)
+	role_label.name = "RoleDescription"
+	role_label.add_theme_color_override("font_color", DESCRIPTION_COLOR)
+	info.add_child(role_label)
 	var stats_label := _make_wrapping_label("", 22)
 	info.add_child(stats_label)
 

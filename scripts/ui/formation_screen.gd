@@ -1,6 +1,9 @@
 ## Squad formation (spec 5.4): tap a hero to put them into the next free slot, tap a hero in a slot to take
 ## them out. Shows the squad's «Сила», each hero's role and which clan bonuses are active. Saves after every change.
 ## The screen scrolls (a finger dragged over the hero cards scrolls it too); the bench wraps onto new lines.
+## M13.1: a tap on a hero (put in or taken out) also shows what the hero's role does, in a line above «Назад» that
+## does not scroll away: «Регин · Поддержка — Сам бьёт слабо, но делает сильнее всю дружину.» (heroes.json →
+## classes[].role_description).
 extends Control
 
 const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
@@ -22,6 +25,7 @@ func _ready() -> void:
 func _on_slot_pressed(hero_id: String) -> void:
 	if hero_id == "":
 		return
+	_show_role(hero_id)
 	if GameState.progress.formation_remove(hero_id):
 		_changed()
 	else:
@@ -29,10 +33,23 @@ func _on_slot_pressed(hero_id: String) -> void:
 
 
 func _on_bench_hero_pressed(hero_id: String) -> void:
+	_show_role(hero_id)
 	if GameState.progress.formation_add(GameState.data, hero_id):
 		_changed()
 	else:
 		_show_message("Все слоты заняты. Сначала убери кого-нибудь из отряда.")
+
+
+func _show_role(hero_id: String) -> void:
+	%RoleHint.text = role_text(GameState.data, hero_id)
+	%RoleHint.visible = true
+
+
+## «Регин · Поддержка — Сам бьёт слабо, но делает сильнее всю дружину.»
+static func role_text(data, hero_id: String) -> String:
+	var hero: Dictionary = data.get_hero(hero_id)
+	var hero_class: Dictionary = data.get_hero_class(hero)
+	return "%s · %s — %s" % [hero["name"], hero_class["role_short"], hero_class["role_description"]]
 
 
 ## The message sits below the bench: scroll to it so it is seen.

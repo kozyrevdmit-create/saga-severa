@@ -1,7 +1,8 @@
 ## M11.2: tips under «Дружина пала» (data/hints.json → defeat). The eagles' tip comes after every defeat or retreat
 ## in a battle where an enemy attacking the back row was on the field (a carrion eagle, Thjazi as an eagle),
 ## and never in other battles. M13: tips about the cave spider, the forge spirit and Fafnir, word for word from the task;
-## when several fit, only the first one in the data is shown.
+## when several fit, only the first one in the data is shown. M13.1: the forge spirit's tip before the spider's (spirits
+## almost always come with spiders; the spider's tip stays for battles with spiders only).
 extends "res://tests/base_test.gd"
 
 const GameData := preload("res://scripts/data/game_data.gd")
@@ -27,6 +28,7 @@ func test_the_eagles_tip_is_in_the_data_word_for_word() -> void:
 
 ## M13: the three tips of chapter 3, word for word from the task, each for its enemy. Fafnir's comes before the spider's
 ## and the spirit's: on stage 30 his waves follow theirs, and the tip should be about the boss who beat the squad.
+## M13.1: the spirit's before the spider's.
 func test_the_tips_of_chapter_three_are_in_the_data_word_for_word() -> void:
 	var by_text := {}
 	for hint in data.hints["defeat"]:
@@ -37,14 +39,19 @@ func test_the_tips_of_chapter_three_are_in_the_data_word_for_word() -> void:
 	var texts: Array = data.hints["defeat"].map(func(hint): return hint["text"])
 	assert_true(texts.find(FAFNIR_TIP) < texts.find(SPIDER_TIP) and texts.find(FAFNIR_TIP) < texts.find(SPIRIT_TIP),
 			"Fafnir's tip first")
+	assert_true(texts.find(SPIRIT_TIP) < texts.find(SPIDER_TIP), "the forge spirit's tip before the spider's (M13.1)")
 
 
-## One tip per battle: the first in the data that fits. A spider and a spirit in one wave — the spider's tip;
-## a retreat from a pack of spirits — the spirit's; Fafnir reached — his, though spiders and spirits were there before.
+## One tip per battle: the first in the data that fits. A spider and a spirit in one wave — the spirit's tip (M13.1);
+## a retreat from a pack of spirits — the spirit's; from a pack of spiders — the spider's; Fafnir reached — his,
+## though spiders and spirits were there before.
 func test_one_tip_the_first_that_fits() -> void:
 	var stage = StageBattle.from_data(data, 24, _squad(1), 1)
 	stage.retreat()
-	assert_eq(stage.defeat_hint(data.hints["defeat"]), SPIDER_TIP, "spider and spirit: only the spider's tip")
+	assert_eq(stage.defeat_hint(data.hints["defeat"]), SPIRIT_TIP, "spider and spirit: only the spirit's tip")
+	var spiders = StageBattle.from_pack(data, "cave_spiders", 22, _squad(10), 1)
+	spiders.retreat()
+	assert_eq(spiders.defeat_hint(data.hints["defeat"]), SPIDER_TIP, "the spiders' pack: their tip")
 	var spirits = StageBattle.from_pack(data, "forge_spirits", 26, _squad(10), 1)
 	spirits.retreat()
 	assert_eq(spirits.defeat_hint(data.hints["defeat"]), SPIRIT_TIP, "the spirits' pack: their tip")
@@ -159,7 +166,8 @@ func test_the_defeat_window_shows_the_tip_after_every_retreat_from_stage_twenty(
 		assert_eq(battle.get_node("%ResultTitle").text, "Дружина отступила", "after a retreat")
 		assert_true(text.begins_with("Бой засчитан поражением.\nПодсказка: прокачай героев или поменяй расстановку отряда."),
 				"the usual text first")
-		assert_true(text.ends_with("\n\n" + EAGLES_TIP), "then the eagles' tip (attempt %d)" % (attempt + 1))
+		assert_true(text.contains("\n\n" + EAGLES_TIP + "\n\nЭйвинд: песнь добавила "),
+				"then the eagles' tip, then the support heroes' lines (M13.1) (attempt %d)" % (attempt + 1))
 		_close(battle)
 
 

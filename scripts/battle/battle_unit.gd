@@ -43,6 +43,11 @@ var poison: Dictionary = {}
 var invulnerable_remaining := 0.0
 var invulnerable_special: Dictionary = {}
 var invulnerable_timer := 0.0
+## M13.1: what this unit's help changed over the whole stage (all waves; the result screen shows it for the support
+## heroes): damage the squad did not take thanks to it (passive armour, «Закалка», «Стена щитов»…) and damage the squad
+## dealt on top thanks to it («Песнь битвы»). See Battle._count_help.
+var damage_prevented := 0
+var damage_added := 0
 
 
 ## The multipliers come from the hero's level and the squad's clan bonuses (see StageBattle.from_data).

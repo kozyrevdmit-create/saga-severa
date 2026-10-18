@@ -51,6 +51,14 @@ godot --headless --path . --script res://tools/balance_sim.gd -- --until=6   # �
 ```
 
 Шаблонов веб-экспорта локально нет (интернет медленный): веб-сборку собирает GitHub Actions.
+
+Проверки в GitHub Actions (с M13.1):
+- **Web build and deploy** (`deploy-web.yml`, ~2 мин) — на каждый PR и push в `main`: тесты + веб-сборка (+ выкладка из `main`).
+- **Balance check** (`balance-check.yml`, ~11 мин) — короткая симуляция всех профилей игроков по всем этапам.
+  Запускается сама, если PR или push в `main` меняет `data/`, `scripts/battle/`, `scripts/data/`, `scripts/save/progress.gd`
+  или `tools/balance_sim.gd`. Вручную (Actions → Balance check → Run workflow, выбрать ветку) — перед слиянием этапа,
+  который меняет баланс косвенно (например, новые бонусы в экранах, правила вне этих путей), и перед отчётом с таблицами симуляции.
+  Сливать PR с изменённым балансом — только после зелёного Balance check.
 Экран можно проверить локально: `godot --path . --script <скрипт>` с сохранением `root.get_texture().get_image()` в PNG.
 
 ## Отчёты для Дмитрия

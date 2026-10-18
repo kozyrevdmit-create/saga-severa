@@ -3,18 +3,21 @@
     {
       "id": 1,
       "name": "Мидгард",
-      "map": "map_midgard"
+      "map": "map_midgard",
+      "map_camp_bottom": 0.88
     },
     {
       "id": 2,
       "name": "Ётунхейм",
       "map": "map_jotunheim",
+      "map_camp_bottom": 0.935,
       "enemy_power_growth_per_stage": 0.055
     },
     {
       "id": 3,
       "name": "Свартальфхейм",
       "map": "map_svartalfheim",
+      "map_camp_bottom": 0.92,
       "enemy_power_growth_per_stage": 0.055
     }
   ],

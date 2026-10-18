@@ -80,6 +80,10 @@ func test_texts_match_story_md_word_for_word() -> void:
 	assert_eq(data.get_scene("boss_after")["end_card"], "Сага продолжится. Глава 2 — Ётунхейм", "the end card")
 	assert_eq(data.get_scene("ch2_boss_after")["end_card"], "Сага продолжится. Глава 3 — Свартальфхейм", "chapter 2's end card")
 	assert_eq(data.get_scene("ch3_boss_after")["end_card"], "Сага продолжится. Глава 4 — Нифльхейм", "chapter 3's end card")
+	var last_line: Dictionary = data.get_scene("ch3_boss_before")["lines"].back()
+	assert_eq([last_line["speaker"], last_line["text"]], ["regin", "Бейте в брюхо — там доспех тоньше. Я сам его ковал."],
+			"«Брат» ends with Regin's line of STORY_M13.md v1.1 (M13.1)")
+	assert_true(FileAccess.get_file_as_string("res://docs/STORY_M13.md").contains("Версия 1.1"), "STORY_M13.md is v1.1")
 
 
 ## Page lines are the ravens'; dialog lines are heroes', ravens' or Thjazi's; every scene has its moment.

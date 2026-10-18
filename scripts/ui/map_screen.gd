@@ -14,6 +14,11 @@
 ## plays over it (chapter_map: Jotunheim's, also for a save that had won chapter 1 before chapter 2 came out).
 ## M13: at the end of Svartalfheim's scene («ch3_intro») Regin joins: the «Новый герой» window, then the map again
 ## (the squad's power may have grown).
+## M13.1 (playtest): on every phone the boss's crown is seen whole, every caption stays off its circle (and the crown),
+## and the chapter's camp at the bottom of the picture (stages.json → chapters[].map_camp_bottom, the lowest point of
+## the camp as a share of the picture's height) stays above the «Назад» button. Where the screen is too short for
+## that with the map at the full screen height, the map is made a little smaller and shifted (_layout); what is left
+## of the screen under the paper bars is paper.
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
@@ -26,7 +31,8 @@ const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const STAGE_SIZE := 84.0  ## stage circle at the map's own scale (≈ 1 screen pixel per map pixel on an iPhone)
 const BOSS_SIZE := 100.0
 const PACK_SIZE := 96.0
-const CAPTION_GAP := 6.0
+const CAPTION_GAP := 14.0  ## between a caption and its circle, so that the pulsing circle never touches the caption
+const MAP_EDGE_GAP := 8.0  ## between the paper bars and what must be seen whole (the crown, captions, the camp)
 const MIN_MARKER_SCALE := 0.75  ## markers shrink with the map on a short screen, but stay readable
 const MIN_TAP_HEIGHT := 96.0  ## spec: buttons at least 96 px tall on the screen, whatever the markers' scale
 const MAX_MARKER_SCALE := 1.1
@@ -86,12 +92,13 @@ class ChapterArrow extends Button:
 
 var _chapter := 0  ## the chapter on the map now
 var _map_size := Vector2.ONE  ## the map picture's own size
-var _markers: Array[Dictionary] = []  ## {button, token, caption, side, point (shares of the picture)}
+var _markers: Array[Dictionary] = []  ## {button, token, caption, side, point (shares of the picture)[, crown]}
 var _stage_buttons := {}  ## stage id -> Button
 var _pack_markers := {}  ## pack id -> its marker plus {status: Label, state: "ready" / "away" / "locked"}
 var _map_origin := Vector2.ZERO  ## where the map picture's corner is on the screen
 var _map_shown := Vector2.ONE  ## the map picture's size on the screen
 var _marker_scale := 1.0
+var _camp_bottom := 1.0  ## the chapter's camp reaches down to this share of the picture's height
 var _clock := Timer.new()
 var _previous_arrow := ChapterArrow.new(true)
 var _next_arrow := ChapterArrow.new(false)
@@ -109,6 +116,8 @@ func _ready() -> void:
 	_next_arrow.pressed.connect(func(): show_chapter(_chapter + 1))
 	%BackButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 	%Board.resized.connect(_layout)
+	%TopBar.resized.connect(_layout)
+	%BottomBar.resized.connect(_layout)
 	_clock.wait_time = 1.0
 	_clock.timeout.connect(_refresh_packs)
 	add_child(_clock)
@@ -133,6 +142,7 @@ func show_chapter(chapter_id: int) -> void:
 	%Title.text = "Глава %d · %s" % [chapter_id, chapter["name"]]
 	%MapPicture.texture = Art.map_picture(chapter["map"])
 	_map_size = %MapPicture.texture.get_size()
+	_camp_bottom = float(chapter["map_camp_bottom"])
 	for stage_id in data.chapter_stage_ids(chapter_id):
 		_add_stage(stage_id)
 	for pack_id in data.pack_ids(chapter_id):
@@ -231,6 +241,7 @@ func _add_stage(stage_id: int) -> void:
 		crown.position = Vector2((side - crown.size.x) / 2.0, -crown.size.y + 8.0)
 		token.add_child(crown)
 		token.move_child(crown, 0)
+		marker["crown"] = crown
 	button.disabled = not open
 	button.pressed.connect(_on_stage_pressed.bind(stage_id))
 	_stage_buttons[stage_id] = button
@@ -438,18 +449,82 @@ func _pulse(token: Control) -> void:
 
 
 ## The map fills the screen height (the sides that do not fit are cut off; on a screen wider than the map it fills
-## the width instead).
+## the width instead) — unless then a marker (with the boss's crown) would reach under a paper bar or the camp would
+## hide behind «Назад»: then the map is the biggest that keeps all of them between the bars, shifted to fit.
 func _layout() -> void:
 	var area: Vector2 = %Board.size
-	var map_scale := maxf(area.y / _map_size.y, area.x / _map_size.x)
+	if area.y <= 0.0:
+		return
+	var fill_scale := maxf(area.y / _map_size.y, area.x / _map_size.x)
+	var top: float = %TopBar.get_rect().end.y + MAP_EDGE_GAP
+	var bottom: float = %BottomBar.get_rect().position.y - MAP_EDGE_GAP
+	var reaches: Array[Vector2] = []
+	for marker in _markers:
+		_arrange(marker)
+		reaches.append(_reach(marker))
+	var map_scale := fill_scale
+	if not _fits(_origin_range(fill_scale, top, bottom, reaches)):
+		var low := fill_scale * 0.25
+		var high := fill_scale
+		for i in 30:
+			var middle := (low + high) / 2.0
+			if _fits(_origin_range(middle, top, bottom, reaches)):
+				low = middle
+			else:
+				high = middle
+		map_scale = low
+	var origin_range := _origin_range(map_scale, top, bottom, reaches)
 	_map_shown = _map_size * map_scale
 	_map_origin = (area - _map_shown) / 2.0
+	_map_origin.y = clampf(_map_origin.y, origin_range.x, maxf(origin_range.x, origin_range.y))
 	%MapPicture.position = _map_origin
 	%MapPicture.size = _map_shown
-	_marker_scale = clampf(map_scale, MIN_MARKER_SCALE, MAX_MARKER_SCALE)
+	_marker_scale = _marker_scale_for(map_scale)
 	for marker in _markers:
 		_arrange(marker)
 		_place(marker)
+
+
+func _marker_scale_for(map_scale: float) -> float:
+	return clampf(map_scale, MIN_MARKER_SCALE, MAX_MARKER_SCALE)
+
+
+## Where the map's top edge may be (x: highest, y: lowest) at this scale so that every marker stays between `top`
+## and `bottom` and the camp above `bottom`. Empty (x > y) when the map is too big for that.
+func _origin_range(map_scale: float, top: float, bottom: float, reaches: Array[Vector2]) -> Vector2:
+	var height := _map_size.y * map_scale
+	var markers := _marker_scale_for(map_scale)
+	var lowest := bottom - _camp_bottom * height
+	var highest := -INF
+	for i in _markers.size():
+		var y := float(_markers[i]["point"]["y"]) * height
+		highest = maxf(highest, top - y + reaches[i].x * markers)
+		lowest = minf(lowest, bottom - y - reaches[i].y * markers)
+	return Vector2(highest, lowest)
+
+
+func _fits(origin_range: Vector2) -> bool:
+	return origin_range.x <= origin_range.y
+
+
+## How far the marker's drawn parts reach above (x) and below (y) its point, at the markers' own scale: the circle
+## at the top of its pulse, the boss's crown, the caption. A pack counts in its biggest look (portrait, caption below)
+## so that the map does not jump when the pack comes back.
+func _reach(marker: Dictionary) -> Vector2:
+	var token: Control = marker["token"]
+	var half := token.size.y / 2.0 * CURRENT_PULSE_SCALE
+	var above := half
+	if marker.has("crown"):
+		above = maxf(above, (token.size.y / 2.0 - marker["crown"].position.y) * CURRENT_PULSE_SCALE)
+	var below := half
+	var caption_height: float = marker["caption"].size.y
+	var side: String = "below" if marker.has("status") else marker["side"]
+	if side == "below":
+		below = maxf(below, token.size.y / 2.0 + CAPTION_GAP + caption_height)
+	else:
+		above = maxf(above, caption_height / 2.0)
+		below = maxf(below, caption_height / 2.0)
+	return Vector2(above, below)
 
 
 ## Puts the marker so that its token's centre stands on its point of the picture.

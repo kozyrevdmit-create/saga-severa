@@ -1,7 +1,8 @@
 ## Main screen: silver (and supplies, once construction in the settlement is open), jarl level, the squad's «Сила»,
 ## the four sections, the gear for «Настройки»
 ## and the "while you were away" window.
-## A long press on the silver counter opens the debug panel (spec 5.6).
+## A long press on the silver counter opens the debug panel (spec 5.6); on the site only with ?debug=1 in the address
+## (GameState.debug_allowed, M13.1), otherwise the long press does nothing.
 ## Saga scenes waiting in the queue are played over this screen: the intro on a new game (also once for a save from
 ## before M10 and after «Сбросить прогресс»), or a scene left unseen when the game was closed.
 extends Control
@@ -61,7 +62,7 @@ func _show_offline_income() -> void:
 
 ## Touches arrive as mouse events too (touch-to-mouse emulation is on by default).
 func _on_silver_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and GameState.debug_allowed:
 		_long_press.start()
 
 
