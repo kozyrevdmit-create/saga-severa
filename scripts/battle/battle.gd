@@ -272,9 +272,10 @@ func _apply_effect(unit, effect: Dictionary) -> void:
 					ally.add_buff(effect["stat"], float(effect["multiplier"]), float(effect["duration"]), unit.id,
 							effect.get("badge", ""))
 		"hits":
+			# The series stops if the hero falls in it (a forge spirit's blast on death).
 			for i in int(effect["count"]):
 				var target = _pick_effect_targets(unit, effect["target"])
-				if target.is_empty():
+				if target.is_empty() or not unit.is_alive():
 					break
 				_deal_damage(unit, target[0], float(effect["attack_multiplier"]), "ultimate")
 		"damage":

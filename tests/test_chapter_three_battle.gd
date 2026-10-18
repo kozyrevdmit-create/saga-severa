@@ -259,6 +259,23 @@ func test_the_blast_is_cut_by_temper_and_reaches_the_back_row_without_a_front_ro
 	assert_eq(hits.map(func(e): return e["target"]), [back.id], "the back row once the front row has fallen")
 
 
+## «Ярость» stops when Sigrid falls in it: her first blow kills a forge spirit, its blast kills her, the other enemy
+## gets no more blows.
+func test_a_series_of_blows_stops_when_the_blast_kills_the_hero() -> void:
+	var sigrid = hero_from_data("sigrid")
+	sigrid.hp = 1
+	var spirit = enemy_from_data("forge_spirit")
+	spirit.hp = 1
+	var other = make_target("front")
+	other.team = ENEMIES
+	var battle = make_battle([sigrid], [spirit, other])
+	assert_true(battle.toggle_mark(spirit.id), "the spirit is marked: the first blow goes to it")
+	sigrid.energy = sigrid.ultimate_cost()
+	battle.use_ultimate(sigrid.id)
+	assert_true(not spirit.is_alive() and not sigrid.is_alive(), "the spirit and Sigrid fell")
+	assert_eq(other.hp, other.max_hp, "no blows after her death")
+
+
 # --- Fafnir --------------------------------------------------------------------
 
 ## «Ядовитое дыхание» every 8 s at the whole squad (× attack_multiplier), then poison: 3 blows, one a second, at every
