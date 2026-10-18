@@ -20,6 +20,8 @@ func test_the_result_window_names_what_regin_and_eyvind_did() -> void:
 	var progress = Progress.new_game(data)
 	progress.jump_to_stage(data, 24)
 	progress.unlock_all_heroes(data)
+	for hero_id in progress.hero_levels:  # strong enough that nobody falls before using the ultimate
+		progress.hero_levels[hero_id] = 38
 	progress.formation[progress.formation.find("skadi")] = "regin"
 	progress.mark_hint_shown = true
 	progress.mark_all_scenes_seen(data)
@@ -33,6 +35,9 @@ func test_the_result_window_names_what_regin_and_eyvind_did() -> void:
 	await tree.process_frame
 	screen.set_process(false)  # the test moves the battle on itself
 	screen._battle.auto_ultimates = true
+	for unit in screen._battle.heroes():  # «Закалка» and «Песнь битвы» at once, whatever the battle's random seed
+		if unit.def_id in ["regin", "eyvind"]:
+			unit.energy = unit.ultimate_cost()
 	for i in 300:  # 15 s of battle (or less if it ends)
 		if screen._battle.finished:
 			break
