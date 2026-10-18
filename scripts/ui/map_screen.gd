@@ -115,9 +115,10 @@ func _ready() -> void:
 	_previous_arrow.pressed.connect(func(): show_chapter(_chapter - 1))
 	_next_arrow.pressed.connect(func(): show_chapter(_chapter + 1))
 	%BackButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
-	%Board.resized.connect(_layout)
-	%TopBar.resized.connect(_layout)
-	%BottomBar.resized.connect(_layout)
+	# Deferred: when the screen changes size, the paper bars take their new places after the board has resized.
+	%Board.resized.connect(_layout, CONNECT_DEFERRED)
+	%TopBar.resized.connect(_layout, CONNECT_DEFERRED)
+	%BottomBar.resized.connect(_layout, CONNECT_DEFERRED)
 	_clock.wait_time = 1.0
 	_clock.timeout.connect(_refresh_packs)
 	add_child(_clock)
@@ -456,8 +457,10 @@ func _layout() -> void:
 	if area.y <= 0.0:
 		return
 	var fill_scale := maxf(area.y / _map_size.y, area.x / _map_size.x)
-	var top: float = %TopBar.get_rect().end.y + MAP_EDGE_GAP
-	var bottom: float = %BottomBar.get_rect().position.y - MAP_EDGE_GAP
+	# From the bars' heights, not their positions: the bottom bar keeps its height when the screen gets shorter, and its
+	# `resized` does not fire then (M13.1: the camp went under «Назад» after Safari's bars appeared).
+	var top: float = %TopBar.size.y + MAP_EDGE_GAP
+	var bottom: float = area.y - %BottomBar.size.y - MAP_EDGE_GAP
 	var reaches: Array[Vector2] = []
 	for marker in _markers:
 		_arrange(marker)

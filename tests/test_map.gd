@@ -105,6 +105,32 @@ func test_boss_crown_caption_and_camp_are_seen() -> void:
 				_close(screen)
 
 
+## M13.1 (site check): the screen changes size while the map is open (Safari on the iPhone hides and shows its bars)
+## — the map is laid out again for the new size: the crown and the camp are still seen.
+func test_the_rule_holds_after_the_screen_changes_size() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	for chapter_id in [1, 2, 3]:
+		var screen = await _open_map(PHONES_M13_1[0], 30, [])
+		screen.show_chapter(chapter_id)
+		await tree.process_frame
+		tree.root.size = PHONES_M13_1[2]  # 375×812 → 393×698
+		for i in 3:
+			await tree.process_frame
+		var where := "chapter %d, after the screen got shorter" % chapter_id
+		var data = screen.get_node("/root/GameState").data
+		var bottom_bar: Rect2 = screen.get_node("%BottomBar").get_global_rect()
+		assert_true(screen.get_viewport_rect().size.y < PHONES_M13_1[0].y - 100, "%s: the screen is shorter" % where)
+		assert_near(bottom_bar.end.y, screen.get_viewport_rect().size.y, 0.5, "%s: «Назад» is at the new bottom" % where)
+		var camp: Vector2 = screen.map_point_on_screen({"x": 0.5, "y": data.get_chapter(chapter_id)["map_camp_bottom"]})
+		assert_true(camp.y <= bottom_bar.position.y, "%s: the camp is above «Назад» (%s, button at %s)" % [where, camp.y, bottom_bar.position.y])
+		var boss_id: int = data.chapter_stage_ids(chapter_id).back()
+		for marker in screen._markers:
+			if marker["button"] == screen._stage_buttons[boss_id]:
+				assert_true(marker["crown"].get_global_rect().position.y >= screen.get_node("%TopBar").get_global_rect().end.y,
+						"%s: the crown is below the top bar" % where)
+		_close(screen)
+
+
 func test_stage_states_and_red_recommended_power() -> void:
 	var screen = await _open_map(PHONE_SIZE, 4, [])
 	var progress = screen.get_node("/root/GameState").progress
