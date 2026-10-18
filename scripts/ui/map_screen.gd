@@ -12,10 +12,13 @@
 ## before_first_battle), once per game; so does the first tap on a stage or a pack where the carrion eagles fight
 ## (before_battle_with); the battle starts right after them. The first time a chapter's map is shown, its scene
 ## plays over it (chapter_map: Jotunheim's, also for a save that had won chapter 1 before chapter 2 came out).
+## M13: at the end of Svartalfheim's scene («ch3_intro») Regin joins: the «Новый герой» window, then the map again
+## (the squad's power may have grown).
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
+const NewHeroWindow := preload("res://scripts/ui/new_hero_window.gd")
 
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -93,12 +96,12 @@ var _clock := Timer.new()
 var _previous_arrow := ChapterArrow.new(true)
 var _next_arrow := ChapterArrow.new(false)
 var _story: Control  ## the saga scene on screen, if any
+var _new_hero_window: Control  ## «Новый герой» after a chapter's scene, if on screen
 
 
 func _ready() -> void:
 	var data = GameState.data
 	var progress = GameState.progress
-	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
 	%ChapterRow.add_child(_previous_arrow)
 	%ChapterRow.move_child(_previous_arrow, 0)
 	%ChapterRow.add_child(_next_arrow)
@@ -120,6 +123,7 @@ func show_chapter(chapter_id: int) -> void:
 	if not chapter_id in data.chapter_ids() or not progress.is_chapter_open(data, chapter_id):
 		return
 	_chapter = chapter_id
+	%PowerLabel.text = "Сила отряда: %d" % progress.squad_power(data)
 	for marker in _markers:
 		marker["button"].queue_free()
 	_markers.clear()
@@ -138,6 +142,17 @@ func show_chapter(chapter_id: int) -> void:
 	var scene_id: String = progress.scene_on_chapter_map(data, chapter_id)
 	if scene_id != "" and not is_instance_valid(_story):
 		_story = StoryPlayer.play(self, scene_id)
+		_story.finished.connect(_on_chapter_scene_finished.bind(scene_id), CONNECT_DEFERRED)
+
+
+## The heroes who join at the end of the chapter's scene (Regin) join now and are announced; the map is laid out again.
+func _on_chapter_scene_finished(scene_id: String) -> void:
+	var joined: Array[String] = GameState.progress.join_heroes_after_scene(GameState.data, scene_id)
+	if joined.is_empty():
+		return
+	GameState.save()
+	_new_hero_window = NewHeroWindow.open(self, joined)
+	_new_hero_window.closed.connect(func(): show_chapter(_chapter), CONNECT_DEFERRED)
 
 
 func shown_chapter() -> int:

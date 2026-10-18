@@ -2,6 +2,7 @@
 ## the beast packs off it. On a tall and a short phone every marker is on the screen, between the paper bars, and no
 ## two markers overlap; the stage states, the red recommended power and the three looks of a pack are shown.
 ## M11: two chapters; the map opens on the current one, the arrows switch, an arrow to a closed chapter is dimmed.
+## M13: chapter 3 «Свартальфхейм» after the first win over Thjazi, Fafnir with a crown on stage 30.
 extends "res://tests/base_test.gd"
 
 const Progress := preload("res://scripts/save/progress.gd")
@@ -17,7 +18,7 @@ var _saved_window_size: Vector2i
 ## lands on its own marker (the topmost button under the finger).
 func test_markers_fit_the_screen_without_overlapping() -> void:
 	for window in [PHONE_SIZE, BASE_SIZE]:
-		for shown in [[0, 1], [4, 1], [10, 1], [10, 2], [14, 2], [17, 2], [20, 2]]:
+		for shown in [[0, 1], [4, 1], [10, 1], [10, 2], [14, 2], [17, 2], [20, 2], [20, 3], [24, 3], [27, 3], [30, 3]]:
 			var cleared: int = shown[0]
 			var screen = await _open_map(window, cleared, ["wolves", "ironwood_wolves"])
 			screen.show_chapter(shown[1])
@@ -105,7 +106,7 @@ func test_two_chapters_and_the_switch() -> void:
 	assert_true(screen._stage_buttons[20].find_children("*", "Control", true, false).any(func(node): return is_instance_of(node, crown)),
 			"with a crown")
 	assert_true(not screen._previous_arrow.disabled, "the arrow back to chapter 1 works")
-	assert_true(screen._next_arrow.modulate.a == 0.0, "there is no chapter 3 yet")
+	assert_true(screen._next_arrow.disabled and screen._next_arrow.modulate.a > 0.0, "the arrow to chapter 3 is dimmed")
 	screen._previous_arrow.pressed.emit()
 	await (Engine.get_main_loop() as SceneTree).process_frame
 	assert_eq(screen.shown_chapter(), 1, "back to Midgard")
@@ -117,7 +118,18 @@ func test_two_chapters_and_the_switch() -> void:
 	_close(screen)
 
 	screen = await _open_map(PHONE_SIZE, 20, [])
-	assert_eq(screen.shown_chapter(), 2, "everything won: the last chapter")
+	assert_eq(screen.shown_chapter(), 3, "after the first win over Thjazi: chapter 3")
+	assert_eq(screen.get_node("%Title").text, "Глава 3 · Свартальфхейм", "its title")
+	assert_eq(screen._stage_buttons.keys(), data.chapter_stage_ids(3), "stages 21–30")
+	assert_eq(screen._pack_markers.keys(), data.pack_ids(3), "Svartalfheim's packs")
+	assert_true("Фафнир" in _texts(screen._stage_buttons[30]), "Fafnir is named on stage 30")
+	assert_true(screen._stage_buttons[30].find_children("*", "Control", true, false).any(func(node): return is_instance_of(node, crown)),
+			"with a crown")
+	assert_true(screen._next_arrow.modulate.a == 0.0, "there is no chapter 4 yet")
+	_close(screen)
+
+	screen = await _open_map(PHONE_SIZE, 30, [])
+	assert_eq(screen.shown_chapter(), 3, "everything won: the last chapter")
 	_close(screen)
 
 

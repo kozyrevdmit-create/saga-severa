@@ -185,15 +185,15 @@ func take_events() -> Array[Dictionary]:
 	return events
 
 
-## The tips (hints.json → defeat) whose condition this stage has met, in file order. A tip's "when" has one key:
+## The tip (hints.json → defeat) for this battle: the first one in file order whose condition the stage has met
+## (M13: one tip, even when several fit), "" when none fits. A tip's "when" has one key:
 ## "enemy_action" — an enemy attacking this way has been on the field (for a boss: in a phase it has entered),
 ## "enemy" — this enemy (enemies.json id) has been on the field.
-func defeat_hints(hints: Array) -> Array[String]:
-	var texts: Array[String] = []
+func defeat_hint(hints: Array) -> String:
 	for hint in hints:
 		if _has_met(hint["when"]):
-			texts.append(hint["text"])
-	return texts
+			return hint["text"]
+	return ""
 
 
 func _has_met(when: Dictionary) -> bool:

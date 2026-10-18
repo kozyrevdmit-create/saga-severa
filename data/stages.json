@@ -10,6 +10,12 @@
       "name": "Ётунхейм",
       "map": "map_jotunheim",
       "enemy_power_growth_per_stage": 0.055
+    },
+    {
+      "id": 3,
+      "name": "Свартальфхейм",
+      "map": "map_svartalfheim",
+      "enemy_power_growth_per_stage": 0.055
     }
   ],
   "stages": [
@@ -311,6 +317,156 @@
         ["ironwood_wolf", "carrion_eagle"],
         ["ice_troll", "ironwood_wolf"],
         ["thjazi"]
+      ]
+    },
+    {
+      "id": 21,
+      "chapter": 3,
+      "recommended_power": 23500,
+      "map_point": { "x": 0.62, "y": 0.815, "label": "left" },
+      "reward": {
+        "silver": 1917,
+        "experience": 420
+      },
+      "waves": [
+        ["cave_spider", "cave_spider"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "cave_spider", "cave_spider"]
+      ]
+    },
+    {
+      "id": 22,
+      "chapter": 3,
+      "recommended_power": 24950,
+      "map_point": { "x": 0.55, "y": 0.735, "label": "left" },
+      "reward": {
+        "silver": 2072,
+        "experience": 440
+      },
+      "waves": [
+        ["cave_spider", "cave_spider"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "cave_spider", "cave_spider"]
+      ]
+    },
+    {
+      "id": 23,
+      "chapter": 3,
+      "recommended_power": 26950,
+      "map_point": { "x": 0.5, "y": 0.645, "label": "left" },
+      "reward": {
+        "silver": 2240,
+        "experience": 460
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "forge_spirit", "cave_spider"]
+      ]
+    },
+    {
+      "id": 24,
+      "chapter": 3,
+      "recommended_power": 28550,
+      "map_point": { "x": 0.46, "y": 0.565, "label": "right" },
+      "reward": {
+        "silver": 2421,
+        "experience": 480
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "forge_spirit", "cave_spider"]
+      ]
+    },
+    {
+      "id": 25,
+      "chapter": 3,
+      "recommended_power": 29100,
+      "map_point": { "x": 0.6, "y": 0.495, "label": "left" },
+      "reward": {
+        "silver": 2617,
+        "experience": 500
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "forge_spirit"],
+        ["rune_golem", "cave_spider", "cave_spider"]
+      ]
+    },
+    {
+      "id": 26,
+      "chapter": 3,
+      "recommended_power": 31450,
+      "map_point": { "x": 0.46, "y": 0.42, "label": "right" },
+      "reward": {
+        "silver": 2829,
+        "experience": 520
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "forge_spirit", "cave_spider"]
+      ]
+    },
+    {
+      "id": 27,
+      "chapter": 3,
+      "recommended_power": 33300,
+      "map_point": { "x": 0.45, "y": 0.34, "label": "right" },
+      "reward": {
+        "silver": 3058,
+        "experience": 540
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "forge_spirit", "cave_spider"]
+      ]
+    },
+    {
+      "id": 28,
+      "chapter": 3,
+      "recommended_power": 35000,
+      "map_point": { "x": 0.65, "y": 0.27, "label": "left" },
+      "reward": {
+        "silver": 3306,
+        "experience": 560
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "forge_spirit"],
+        ["rune_golem", "cave_spider", "cave_spider"]
+      ]
+    },
+    {
+      "id": 29,
+      "chapter": 3,
+      "recommended_power": 37350,
+      "map_point": { "x": 0.61, "y": 0.19, "label": "left" },
+      "reward": {
+        "silver": 3574,
+        "experience": 580
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "cave_spider"],
+        ["rune_golem", "forge_spirit", "cave_spider"]
+      ]
+    },
+    {
+      "id": 30,
+      "chapter": 3,
+      "recommended_power": 38300,
+      "map_point": { "x": 0.57, "y": 0.115, "label": "left" },
+      "reward": {
+        "silver": 3863,
+        "experience": 600
+      },
+      "waves": [
+        ["cave_spider", "forge_spirit"],
+        ["rune_golem", "cave_spider"],
+        ["fafnir"]
       ]
     }
   ]

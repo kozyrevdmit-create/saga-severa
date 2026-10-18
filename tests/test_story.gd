@@ -10,12 +10,16 @@
 ## first win there; Thjazi speaks with his head from the enemy picture.
 ## M12: «Зерно нового мира» (docs/STORY_M12.md) the first time the settlement is entered with construction open
 ## (tests/test_settlement.gd plays it).
+## M13: chapter 3 (docs/STORY_M13.md): Svartalfheim's scene the first time its map is shown (Regin joins at its end:
+## the «Новый герой» window over the map), the spirits' scene before the first battle with a forge spirit, Fafnir's
+## scenes before the first battle on stage 30 and after the first win there; Fafnir speaks with his head.
 extends "res://tests/base_test.gd"
 
 const Progress := preload("res://scripts/save/progress.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 const Art := preload("res://scripts/ui/art.gd")
-const STORY_MDS := ["res://docs/STORY_M10.md", "res://docs/STORY_M11.md", "res://docs/STORY_M12.md"]
+const STORY_MDS := ["res://docs/STORY_M10.md", "res://docs/STORY_M11.md", "res://docs/STORY_M12.md", "res://docs/STORY_M13.md"]
+const NewHeroWindow := preload("res://scripts/ui/new_hero_window.gd")
 const LORE_MD := "res://docs/LORE.md"
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -24,7 +28,8 @@ const BATTLE_SCENE := "res://scenes/battle.tscn"
 const PHONE_SIZE := Vector2i(720, 1558)  ## iPhone 14 shape at the project's 720 px width
 const BASE_SIZE := Vector2i(720, 1280)  ## project.godot viewport (a shorter phone)
 const SCENES := ["intro", "join_angrboda", "join_skadi", "join_hrungnir", "boss_before", "boss_after",
-	"ch2_intro", "ch2_eagles", "ch2_boss_before", "ch2_boss_after", "settlement_intro"]
+	"ch2_intro", "ch2_eagles", "ch2_boss_before", "ch2_boss_after", "settlement_intro",
+	"ch3_intro", "ch3_spirits", "ch3_boss_before", "ch3_boss_after"]
 
 var _saved_progress
 var _saved_window_size: Vector2i
@@ -32,7 +37,7 @@ var _saved_window_size: Vector2i
 
 # --- texts ----------------------------------------------------------------------
 
-## docs/STORY_M10.md, STORY_M11.md and STORY_M12.md are byte copies of Dmitriy's approved texts (../docs/). Every scene, title,
+## docs/STORY_M10.md, STORY_M11.md, STORY_M12.md and STORY_M13.md are byte copies of Dmitriy's approved texts (../docs/). Every scene, title,
 ## speaker, look («[страница саги]» / «[диалог]»), line and the end card match word for word.
 func test_texts_match_story_md_word_for_word() -> void:
 	var data = await _data()
@@ -60,8 +65,8 @@ func test_texts_match_story_md_word_for_word() -> void:
 			expected.back()["lines"].append([view, found.get_string(1), found.get_string(2)])
 		elif not expected.is_empty() and card.search(line):
 			expected.back()["end_card"] = card.search(line).get_string(1)
-	assert_eq(expected.map(func(scene): return scene["id"]), SCENES, "six scenes in STORY_M10.md, four in STORY_M11.md, one in STORY_M12.md")
-	assert_eq(data.scene_ids(), SCENES, "the same eleven scenes in story.json, in the same order")
+	assert_eq(expected.map(func(scene): return scene["id"]), SCENES, "six scenes in STORY_M10.md, four in STORY_M11.md, one in STORY_M12.md, four in STORY_M13.md")
+	assert_eq(data.scene_ids(), SCENES, "the same fifteen scenes in story.json, in the same order")
 	for scene in expected:
 		if not data.has_scene(scene["id"]):
 			continue
@@ -74,6 +79,7 @@ func test_texts_match_story_md_word_for_word() -> void:
 			assert_eq(lines[i], scene["lines"][i], "%s: line %d" % [scene["id"], i + 1])
 	assert_eq(data.get_scene("boss_after")["end_card"], "Сага продолжится. Глава 2 — Ётунхейм", "the end card")
 	assert_eq(data.get_scene("ch2_boss_after")["end_card"], "Сага продолжится. Глава 3 — Свартальфхейм", "chapter 2's end card")
+	assert_eq(data.get_scene("ch3_boss_after")["end_card"], "Сага продолжится. Глава 4 — Нифльхейм", "chapter 3's end card")
 
 
 ## Page lines are the ravens'; dialog lines are heroes', ravens' or Thjazi's; every scene has its moment.
@@ -105,6 +111,12 @@ func test_speakers_looks_and_moments_are_valid() -> void:
 	assert_eq(data.scene_ids_shown_at("before_first_battle", 20), ["ch2_boss_before"] as Array[String], "before Thjazi")
 	assert_eq(data.scene_ids_shown_at("first_victory", 20), ["ch2_boss_after"] as Array[String], "after Thjazi")
 	assert_eq(data.scene_ids_shown_at("settlement"), ["settlement_intro"] as Array[String], "the settlement's scene")
+	assert_eq(data.scene_ids_shown_at("chapter_map", 3), ["ch3_intro"] as Array[String], "Svartalfheim's map")
+	assert_eq(data.scene_ids_shown_at("before_battle_with", "forge_spirit"), ["ch3_spirits"] as Array[String], "the spirits")
+	assert_eq(data.scene_ids_shown_at("before_battle_with", "cave_spider"), [] as Array[String], "nothing before the spiders")
+	assert_eq(data.scene_ids_shown_at("before_first_battle", 30), ["ch3_boss_before"] as Array[String], "before Fafnir")
+	assert_eq(data.scene_ids_shown_at("first_victory", 30), ["ch3_boss_after"] as Array[String], "after Fafnir")
+	assert_eq(data.speaker_enemy("fafnir"), "fafnir", "Fafnir's portrait is his enemy picture's head")
 	assert_eq(data.speaker_enemy("thjazi"), "thjazi", "Thjazi's portrait is his enemy picture's head")
 	assert_true(not data.is_raven("thjazi"), "Thjazi is not a raven")
 	var story: Dictionary = data.visual["story"]
@@ -124,7 +136,8 @@ func test_captions_match_the_lore_word_for_word() -> void:
 			in_section = line.begins_with("## 6а. Кто есть кто")
 		elif in_section and row.search(line) and not line.begins_with("| Имя |"):
 			lore[row.search(line).get_string(1)] = row.search(line).get_string(2)
-	assert_eq(lore.size(), 9, "nine captions in the lore table")
+	assert_eq(lore.size(), 11, "eleven captions in the lore table (M13: Regin, Fafnir)")
+	assert_eq(lore.get("Фафнир", ""), "змей на золоте", "Fafnir's caption without the note in brackets")
 	assert_eq(lore.get("Хугин", ""), "ворон Одина · Мысль", "the table is read")
 	assert_eq(lore.get("Тьяцци", ""), "великан, отец Скади", "Thjazi's caption without the note in brackets")
 	var captions: Dictionary = data.story["captions"]
@@ -232,6 +245,61 @@ func test_the_scenes_of_chapter_two() -> void:
 	fresh.seen_scenes.append("ch2_boss_before")
 	assert_eq(fresh.scenes_before_battle(data, 20), ["ch2_eagles"] as Array[String],
 			"a battle with eagles still brings their scene, even on the boss stage")
+
+
+## M13: Svartalfheim's scene with its map, once; the spirits' scene before the first battle where a forge spirit fights
+## (a stage or the spirits' pack), not before the spiders' or the golem's; Fafnir's scenes before the first battle on
+## stage 30 and after the first win there (not after a replay).
+func test_the_scenes_of_chapter_three() -> void:
+	var data = await _data()
+	var progress = Progress.new_game(data)
+	progress.mark_all_scenes_seen(data)
+	progress.seen_scenes.clear()
+	progress.cleared_stage = 20
+	assert_eq(progress.scene_on_chapter_map(data, 3), "ch3_intro", "Svartalfheim's scene with its map")
+	progress.start_scene("ch3_intro")
+	assert_eq(progress.scene_on_chapter_map(data, 3), "", "once")
+	var first_spirits := 0
+	for stage_id in data.chapter_stage_ids(3):
+		if data.stage_has_enemy(stage_id, "forge_spirit"):
+			first_spirits = stage_id
+			break
+	assert_true(first_spirits > 21, "the forge spirits come after the first stage of chapter 3")
+	for stage_id in range(21, first_spirits):
+		assert_true(not "ch3_spirits" in progress.scenes_before_battle(data, stage_id), "no spirits' scene before stage %d" % stage_id)
+	assert_true("ch3_spirits" in progress.scenes_before_battle(data, first_spirits), "the spirits' scene before stage %d" % first_spirits)
+	assert_true("ch3_spirits" in progress.scenes_before_battle(data, 0, "forge_spirits"), "or before the spirits' pack")
+	assert_true(not "ch3_spirits" in progress.scenes_before_battle(data, 0, "cave_spiders"), "not before the spiders")
+	assert_true(not "ch3_spirits" in progress.scenes_before_battle(data, 0, "rune_golem"), "not before the golem")
+	progress.start_scene("ch3_spirits")
+	progress.start_scene("ch2_eagles")
+	assert_eq(progress.scenes_before_battle(data, first_spirits), [] as Array[String], "once")
+	progress.cleared_stage = 29
+	assert_eq(progress.scenes_before_battle(data, 30), ["ch3_boss_before"] as Array[String], "the first tap on stage 30")
+	progress.start_scene("ch3_boss_before")
+	progress.apply_victory(data, 30)
+	assert_eq(progress.queued_scene(data, "first_victory", 30), "ch3_boss_after", "the first win over Fafnir")
+	progress.start_scene("ch3_boss_after")
+	progress.apply_victory(data, 30)
+	assert_eq(progress.queued_scene(data), "", "a replay of stage 30 brings no scene")
+
+
+## M13: a save that had won chapter 2 before chapter 3 came out gets Svartalfheim's scene with the map and Regin at its
+## end, not at once; a game closed during the scene has him on the next start (the scene counts as seen once started).
+func test_an_old_save_gets_regin_with_his_scene() -> void:
+	var data = await _data()
+	var old := Progress.new_game(data)
+	old.mark_all_scenes_seen(data)
+	old.seen_scenes.erase("ch3_intro")
+	old.jump_to_stage(data, 21)
+	var saved: Dictionary = old.to_dict()
+	saved["hero_levels"].erase("regin")
+	var progress = Progress.from_dict(saved, data)
+	assert_true(not progress.hero_levels.has("regin"), "no Regin before his scene")
+	assert_eq(progress.scene_on_chapter_map(data, 3), "ch3_intro", "the scene with chapter 3's map")
+	progress.start_scene("ch3_intro")
+	var closed_during = Progress.from_dict(progress.to_dict(), data)
+	assert_true(closed_during.hero_levels.has("regin"), "closed during the scene: Regin is there on the next start")
 
 
 func test_the_debug_panel_brings_no_scenes() -> void:
@@ -649,6 +717,48 @@ func test_the_map_plays_the_eagles_scene_before_their_first_battle() -> void:
 	if players.size() == 1:
 		assert_eq(players[0].scene_id, "ch2_eagles", "the eagles' scene")
 	assert_eq(game_state.selected_stage, stage_id, "the battle with them comes next")
+	map.queue_free()
+	_restore()
+
+
+## M13: the first time chapter 3's map is shown Svartalfheim's scene plays; at its end Regin joins: the «Новый герой»
+## window over the map, «Отлично!» closes it; the scene does not play again.
+func test_the_map_plays_svartalfheims_scene_and_regin_joins_at_its_end() -> void:
+	var data = await _data()
+	var progress = Progress.new_game(data)
+	progress.mark_all_scenes_seen(data)
+	progress.seen_scenes.erase("ch3_intro")
+	progress.jump_to_stage(data, 21)
+	assert_true(not progress.hero_levels.has("regin"), "no Regin before the scene, even after the debug jump")
+	var game_state = await _use_progress(progress)
+	var tree := Engine.get_main_loop() as SceneTree
+	var map: Control = load(MAP_SCENE).instantiate()
+	tree.root.add_child(map)
+	await tree.process_frame
+	assert_eq(map.shown_chapter(), 3, "the map opens on chapter 3")
+	var players := map.find_children("*", "", false, false).filter(func(node): return node.get_script() == StoryPlayer)
+	assert_eq(players.size(), 1, "a scene over the map")
+	if players.size() == 1:
+		assert_eq(players[0].scene_id, "ch3_intro", "Svartalfheim's scene")
+		assert_true(not progress.hero_levels.has("regin"), "Regin joins at the end, not at the start")
+		players[0].close()
+	await tree.process_frame
+	assert_true(progress.hero_levels.has("regin"), "Regin has joined")
+	var windows := map.find_children("*", "", false, false).filter(func(node): return node.get_script() == NewHeroWindow)
+	assert_eq(windows.size(), 1, "the «Новый герой» window over the map")
+	if windows.size() == 1:
+		await tree.process_frame
+		assert_eq(windows[0].shown_hero(), "regin", "for Regin")
+		assert_true(windows[0]._info.text.begins_with("Кузнец · Поддержка · род Свартальфхейм"), "his class, role and clan")
+		windows[0].press_button()
+		await tree.process_frame
+		await tree.process_frame
+		assert_true(not is_instance_valid(windows[0]), "«Отлично!» closes it")
+	map.show_chapter(2)
+	map.show_chapter(3)
+	await tree.process_frame
+	players = map.find_children("*", "", false, false).filter(func(node): return node.get_script() == StoryPlayer)
+	assert_eq(players.size(), 0, "the scene does not play again")
 	map.queue_free()
 	_restore()
 

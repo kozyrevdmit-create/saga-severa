@@ -31,7 +31,10 @@
 ## 6. (--recommend) «Рекомендуемая сила» per stage: the squad power at which the human player wins
 ##    simulation.recommended_power_win_share of the fights (for stages.json → recommended_power). For a chapter's
 ##    boss stage also how long the human's battle lasts at that power: the whole stage and the boss's wave alone.
-## The campaigns go through every chapter (stages 1–20); a chapter's enemies grow by its own step (M11).
+## The campaigns go through every chapter (stages 1–30); a chapter's enemies grow by its own step (M11).
+## M13: a chapter's map is "shown" right after the win that opens it: its scene plays and Regin joins at the end of
+## «ch3_intro»; every player puts him into the squad in place of the hero named in balance.json →
+## simulation.new_hero_takes_the_place_of (the human player of the task puts Regin into the second row).
 ## 7. (--packs) Beast packs (M9). Tables 1–5 leave the packs out: the worst case, a player who never fights them.
 ##    Here the human player comes back every respawn time (balance.json → beast_packs.respawn_hours) and first beats
 ##    every pack on the map, then fights stages as in table 1 (an attempt at the next stage, a replay of the previous
@@ -398,6 +401,7 @@ func _campaign(policy: String, visit_fights := 0) -> Dictionary:
 				var middle_level := _middle_squad_level(progress)
 				# Count with the silver actually paid (jarl bonus included), at the levels before the reward.
 				var paid: Dictionary = progress.apply_victory(data, stage)
+				_see_chapter_maps(progress)
 				packs["stage_silver"] += int(paid["silver"])
 				record["upgrades"] = _upgrades_bought_by(middle_level, int(paid["silver"]))
 				_build(progress)
@@ -443,6 +447,24 @@ func _pack_visit(progress, policy: String, packs: Dictionary) -> void:
 			var paid: Dictionary = progress.apply_pack_victory(data, pack_id, now)
 			packs["silver"] += int(paid["silver"])
 			packs["supplies"] += int(paid["supplies"])
+
+
+## The first look at every open chapter's map (as the map screen does): the chapter's scene starts, and the heroes who
+## join at its end (Regin) join and take the place of the hero named in balance.json → simulation.new_hero_takes_the_place_of
+## (if that hero is in the squad; otherwise they stay where Progress put them).
+func _see_chapter_maps(progress) -> void:
+	var places: Dictionary = data.balance["simulation"]["new_hero_takes_the_place_of"]
+	for chapter_id in data.chapter_ids():
+		if not progress.is_chapter_open(data, chapter_id):
+			continue
+		var scene_id: String = progress.scene_on_chapter_map(data, chapter_id)
+		if scene_id == "":
+			continue
+		progress.start_scene(scene_id)
+		for hero_id in progress.join_heroes_after_scene(data, scene_id):
+			var replaced: String = places.get(hero_id, "")
+			if not progress.is_in_formation(hero_id) and progress.is_in_formation(replaced):
+				progress.formation[progress.formation.find(replaced)] = hero_id
 
 
 ## Builds, then spends silver before a fight; `goal` is the stage the player is trying to beat.
@@ -836,6 +858,7 @@ func _squad_for(stage: int, levels: Dictionary, default_level: int) -> Array:
 	var progress = Progress.new_game(data)
 	for won in range(1, stage):
 		progress.apply_victory(data, won)
+		_see_chapter_maps(progress)
 	for hero_id in progress.hero_levels:
 		progress.hero_levels[hero_id] = int(levels.get(hero_id, default_level))
 	return progress.squad(data)
@@ -986,6 +1009,7 @@ func _print_recommended() -> void:
 		var progress = Progress.new_game(data)
 		for won in range(1, stage):
 			progress.apply_victory(data, won)
+			_see_chapter_maps(progress)
 		var ids: Array = progress.squad_ids()
 		# Step i: every squad hero at level 1 + i / n, the first i % n of them (in unlock order) one level higher.
 		var rate_at := func(step: int) -> float:

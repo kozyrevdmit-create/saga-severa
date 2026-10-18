@@ -11,8 +11,8 @@
 ## A boss with phases (Thjazi) changes its picture when it enters the next one; Fafnir keeps his and is darkened while
 ## burrowed into his gold (blows at him then show «Неуязвим»). A cave spider's «Паутина» is written over the hero it
 ## caught; the hero cards show the web, the poison and Regin's «Закалка» (HeroCard).
-## A defeat (or a retreat) adds the tips of data/hints.json → defeat whose condition the battle met (StageBattle.defeat_hints),
-## every time.
+## A defeat (or a retreat) adds the first tip of data/hints.json → defeat whose condition the battle met
+## (StageBattle.defeat_hint), every time.
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -22,6 +22,7 @@ const HeroCard := preload("res://scripts/ui/hero_card.gd")
 const Art := preload("res://scripts/ui/art.gd")
 const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
+const NewHeroWindow := preload("res://scripts/ui/new_hero_window.gd")
 
 const MAP_SCENE := "res://scenes/map.tscn"
 
@@ -357,7 +358,8 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 		%ResultHint.text = "Подсказка: прокачай героев или поменяй расстановку отряда."
 		if retreat:
 			%ResultHint.text = "Бой засчитан поражением.\n" + %ResultHint.text
-		for tip in _battle.defeat_hints(GameState.data.hints["defeat"]):
+		var tip: String = _battle.defeat_hint(GameState.data.hints["defeat"])
+		if tip != "":
 			%ResultHint.text += "\n\n" + tip
 	GameState.save()
 	%ResultOverlay.visible = true
@@ -415,13 +417,9 @@ func _show_next_new_hero() -> void:
 	var hero_id: String = _new_heroes.pop_front()
 	_announced_hero = hero_id
 	var hero: Dictionary = data.get_hero(hero_id)
-	var hero_class: Dictionary = data.get_hero_class(hero)
 	for old in %NewHeroPortrait.get_children():
 		old.queue_free()
 	%NewHeroPortrait.add_child(HeroesScreen.make_portrait(hero, NEW_HERO_PORTRAIT_SIZE))
 	%NewHeroName.text = hero["name"]
-	var where := "Уже в отряде." if GameState.progress.is_in_formation(hero_id) else "Поставь в отряд на экране «Отряд»."
-	%NewHeroInfo.text = "%s · %s · род %s\nУльта: %s\n%s" % [
-		hero_class["name"], hero_class["role_short"], data.heroes["clans"][hero["clan"]]["name"],
-		hero["ultimate"]["name"], where]
+	%NewHeroInfo.text = NewHeroWindow.info_text(data, GameState.progress, hero_id)
 	%NewHeroOverlay.visible = true

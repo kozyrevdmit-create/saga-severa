@@ -83,6 +83,13 @@ func test_construction_opens_with_chapter_one_won_with_supplies_for_one_building
 	win_stages(progress, 20)
 	assert_true(progress.is_building_open(data, "thjazi_barrow"), "the barrow opens after chapter 2")
 	assert_true(not progress.is_building_open(data, "forge"), "the forge waits for chapter 3")
+	win_stages(progress, 29)
+	assert_true(not progress.is_building_open(data, "forge"), "M13: still closed before Fafnir")
+	win_stages(progress, 30)
+	assert_true(progress.is_building_open(data, "forge"), "M13: the forge opens with the first win over Fafnir")
+	var old: Dictionary = Progress.new_game(data).to_dict()
+	old["cleared_stage"] = 30
+	assert_true(Progress.from_dict(old, data).is_building_open(data, "forge"), "a save with chapter 3 won has it open")
 
 
 ## A save from before M12: one that has won chapter 1 gets construction and the starting supplies at once, the barrow
