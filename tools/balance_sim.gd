@@ -42,8 +42,9 @@
 ##    one after a defeat, …) until the visit's stage fights (--visit-fights, several lengths) are used up.
 ##    Prints the replays per stage with and without packs, and how often the human beats each pack.
 ## 8. (--durations) Battle length rule (M13.2): the human's average won battle on every stage and against every pack at
-##    the recommended power, against balance.json → balance_check.battle_length. A normal stage or a pack over its limit
-##    fails the check (exit code 1) and is named; boss stages are only printed (the rule does not cover them).
+##    the recommended power, against balance.json → balance_check.battle_length. A normal stage or a pack over its limit,
+##    or with no won battle at all, fails the check (exit code 1) and is named; boss stages are only printed (the rule
+##    does not cover them).
 ## Settlement (M12): every player builds with their supplies (from chapter 2 on: first wins, packs) before spending
 ## silver, the simple way: the open building with the lowest level, in data order on a tie (капище → двор → пристань →
 ## курган), as soon as the supplies are there. Table 1 and table 7 print the buildings' levels at the first win of
@@ -1122,6 +1123,9 @@ func _print_durations() -> void:
 		var mark := ""
 		if boss:
 			mark = "  (босс, не проверяется)"
+		elif result["won"] == 0:
+			mark = "  ! ни одной победы — длительность не измерить"
+			over.append("этап %d — ни одной победы" % stage)
 		elif result["average"] > stage_limit:
 			mark = "  ! дольше %s с" % _number(stage_limit)
 			over.append("этап %d — %d с" % [stage, roundi(result["average"])])
@@ -1141,7 +1145,10 @@ func _print_durations() -> void:
 			var power_stage: int = progress.pack_stage(data, pack_id)
 			var result := _won_time(func(run): return StageBattle.from_pack(data, pack_id, power_stage, squad, run * 7919 + stage), fights)
 			var mark := ""
-			if result["average"] > pack_limit:
+			if result["won"] == 0:
+				mark = "  ! ни одной победы — длительность не измерить"
+				over.append("стая «%s» на силе этапа %d — ни одной победы" % [pack["name"], power_stage])
+			elif result["average"] > pack_limit:
 				mark = "  ! дольше %s с" % _number(pack_limit)
 				over.append("стая «%s» на силе этапа %d — %d с" % [pack["name"], power_stage, roundi(result["average"])])
 			print("%-22s | %10d | %9d | %4d%% | %20s | %s%s" % [pack["name"], power_stage, data.recommended_power(stage), result["share"],
@@ -1168,7 +1175,9 @@ func _squad_at_power(progress, power: int) -> Array:
 	return progress.squad(data)
 
 
-## The human's fights (`make_battle`: run -> battle): the share won and the average and longest won battle time.
+## The human's fights (`make_battle`: run -> battle): how many and what share were won, the average and longest won
+## battle time. A battle stopped at stall_after_seconds is lost (see _run). With no wins there is no length to check:
+## _print_durations fails such a stage or pack (an enemy too strong or too "fat" must not pass as a short battle).
 func _won_time(make_battle: Callable, fights: int) -> Dictionary:
 	var times := []
 	for run in fights:
@@ -1177,7 +1186,7 @@ func _won_time(make_battle: Callable, fights: int) -> Dictionary:
 		if battle.victory:
 			times.append(battle.time)
 	var average := _average(times) if not times.is_empty() else 0.0
-	return {"share": roundi(100.0 * times.size() / fights), "average": average,
+	return {"won": times.size(), "share": roundi(100.0 * times.size() / fights), "average": average,
 			"text": "%d с" % roundi(average) if not times.is_empty() else "—",
 			"longest": "%d с" % roundi(times.max()) if not times.is_empty() else "—"}
 
