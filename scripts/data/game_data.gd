@@ -300,16 +300,28 @@ func slot_count() -> int:
 	return front_slot_count() + int(balance["formation"]["back_slots"])
 
 
-## Heroes that join the squad after winning `stage_id` for the first time (in data order).
+## Heroes that join the squad right after winning `stage_id` for the first time (in data order). A hero with
+## "joins_after_scene" (Regin) is not among them: he joins at the end of that saga scene (heroes_joining_after_scene).
 func heroes_unlocked_at(stage_id: int) -> Array[String]:
 	var ids: Array[String] = []
 	for hero in heroes.get("heroes", []):
-		if int(hero["unlock_after_stage"]) == stage_id and stage_id > 0:
+		if int(hero["unlock_after_stage"]) == stage_id and stage_id > 0 and not hero.has("joins_after_scene"):
 			ids.append(hero["id"])
 	return ids
 
 
-## All heroes available once stages up to `cleared_stage` are won (in data order).
+## Heroes who join at the end of the saga scene `scene_id` (heroes.json → joins_after_scene; Regin — «ch3_intro»),
+## once their stage (unlock_after_stage) is won.
+func heroes_joining_after_scene(scene_id: String) -> Array[String]:
+	var ids: Array[String] = []
+	for hero in heroes.get("heroes", []):
+		if hero.get("joins_after_scene", "") == scene_id:
+			ids.append(hero["id"])
+	return ids
+
+
+## All heroes whose stage is won once stages up to `cleared_stage` are won (in data order); a hero who joins after
+## a scene also needs that scene (Progress.earned_hero_ids).
 func unlocked_hero_ids(cleared_stage: int) -> Array[String]:
 	var ids: Array[String] = []
 	for hero in heroes.get("heroes", []):

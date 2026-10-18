@@ -173,7 +173,7 @@ func test_heroes_join_after_their_stages() -> void:
 	var progress = Progress.new_game(data)
 	for hero in data.heroes["heroes"]:
 		var unlock_stage := int(hero["unlock_after_stage"])
-		if unlock_stage == 0:
+		if unlock_stage == 0 or hero.has("joins_after_scene"):  # Regin joins after his scene (test_regin_joins_after_his_scene)
 			continue
 		win_stages(progress, unlock_stage - 1)
 		assert_true(not progress.hero_levels.has(hero["id"]), "%s locked before stage %d" % [hero["id"], unlock_stage])
@@ -185,6 +185,31 @@ func test_heroes_join_after_their_stages() -> void:
 		assert_eq(paid["new_heroes"], [hero["id"]], "%s announced after stage %d" % [hero["id"], unlock_stage])
 		assert_eq(progress.level_of(hero["id"]), 8, "%s joins at the squad's average level, rounded down" % hero["id"])
 		assert_true(progress.apply_victory(data, unlock_stage)["new_heroes"].is_empty(), "a replay unlocks nobody")
+
+
+## M13: Regin's stage is 20, but he joins at the end of his scene «ch3_intro» (heroes.json → joins_after_scene), not with
+## the win: like a new hero (squad average level, a free slot or the bench), once. A scene counts as seen as soon as it
+## starts, so a game closed during it has him on the next start (earned_hero_ids).
+func test_regin_joins_after_his_scene() -> void:
+	var progress = Progress.new_game(data)
+	win_stages(progress, 19)
+	for hero_id in progress.hero_levels:
+		progress.hero_levels[hero_id] = 12
+	var paid: Dictionary = progress.apply_victory(data, 20)
+	assert_true(not "regin" in paid["new_heroes"], "not announced with the win over stage 20")
+	assert_true(not progress.hero_levels.has("regin"), "not here yet")
+	assert_true(not "regin" in progress.earned_hero_ids(data), "not earned before his scene")
+	assert_eq(progress.join_heroes_after_scene(data, "ch2_boss_after"), [] as Array[String], "another scene brings nobody")
+	progress.start_scene("ch3_intro")
+	assert_true("regin" in progress.earned_hero_ids(data), "earned once his scene has started")
+	assert_eq(progress.join_heroes_after_scene(data, "ch3_intro"), ["regin"] as Array[String], "joins at its end")
+	assert_eq(progress.level_of("regin"), 12, "at the squad's average level")
+	assert_true(not progress.is_in_formation("regin"), "the squad is full: «Не в отряде»")
+	assert_eq(progress.join_heroes_after_scene(data, "ch3_intro"), [] as Array[String], "only once")
+	var early = Progress.new_game(data)
+	win_stages(early, 10)
+	early.start_scene("ch3_intro")
+	assert_eq(early.join_heroes_after_scene(data, "ch3_intro"), [] as Array[String], "not before stage 20 is won")
 
 
 func test_join_level_is_the_squad_average_rounded_down() -> void:

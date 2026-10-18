@@ -2,7 +2,7 @@
 ## The battle screen sets the picture size to fit the field (set_art_size); a fighter with art_scale (the boss)
 ## is that much bigger. Simple tweened animation, no extra drawings: breathing while alive, a lunge towards the
 ## enemy on every attack (lunge), a bright flash and a small shake when hit (hit), fading out on death; a boss that
-## changes form gets its new picture with a flash (change_picture).
+## changes form gets its new picture with a flash (change_picture); a boss burrowed into its gold (invulnerable) is darker.
 ## The hit feedback's colour, strength and timing come from data/visual.json; a fighter hit again soon after
 ## (hit_min_gap_seconds, real time, so x2 does not double it) does not flash or shake again.
 extends Control
@@ -33,6 +33,7 @@ const DEATH_SECONDS := 0.6
 const DEAD_ALPHA := 0.25
 const DEATH_SINK := 0.05  ## share of the picture size the body sinks while fading
 const SHADOW_COLOR := Color(0.1, 0.07, 0.03, 0.22)
+const BURROWED_TINT := Color(0.5, 0.5, 0.5)  ## a boss burrowed into its gold (Fafnir, invulnerable) is darkened
 
 signal tapped
 
@@ -160,6 +161,7 @@ static func art_size_for(height: float) -> float:
 
 func refresh(unit, marked := false) -> void:
 	_mark.visible = marked and unit.is_alive()
+	_pose.modulate = BURROWED_TINT if unit.is_invulnerable() else Color.WHITE
 	_hp_bar.value = unit.hp_fraction()
 	if unit.has_ultimate():
 		_energy_bar.value = float(unit.energy) / unit.ultimate_cost()

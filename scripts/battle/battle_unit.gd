@@ -27,12 +27,22 @@ var first_strike: Dictionary = {}  ## the first attack hits harder (the boar's c
 var first_strike_used := false
 var phases: Array = []  ## later phases of a boss (Thjazi turns into an eagle), each starts at its HP share; empty for most units
 var phase := 0  ## phases entered so far (0 = the first form)
+var death_blast: Dictionary = {}  ## a blow at the opposing front row on death (the forge spirit's «Взрыв»), empty for most units
 var energy := 0
 
-var buffs: Array[Dictionary] = []  ## {stat, multiplier, remaining, source}
+var buffs: Array[Dictionary] = []  ## {stat, multiplier, remaining, source, badge}
 var stun_remaining := 0.0
 var slow_amount := 0.0
 var slow_remaining := 0.0
+var web_remaining := 0.0  ## caught in a cave spider's web: does not act and gains no energy
+## Poison (Fafnir's breath): {source, amount, interval, timer, ticks_left}; amount is the damage of one tick before
+## the target's damage reductions. Empty when not poisoned.
+var poison: Dictionary = {}
+## A boss burrowed into its gold (Fafnir at half HP): takes no damage and no statuses, does not attack or use its
+## special ability; hits with invulnerable_special (the coins) on its own timer instead.
+var invulnerable_remaining := 0.0
+var invulnerable_special: Dictionary = {}
+var invulnerable_timer := 0.0
 
 
 ## The multipliers come from the hero's level and the squad's clan bonuses (see StageBattle.from_data).
@@ -71,6 +81,7 @@ static func from_enemy(enemy: Dictionary, power_multiplier := 1.0) -> RefCounted
 	unit.special = enemy.get("special", {})
 	unit.first_strike = enemy.get("first_strike", {})
 	unit.phases = enemy.get("phases", [])
+	unit.death_blast = enemy.get("death_blast", {})
 	return unit
 
 
@@ -109,6 +120,7 @@ func due_phase() -> Dictionary:
 
 
 ## Enters the next phase: a new action, a faster (or slower) attack and a new special ability on a fresh timer.
+## A phase with "invulnerable" (Fafnir burrows into his gold) starts with that many seconds of invulnerability.
 ## HP stays as it is.
 func enter_phase(next: Dictionary) -> void:
 	phase += 1
@@ -116,6 +128,27 @@ func enter_phase(next: Dictionary) -> void:
 	attack_interval *= float(next["attack_interval_multiplier"])
 	special = next["special"]
 	special_timer = 0.0
+	if next.has("invulnerable"):
+		invulnerable_remaining = float(next["invulnerable"]["seconds"])
+		invulnerable_special = next["invulnerable"]["special"]
+		invulnerable_timer = 0.0
+
+
+func is_invulnerable() -> bool:
+	return invulnerable_remaining > 0.0
+
+
+func is_webbed() -> bool:
+	return web_remaining > 0.0
+
+
+func is_poisoned() -> bool:
+	return not poison.is_empty()
+
+
+## A buff with this badge (heroes.json ultimate effect "badge": Regin's «Закалка» is "temper") is on the unit.
+func has_badge(badge: String) -> bool:
+	return buffs.any(func(buff): return buff["badge"] == badge)
 
 
 func is_stunned() -> bool:
@@ -138,24 +171,38 @@ func damage_taken_multiplier() -> float:
 
 
 ## A newer buff of the same stat from the same source refreshes the old one instead of stacking.
-func add_buff(stat: String, multiplier: float, duration: float, source_id: int) -> void:
+## badge: what the hero card shows while the buff lasts ("" = nothing).
+func add_buff(stat: String, multiplier: float, duration: float, source_id: int, badge := "") -> void:
 	for buff in buffs:
 		if buff["stat"] == stat and buff["source"] == source_id:
 			buff["multiplier"] = multiplier
 			buff["remaining"] = duration
+			buff["badge"] = badge
 			return
-	buffs.append({"stat": stat, "multiplier": multiplier, "remaining": duration, "source": source_id})
+	buffs.append({"stat": stat, "multiplier": multiplier, "remaining": duration, "source": source_id, "badge": badge})
 
 
+## A boss burrowed into its gold takes no statuses.
 func apply_status(status: Dictionary) -> void:
+	if is_invulnerable():
+		return
 	match status["kind"]:
 		"stun":
 			stun_remaining = maxf(stun_remaining, float(status["duration"]))
 		"slow":
 			slow_amount = float(status["amount"])
 			slow_remaining = maxf(slow_remaining, float(status["duration"]))
+		"web":
+			web_remaining = maxf(web_remaining, float(status["duration"]))
 		_:
 			push_error("Unknown status kind: %s" % status["kind"])
+
+
+## Poisons the unit (a new poison replaces the old one): `ticks` blows of `amount` damage, one every `interval` seconds.
+func apply_poison(source_id: int, amount: float, interval: float, ticks: int) -> void:
+	if is_invulnerable():
+		return
+	poison = {"source": source_id, "amount": amount, "interval": interval, "timer": 0.0, "ticks_left": ticks}
 
 
 ## Counts down buffs and statuses by dt seconds.
@@ -165,6 +212,7 @@ func tick_effects(dt: float) -> void:
 		if buffs[i]["remaining"] <= 0.0:
 			buffs.remove_at(i)
 	stun_remaining = maxf(0.0, stun_remaining - dt)
+	web_remaining = maxf(0.0, web_remaining - dt)
 	slow_remaining = maxf(0.0, slow_remaining - dt)
 	if slow_remaining == 0.0:
 		slow_amount = 0.0

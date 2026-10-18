@@ -22,7 +22,8 @@ func test_every_character_has_a_square_picture_of_one_size() -> void:
 	for enemy in _data.enemies["enemies"]:
 		pictures.append([enemy["id"], Art.enemy_picture(enemy["id"])])
 		for phase in enemy.get("phases", []):
-			pictures.append([phase["picture"], Art.enemy_picture(phase["picture"])])
+			if phase.has("picture"):  # Fafnir keeps his picture when he burrows into the gold
+				pictures.append([phase["picture"], Art.enemy_picture(phase["picture"])])
 	for entry in pictures:
 		var picture: Texture2D = entry[1]
 		assert_true(picture != null, "%s has a picture" % entry[0])
@@ -43,9 +44,11 @@ func test_every_hero_has_a_portrait_inside_the_picture() -> void:
 		assert_true(portrait.region.position.y < picture_rect.size.y * 0.25, "%s: the portrait is the upper part of the picture" % hero["id"])
 
 
-## The boss is half as big again (M7), the bear 1.3 times, the boar a bit smaller than a draugr-sized picture (M9).
+## The boss is half as big again (M7), the bear 1.3 times, the boar a bit smaller than a draugr-sized picture (M9);
+## M13: Fafnir as big as the other bosses, the rune golem as the bear.
 func test_the_boss_is_drawn_half_as_big_again() -> void:
-	var scales := {"draugr_king": 1.5, "bear": 1.3, "boar": 0.9, "thjazi": 1.5, "ice_troll": 1.2, "ironwood_wolf": 1.1, "carrion_eagle": 1.1}
+	var scales := {"draugr_king": 1.5, "bear": 1.3, "boar": 0.9, "thjazi": 1.5, "ice_troll": 1.2, "ironwood_wolf": 1.1, "carrion_eagle": 1.1,
+		"fafnir": 1.5, "rune_golem": 1.3}
 	for enemy in _data.enemies["enemies"]:
 		var expected: float = scales.get(enemy["id"], 1.0)
 		assert_near(float(enemy["art_scale"]), expected, 0.001, "%s: art_scale" % enemy["id"])

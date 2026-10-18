@@ -6,16 +6,17 @@ const GameData := preload("res://scripts/data/game_data.gd")
 const KNOWN_ACTIONS := ["attack_front_row", "attack_lowest_hp", "heal_or_attack", "attack_back_row_weakest"]
 const KNOWN_EFFECTS := ["buff_allies", "hits", "damage", "heal_allies"]
 const KNOWN_TARGETS := ["front_row_single", "front_row_all", "all_enemies"]
-const KNOWN_PASSIVES := ["attack_per_missing_hp", "damage_taken_reduction"]
+const KNOWN_PASSIVES := ["attack_per_missing_hp", "damage_taken_reduction", "front_row_damage_taken_reduction"]
 
 var data = GameData.load_all()
 
 
-func test_all_six_heroes_present() -> void:
+## M13: Regin is the seventh.
+func test_all_seven_heroes_present() -> void:
 	var ids := []
 	for hero in data.heroes["heroes"]:
 		ids.append(hero["id"])
-	assert_eq(ids, ["torvald", "sigrid", "eyvind", "angrboda", "skadi", "hrungnir"], "hero ids")
+	assert_eq(ids, ["torvald", "sigrid", "eyvind", "angrboda", "skadi", "hrungnir", "regin"], "hero ids")
 
 
 func test_heroes_have_valid_fields() -> void:
@@ -85,9 +86,10 @@ func test_three_enemy_types_and_the_boss() -> void:
 		assert_true(enemy["action"] in KNOWN_ACTIONS, "%s action" % enemy["id"])
 		assert_true(enemy["hp"] > 0 and enemy["attack"] > 0 and enemy["attack_interval"] > 0, "%s stats positive" % enemy["id"])
 		assert_true(Color.html_is_valid(enemy["color"]), "%s color" % enemy["id"])
-	assert_eq(regular, ["draugr", "wolf", "draugr_archer", "boar", "bear", "ice_troll", "ironwood_wolf", "carrion_eagle"],
-			"regular enemy ids (boar and bear: beast packs, M9; troll, Iron Wood wolf and carrion eagle: chapter 2, M11)")
-	assert_eq(bosses, ["draugr_king", "thjazi"], "boss ids")
+	assert_eq(regular, ["draugr", "wolf", "draugr_archer", "boar", "bear", "ice_troll", "ironwood_wolf", "carrion_eagle",
+			"rune_golem", "cave_spider", "forge_spirit"],
+			"regular enemy ids (boar and bear: beast packs, M9; troll, Iron Wood wolf and carrion eagle: chapter 2, M11; golem, spider, forge spirit: chapter 3, M13)")
+	assert_eq(bosses, ["draugr_king", "thjazi", "fafnir"], "boss ids")
 	var special: Dictionary = data.get_enemy("draugr_king")["special"]
 	assert_eq(special["type"], "hit_all", "boss strikes the whole squad")
 	assert_true(special["interval"] > 0 and special["attack_multiplier"] > 0, "boss strike numbers positive")
@@ -201,12 +203,17 @@ func test_classes_have_short_roles() -> void:
 		assert_true(data.heroes["classes"][class_id]["role_short"] in ["Танк", "Урон", "Лекарь", "Поддержка"], "%s role" % class_id)
 
 
+## Svartalfheim (M13) has one hero so far: its bonus is not set yet (it comes with other dwarves, LORE.md «Регин»).
 func test_clan_synergies_present() -> void:
 	for clan_id in data.heroes["clans"]:
 		var synergy: Dictionary = data.heroes["clans"][clan_id]["synergy"]
 		assert_true(synergy["min_heroes"] > 1, "%s needs several heroes" % clan_id)
 		assert_true(synergy["stat"] in ["hp", "attack"], "%s bonus stat" % clan_id)
-		assert_true(synergy["bonus"] > 0, "%s bonus positive" % clan_id)
+		if clan_id == "svartalfheim":
+			var members: Array = data.heroes["heroes"].filter(func(hero): return hero["clan"] == clan_id)
+			assert_true(members.size() < int(synergy["min_heroes"]), "Svartalfheim's bonus cannot be active yet")
+		else:
+			assert_true(synergy["bonus"] > 0, "%s bonus positive" % clan_id)
 
 
 func test_m4_balance_settings_present() -> void:
@@ -236,7 +243,7 @@ func test_balance_check_settings_present() -> void:
 func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:
 	for hero in data.heroes["heroes"]:
 		var stage := int(hero["unlock_after_stage"])
-		assert_true(stage >= 0 and stage < data.stage_count(), "%s unlocks on an existing stage" % hero["id"])
+		assert_true(stage >= 0 and stage <= data.stage_count(), "%s unlocks on an existing stage" % hero["id"])
 
 
 ## M8: the hit feedback is short (~0.15 s) and a fighter does not flash again before the last flash is over.

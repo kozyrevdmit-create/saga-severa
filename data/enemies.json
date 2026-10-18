@@ -189,6 +189,118 @@
         "y": 0.21,
         "size": 0.3
       }
+    },
+    {
+      "id": "rune_golem",
+      "name": "Рунный голем",
+      "description": "Танк: очень много HP, медленный",
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 4200,
+      "attack": 120,
+      "attack_interval": 2.8,
+      "art_scale": 1.3,
+      "color": "#8a8070",
+      "portrait": {
+        "x": 0.45,
+        "y": 0.22,
+        "size": 0.4
+      }
+    },
+    {
+      "id": "cave_spider",
+      "name": "Пещерный паук",
+      "description": "Опутывает героя паутиной: тот не атакует",
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 1100,
+      "attack": 42,
+      "attack_interval": 1.0,
+      "art_scale": 1.0,
+      "color": "#2a2a3a",
+      "special": {
+        "name": "Паутина",
+        "type": "web",
+        "target": "front_row",
+        "interval": 6.0,
+        "duration": 2.0
+      },
+      "portrait": {
+        "x": 0.36,
+        "y": 0.52,
+        "size": 0.38
+      }
+    },
+    {
+      "id": "forge_spirit",
+      "name": "Дух горна",
+      "description": "Погибая, взрывается и бьёт огнём весь первый ряд",
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 1200,
+      "attack": 50,
+      "attack_interval": 1.2,
+      "art_scale": 1.0,
+      "color": "#b5442c",
+      "death_blast": {
+        "name": "Взрыв",
+        "attack_multiplier": 2.0
+      },
+      "portrait": {
+        "x": 0.48,
+        "y": 0.36,
+        "size": 0.36
+      }
+    },
+    {
+      "id": "fafnir",
+      "name": "Фафнир",
+      "description": "Босс: змей на золоте, «Ядовитое дыхание» бьёт всю дружину и отравляет; на половине HP зарывается в золото",
+      "boss": true,
+      "row": "front",
+      "action": "attack_front_row",
+      "hp": 7000,
+      "attack": 100,
+      "attack_interval": 1.6,
+      "art_scale": 1.5,
+      "color": "#1f2f4a",
+      "special": {
+        "name": "Ядовитое дыхание",
+        "type": "hit_all",
+        "interval": 8.0,
+        "attack_multiplier": 1.2,
+        "poison": { "attack_multiplier": 0.3, "interval": 1.0, "ticks": 3 }
+      },
+      "phases": [
+        {
+          "at_hp_fraction": 0.5,
+          "announcement": "Фафнир зарывается в золото!",
+          "action": "attack_front_row",
+          "attack_interval_multiplier": 1.0,
+          "invulnerable": {
+            "seconds": 5.0,
+            "special": {
+              "name": "Монеты",
+              "type": "hit_one",
+              "target": "random",
+              "interval": 1.0,
+              "attack_multiplier": 1.0
+            }
+          },
+          "special": {
+            "name": "Ядовитое дыхание",
+            "type": "hit_all",
+            "interval": 6.0,
+            "attack_multiplier": 1.2,
+            "poison": { "attack_multiplier": 0.3, "interval": 1.0, "ticks": 3 }
+          }
+        }
+      ],
+      "portrait": {
+        "x": 0.27,
+        "y": 0.2,
+        "size": 0.34
+      }
     }
   ]
 }
