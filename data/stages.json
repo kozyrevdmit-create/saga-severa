@@ -419,9 +419,9 @@
         "experience": 540
       },
       "waves": [
-        ["forge_spirit", "forge_spirit"],
+        ["cave_spider", "forge_spirit"],
         ["rune_golem", "cave_spider"],
-        ["rune_golem", "cave_spider", "cave_spider"]
+        ["rune_golem", "forge_spirit", "cave_spider"]
       ]
     },
     {
@@ -457,7 +457,7 @@
     {
       "id": 30,
       "chapter": 3,
-      "recommended_power": 40300,
+      "recommended_power": 38300,
       "map_point": { "x": 0.57, "y": 0.115, "label": "left" },
       "reward": {
         "silver": 3863,
