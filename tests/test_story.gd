@@ -240,7 +240,7 @@ func test_the_debug_panel_brings_no_scenes() -> void:
 	progress.start_scene("intro")
 	progress.jump_to_stage(data, 10)
 	progress.unlock_all_heroes(data)
-	assert_eq(progress.hero_levels.size(), 6, "all heroes joined")
+	assert_eq(progress.hero_levels.size(), 7, "all heroes joined, Regin too (M13)")
 	assert_eq(progress.scene_queue, [] as Array[String], "jumping to a stage and unlocking heroes queue no scenes")
 	assert_eq(progress.seen_scenes, ["intro"] as Array[String], "and mark none seen")
 	progress.mark_all_scenes_seen(data)

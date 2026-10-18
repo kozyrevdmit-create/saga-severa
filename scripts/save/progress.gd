@@ -75,7 +75,7 @@ func unlock_all_heroes(data) -> Array[String]:
 func jump_to_stage(data, stage_id: int) -> void:
 	cleared_stage = clampi(stage_id, 1, data.stage_count()) - 1
 	var level := _join_level(data)
-	for hero_id in data.unlocked_hero_ids(cleared_stage):
+	for hero_id in earned_hero_ids(data):
 		if not hero_levels.has(hero_id):
 			_join(data, hero_id, level)
 	_open_construction(data)
@@ -138,6 +138,31 @@ func apply_victory(data, stage_id: int) -> Dictionary:
 		_open_construction(data)
 	return {"silver": silver_gain, "experience": experience_gain, "supplies": supplies_gain, "replay": replay,
 		"new_heroes": new_heroes}
+
+
+## Heroes earned by the won stages: each hero's stage (unlock_after_stage) is won, and a hero who joins after a saga
+## scene (Regin after «ch3_intro») has also had that scene start (a scene counts as seen as soon as it starts, so if
+## the game is closed during it, he is there on the next start).
+func earned_hero_ids(data) -> Array[String]:
+	var ids: Array[String] = []
+	for hero_id in data.unlocked_hero_ids(cleared_stage):
+		var scene_id: String = data.get_hero(hero_id).get("joins_after_scene", "")
+		if scene_id == "" or is_scene_seen(scene_id):
+			ids.append(hero_id)
+	return ids
+
+
+## The saga scene `scene_id` has ended: the heroes who join at its end (GameData.heroes_joining_after_scene) join like
+## new heroes (at the join level, into a free slot or onto the bench) once their stage is won. Returns those who joined
+## now, for the «Новый герой» window (nobody when the scene is watched again from «Сцены саги»: they are already here).
+func join_heroes_after_scene(data, scene_id: String) -> Array[String]:
+	var joined: Array[String] = []
+	var level := _join_level(data)
+	for hero_id in data.heroes_joining_after_scene(scene_id):
+		if not hero_levels.has(hero_id) and hero_id in earned_hero_ids(data):
+			_join(data, hero_id, level)
+			joined.append(hero_id)
+	return joined
 
 
 # --- saga scenes (data/story.json) ----------------------------------------------
@@ -690,7 +715,7 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 	# level, once the formation is restored). Heroes saved with a level beyond that (opened by the debug panel,
 	# or kept after jumping back to an earlier stage) stay unlocked.
 	var levels = saved.get("hero_levels")
-	var earned: Array[String] = data.unlocked_hero_ids(progress.cleared_stage)
+	var earned: Array[String] = progress.earned_hero_ids(data)
 	progress.hero_levels.clear()
 	var missing: Array[String] = []
 	for hero in data.heroes["heroes"]:

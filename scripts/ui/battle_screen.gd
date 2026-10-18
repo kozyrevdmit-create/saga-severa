@@ -8,7 +8,9 @@
 ## Progress is saved after every stage.
 ## Saga scenes: a hero's scene right after their «Новый герой» window is closed; the boss's last scene after «Победа!»
 ## (on the way to the map). Both are queued by the first win (Progress.apply_victory).
-## A boss with phases (Thjazi) changes its picture when it enters the next one.
+## A boss with phases (Thjazi) changes its picture when it enters the next one; Fafnir keeps his and is darkened while
+## burrowed into his gold (blows at him then show «Неуязвим»). A cave spider's «Паутина» is written over the hero it
+## caught; the hero cards show the web, the poison and Regin's «Закалка» (HeroCard).
 ## A defeat (or a retreat) adds the tips of data/hints.json → defeat whose condition the battle met (StageBattle.defeat_hints),
 ## every time.
 extends Control
@@ -35,6 +37,8 @@ const DAMAGE_TO_HERO_COLOR := Color("#ff6b6b")
 const ULTIMATE_COLOR := Color("#ffd84a")
 const SPECIAL_COLOR := Color("#ff9a3c")
 const HEAL_COLOR := Color("#6bff8a")
+const POISON_COLOR := Color("#b6f06a")
+const IMMUNE_TEXT := "Неуязвим"
 const POPUP_STACK_STEP := 36.0
 const PHASE_FONT_SIZE := 34
 const PHASE_SECONDS := 2.2
@@ -215,6 +219,8 @@ func _show_event(event: Dictionary) -> void:
 				"special":
 					color = SPECIAL_COLOR
 					font_size = 40
+				"poison":
+					color = POISON_COLOR
 			_popup(event["target"], str(event["amount"]), color, font_size)
 		"heal":
 			_popup(event["target"], "+%d" % event["amount"], HEAL_COLOR, 32)
@@ -223,7 +229,10 @@ func _show_event(event: Dictionary) -> void:
 			_popup(event["unit"], event["name"], ULTIMATE_COLOR, 30, 1.4)
 		"special":
 			_animate(event["unit"], "lunge")
-			_popup(event["unit"], event["name"], SPECIAL_COLOR, 30, 1.4)
+			# «Паутина» is written over the hero it caught; other specials over the one who uses them.
+			_popup(event.get("target", event["unit"]), event["name"], SPECIAL_COLOR, 30, 1.4)
+		"immune":
+			_popup(event["unit"], IMMUNE_TEXT, Color.WHITE, 26)
 		"phase":
 			_show_phase(event["unit"], event["phase"])
 		"mark":
@@ -236,14 +245,15 @@ func _show_event(event: Dictionary) -> void:
 			_finish_stage(event["victory"], event.get("retreat", false))
 
 
-## A boss enters a new phase (enemies.json phases[]): its new picture with a flash and the announcement over it
-## («Тьяцци обращается в орла!»).
+## A boss enters a new phase (enemies.json phases[]): its new picture with a flash (if the phase has one; Fafnir keeps
+## his) and the announcement over it («Тьяцци обращается в орла!», «Фафнир зарывается в золото!»).
 func _show_phase(unit_id: int, phase: int) -> void:
 	if not _views.has(unit_id):
 		return
 	var enemy: Dictionary = GameState.data.get_enemy(_battle.units[unit_id].def_id)
 	var entered: Dictionary = enemy["phases"][phase - 1]
-	_views[unit_id].change_picture(Art.enemy_picture(entered["picture"]))
+	if entered.has("picture"):
+		_views[unit_id].change_picture(Art.enemy_picture(entered["picture"]))
 	_popup(unit_id, entered["announcement"], SPECIAL_COLOR, PHASE_FONT_SIZE, PHASE_SECONDS)
 
 

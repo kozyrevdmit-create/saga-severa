@@ -1,4 +1,4 @@
-## Phone-sized screens with all six heroes: every hero card can be reached, and a finger dragged over the cards
+## Phone-sized screens with all seven heroes (M13: Regin): every hero card can be reached, and a finger dragged over the cards
 ## scrolls the list (nothing inside the scroll area swallows the touch). M6.2: on the iPhone the 5th and 6th
 ## heroes could not be reached on «Герои».
 ## M9.1: the lists move exactly with the finger, glide on after it lifts and stop; a drag that starts on a button
@@ -13,7 +13,7 @@ const FORMATION_SCENE := "res://scenes/formation.tscn"
 func test_every_hero_on_the_heroes_screen_can_be_reached() -> void:
 	var screen = await _open(HEROES_SCENE, false)
 	var buttons: Array = screen._rows.values().map(func(row): return row["button"])
-	assert_eq(buttons.size(), 6, "six hero cards")
+	assert_eq(buttons.size(), 7, "seven hero cards")
 	await _check_reachable(screen, buttons, "«Герои»")
 	_close(screen)
 
@@ -23,7 +23,7 @@ func test_every_hero_on_the_formation_screen_can_be_reached_with_a_full_bench() 
 	var buttons: Array = []
 	for row in [screen.get_node("%FrontRow"), screen.get_node("%BackRow"), screen.get_node("%Bench")]:
 		buttons.append_array(row.get_children().filter(func(c): return c is Button))
-	assert_eq(buttons.size(), 2 + 3 + 5, "five slots and five heroes on the bench")
+	assert_eq(buttons.size(), 2 + 3 + 6, "five slots and six heroes on the bench")
 	var bench: Control = screen.get_node("%Bench")
 	assert_true(bench.size.x <= screen.get_node("%Scroll").size.x, "the bench wraps instead of widening the screen")
 	await _check_reachable(screen, buttons, "«Отряд»")

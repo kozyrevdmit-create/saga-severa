@@ -7,6 +7,7 @@ extends RefCounted
 const BattleUnit := preload("res://scripts/battle/battle_unit.gd")
 
 const TICK := 0.05  ## simulation step, seconds
+const EPSILON := 0.0001  ## timers summed from TICKs reach whole seconds within this
 
 var units: Array = []  ## all BattleUnits; unit.id == index
 var time := 0.0
@@ -82,7 +83,7 @@ func _set_mark(unit_id: int) -> void:
 	_events.append({"type": "mark", "unit": unit_id})
 
 
-## Events since the last call: damage, heal, death, mark, ultimate, special, phase, end. Used by the screen for effects.
+## Events since the last call: damage, heal, death, mark, ultimate, special, phase, immune, end. Used by the screen for effects.
 func take_events() -> Array[Dictionary]:
 	var events := _events
 	_events = []
@@ -99,7 +100,20 @@ func step() -> void:
 		if unit.is_alive():
 			unit.tick_effects(TICK)
 	for unit in units:
-		if not unit.is_alive() or unit.is_stunned():
+		if unit.is_alive() and unit.is_poisoned():
+			_tick_poison(unit)
+			if _check_end():
+				return
+	for unit in units:
+		if not unit.is_alive():
+			continue
+		if unit.is_invulnerable():
+			_tick_invulnerable(unit)
+			if _check_end():
+				return
+			continue
+		# A stunned unit and a hero caught in a web do not act; their timers wait.
+		if unit.is_stunned() or unit.is_webbed():
 			continue
 		unit.attack_timer += TICK * unit.action_speed()
 		if unit.attack_timer >= unit.attack_interval:
@@ -112,7 +126,7 @@ func step() -> void:
 			unit.special_timer += TICK * unit.action_speed()
 			if unit.special_timer >= float(unit.special["interval"]):
 				unit.special_timer -= float(unit.special["interval"])
-				_perform_special(unit)
+				_perform_special(unit, unit.special)
 				if _check_end():
 					return
 	if auto_ultimates:
@@ -174,22 +188,36 @@ func _attack(unit, target) -> void:
 	_gain_energy(unit, int(_energy["per_attack"]))
 
 
-## "hit_all": the whole opposing side (Гнев конунга); "hit_one": one target picked like the unit's attack of that kind
-## (special.target: "front_row" — by the target weights, «Ледяное копьё»; "back_row_weakest" — as the carrion eagle, «Пике»).
-func _perform_special(unit) -> void:
-	match unit.special["type"]:
+## "hit_all": the whole opposing side (Гнев конунга); with "poison" every target that survives is poisoned too
+## (Fafnir's «Ядовитое дыхание»: poison.ticks blows of poison.attack_multiplier × attack, one every poison.interval s).
+## "hit_one": one target picked like the unit's attack of that kind (special.target: "front_row" — by the target weights,
+## «Ледяное копьё»; "back_row_weakest" — as the carrion eagle, «Пике»; "random" — any living opponent, Fafnir's «Монеты»).
+## "web": the cave spider's «Паутина» — one target picked like "hit_one" (special.target) cannot act and gains no energy
+## for special.duration seconds; no damage. Its event carries the target: the screen writes «Паутина» over the hero.
+func _perform_special(unit, special: Dictionary) -> void:
+	match special["type"]:
 		"hit_all":
-			_events.append({"type": "special", "unit": unit.id, "name": unit.special["name"]})
+			_events.append({"type": "special", "unit": unit.id, "name": special["name"]})
 			for target in _alive(_opponents_of(unit)):
-				_deal_damage(unit, target, float(unit.special["attack_multiplier"]), "special")
+				_deal_damage(unit, target, float(special["attack_multiplier"]), "special")
+				if special.has("poison") and target.is_alive():
+					var poison: Dictionary = special["poison"]
+					target.apply_poison(unit.id, unit.attack_power() * float(poison["attack_multiplier"]),
+							float(poison["interval"]), int(poison["ticks"]))
 		"hit_one":
-			var target = _pick_special_target(unit, unit.special["target"])
+			var target = _pick_special_target(unit, special["target"])
 			if target == null:
 				return
-			_events.append({"type": "special", "unit": unit.id, "name": unit.special["name"]})
-			_deal_damage(unit, target, float(unit.special["attack_multiplier"]), "special")
+			_events.append({"type": "special", "unit": unit.id, "name": special["name"]})
+			_deal_damage(unit, target, float(special["attack_multiplier"]), "special")
+		"web":
+			var target = _pick_special_target(unit, special["target"])
+			if target == null:
+				return
+			_events.append({"type": "special", "unit": unit.id, "name": special["name"], "target": target.id})
+			target.apply_status({"kind": "web", "duration": float(special["duration"])})
 		_:
-			push_error("Unknown special ability: %s" % unit.special["type"])
+			push_error("Unknown special ability: %s" % special["type"])
 
 
 func _pick_special_target(unit, target_kind: String):
@@ -198,19 +226,56 @@ func _pick_special_target(unit, target_kind: String):
 			return _pick_front_row_target(unit)
 		"back_row_weakest":
 			return _pick_back_row_weakest_target(unit)
+		"random":
+			var opponents := _alive(_opponents_of(unit))
+			return null if opponents.is_empty() else opponents[_rng.randi_range(0, opponents.size() - 1)]
 	push_error("Unknown special target: %s" % target_kind)
 	return null
+
+
+## A poisoned unit takes its poison's blow every poison.interval seconds until the blows run out. Reduced like any damage
+## (shieldbearers, «Кузнечная броня», «Закалка», «Стена щитов»); poison does not give energy (it is not a hit).
+func _tick_poison(unit) -> void:
+	var poison: Dictionary = unit.poison
+	poison["timer"] += TICK
+	if poison["timer"] < float(poison["interval"]) - EPSILON:
+		return
+	poison["timer"] -= float(poison["interval"])
+	poison["ticks_left"] -= 1
+	if poison["ticks_left"] <= 0:
+		unit.poison = {}
+	var amount := maxi(1, roundi(float(poison["amount"]) * damage_taken_multiplier(unit)))
+	_take_damage(int(poison["source"]), unit, amount, "poison", false)
+
+
+## Fafnir burrowed into his gold: the coins hit (invulnerable_special) on their own timer, stuns and slows do not stop
+## them; when the time is over he comes out ({"type": "invulnerable_end", "unit"}), and his special ability starts
+## on a fresh timer (enter_phase reset it).
+func _tick_invulnerable(unit) -> void:
+	var coins: Dictionary = unit.invulnerable_special
+	unit.invulnerable_timer += TICK
+	if unit.invulnerable_timer >= float(coins["interval"]) - EPSILON:
+		unit.invulnerable_timer -= float(coins["interval"])
+		_perform_special(unit, coins)
+	unit.invulnerable_remaining -= TICK
+	if unit.invulnerable_remaining <= EPSILON:
+		unit.invulnerable_remaining = 0.0
+		_events.append({"type": "invulnerable_end", "unit": unit.id})
 
 
 func _apply_effect(unit, effect: Dictionary) -> void:
 	match effect["type"]:
 		"buff_allies":
+			# "row": only the allies standing in that row when the ultimate is used (Regin's «Закалка»: the front row).
 			for ally in _alive(_allies_of(unit)):
-				ally.add_buff(effect["stat"], float(effect["multiplier"]), float(effect["duration"]), unit.id)
+				if not effect.has("row") or ally.row == effect["row"]:
+					ally.add_buff(effect["stat"], float(effect["multiplier"]), float(effect["duration"]), unit.id,
+							effect.get("badge", ""))
 		"hits":
+			# The series stops if the hero falls in it (a forge spirit's blast on death).
 			for i in int(effect["count"]):
 				var target = _pick_effect_targets(unit, effect["target"])
-				if target.is_empty():
+				if target.is_empty() or not unit.is_alive():
 					break
 				_deal_damage(unit, target[0], float(effect["attack_multiplier"]), "ultimate")
 		"damage":
@@ -240,20 +305,53 @@ func _pick_effect_targets(unit, target_kind: String) -> Array:
 
 
 ## kind: "attack", "ultimate" or "special" (the screen styles the numbers by it).
+## A boss burrowed into its gold takes nothing: {"type": "immune", "unit"} instead (the screen writes «Неуязвим»).
 func _deal_damage(source, target, multiplier: float, kind: String) -> void:
-	var amount := maxi(1, roundi(source.attack_power() * multiplier * target.damage_taken_multiplier()))
+	if target.is_invulnerable():
+		_events.append({"type": "immune", "unit": target.id, "source": source.id})
+		return
+	var amount := maxi(1, roundi(source.attack_power() * multiplier * damage_taken_multiplier(target)))
+	_take_damage(source.id, target, amount, kind, true)
+
+
+## The share of damage the unit takes: its own buffs and passive (BattleUnit.damage_taken_multiplier) times the passive
+## of every living ally that guards the front row (Regin's «Кузнечная броня», heroes.json passive
+## "front_row_damage_taken_reduction") while the unit stands in the front row. Multipliers multiply.
+func damage_taken_multiplier(unit) -> float:
+	var multiplier: float = unit.damage_taken_multiplier()
+	if unit.row == "front":
+		for ally in _alive(_allies_of(unit)):
+			if ally.passive.get("type", "") == "front_row_damage_taken_reduction":
+				multiplier *= float(ally.passive["damage_taken_multiplier"])
+	return multiplier
+
+
+## kind: "attack", "ultimate", "special" or "poison". A unit that dies with a death blast (the forge spirit) blows up.
+func _take_damage(source_id: int, target, amount: int, kind: String, gives_energy: bool) -> void:
 	target.hp = maxi(0, target.hp - amount)
 	_events.append({
-		"type": "damage", "source": source.id, "target": target.id, "amount": amount,
+		"type": "damage", "source": source_id, "target": target.id, "amount": amount,
 		"kind": kind, "target_is_hero": target.team == BattleUnit.Team.HEROES,
 	})
 	if target.is_alive():
-		_gain_energy(target, int(_energy["per_hit_taken"]))
+		if gives_energy:
+			_gain_energy(target, int(_energy["per_hit_taken"]))
 		_enter_due_phases(target)
 	else:
+		target.poison = {}
 		_events.append({"type": "death", "unit": target.id})
 		if target.id == marked_target_id:
 			_set_mark(-1)
+		if not target.death_blast.is_empty():
+			_blow_up(target)
+
+
+## The forge spirit's «Взрыв»: dying, it hits the opposing front row (everyone left when the front row has fallen)
+## for death_blast.attack_multiplier × its attack, reduced like any damage.
+func _blow_up(unit) -> void:
+	_events.append({"type": "special", "unit": unit.id, "name": unit.death_blast["name"]})
+	for target in _front_row_or_rest(_alive(_opponents_of(unit))):
+		_deal_damage(unit, target, float(unit.death_blast["attack_multiplier"]), "special")
 
 
 ## A boss whose HP has dropped to a phase's share enters it: {"type": "phase", "unit", "phase"} (1 = the first change,
@@ -275,8 +373,9 @@ func _heal(source, target, amount: int) -> void:
 	_events.append({"type": "heal", "source": source.id, "target": target.id, "amount": healed})
 
 
+## A hero caught in a web gains no energy.
 func _gain_energy(unit, amount: int) -> void:
-	if unit.has_ultimate():
+	if unit.has_ultimate() and not unit.is_webbed():
 		unit.energy = mini(unit.ultimate_cost(), unit.energy + amount)
 
 

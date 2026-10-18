@@ -77,6 +77,9 @@ func _refresh() -> void:
 		%Bench.add_child(label)
 
 	for synergy in data.clan_synergies(progress.squad_ids()):
+		# A clan none of whose heroes has joined yet is not shown (Svartalfheim before Regin, M13).
+		if not progress.hero_levels.keys().any(func(hero_id): return data.get_hero(hero_id)["clan"] == synergy["clan_id"]):
+			continue
 		var text := "%s: %d из %d — %s" % [synergy["name"], synergy["count"], synergy["needed"], synergy["description"]]
 		var color := ACTIVE_SYNERGY_COLOR if synergy["active"] else INACTIVE_SYNERGY_COLOR
 		# Words, not a check mark: the web build's font has no ✔ glyph.

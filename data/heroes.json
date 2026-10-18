@@ -41,6 +41,14 @@
       "row": "back",
       "color": "#e0b51f",
       "action": "attack_front_row"
+    },
+    "smith": {
+      "name": "Кузнец",
+      "role": "Броня для первого ряда",
+      "role_short": "Поддержка",
+      "row": "back",
+      "color": "#c46a2a",
+      "action": "attack_front_row"
     }
   },
   "clans": {
@@ -51,6 +59,10 @@
     "jotunheim": {
       "name": "Ётунхейм",
       "synergy": { "min_heroes": 3, "stat": "attack", "bonus": 0.2, "description": "+20% атаки всему отряду" }
+    },
+    "svartalfheim": {
+      "name": "Свартальфхейм",
+      "synergy": { "min_heroes": 3, "stat": "hp", "bonus": 0.0, "description": "бонус появится, когда придут другие гномы" }
     }
   },
   "heroes": [
@@ -197,6 +209,32 @@
         "type": "damage_taken_reduction",
         "description": "−30% получаемого урона",
         "damage_taken_multiplier": 0.7
+      }
+    },
+    {
+      "id": "regin",
+      "name": "Регин",
+      "portrait": { "x": 0.64, "y": 0.24, "size": 0.38 },
+      "role_detail": "Поддержка · броня",
+      "class": "smith",
+      "clan": "svartalfheim",
+      "hp": 700,
+      "attack": 40,
+      "attack_interval": 1.3,
+      "unlock_after_stage": 20,
+      "joins_after_scene": "ch3_intro",
+      "ultimate": {
+        "energy_cost": 58,
+        "name": "Закалка",
+        "description": "Первый ряд получает вдвое меньше урона 5 с",
+        "effects": [
+          { "type": "buff_allies", "row": "front", "stat": "damage_taken", "multiplier": 0.5, "duration": 5.0, "badge": "temper" }
+        ]
+      },
+      "passive": {
+        "type": "front_row_damage_taken_reduction",
+        "description": "Пока жив, первый ряд получает на 10% меньше урона",
+        "damage_taken_multiplier": 0.9
       }
     }
   ]
