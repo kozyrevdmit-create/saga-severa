@@ -370,7 +370,7 @@
     {
       "id": 24,
       "chapter": 3,
-      "recommended_power": 28550,
+      "recommended_power": 28150,
       "map_point": { "x": 0.46, "y": 0.565, "label": "right" },
       "reward": {
         "silver": 2421,
@@ -385,7 +385,7 @@
     {
       "id": 25,
       "chapter": 3,
-      "recommended_power": 29100,
+      "recommended_power": 30400,
       "map_point": { "x": 0.6, "y": 0.495, "label": "left" },
       "reward": {
         "silver": 2617,
@@ -430,7 +430,7 @@
     {
       "id": 28,
       "chapter": 3,
-      "recommended_power": 35000,
+      "recommended_power": 35450,
       "map_point": { "x": 0.65, "y": 0.27, "label": "left" },
       "reward": {
         "silver": 3306,
@@ -445,7 +445,7 @@
     {
       "id": 29,
       "chapter": 3,
-      "recommended_power": 37350,
+      "recommended_power": 36650,
       "map_point": { "x": 0.61, "y": 0.19, "label": "left" },
       "reward": {
         "silver": 3574,

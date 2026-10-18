@@ -277,6 +277,16 @@ func test_balance_check_settings_present() -> void:
 		assert_true(variant["name"] is String and variant["heroes"] > 0 and variant["rewards"] > 0, "variant %s" % str(variant))
 
 
+## M13.2: the battle length rule for balance_sim.gd -- --durations (the Balance check fails over it).
+func test_battle_length_rule_settings_present() -> void:
+	var rule: Dictionary = data.balance["balance_check"]["battle_length"]
+	assert_eq(float(rule["max_average_won_seconds_stage"]), 110.0, "a normal stage: ~110 s at most")
+	assert_eq(float(rule["max_average_won_seconds_pack"]), 90.0, "a beast pack: ~90 s at most")
+	assert_true(int(rule["fights"]) >= 50, "enough fights for a steady average")
+	assert_true(float(rule["max_average_won_seconds_stage"]) < float(data.balance["balance_check"]["stall_after_seconds"]),
+			"the limit is below a stalled battle")
+
+
 func test_stage_one_has_no_boss_and_heroes_unlock_on_real_stages() -> void:
 	for hero in data.heroes["heroes"]:
 		var stage := int(hero["unlock_after_stage"])
