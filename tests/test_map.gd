@@ -9,6 +9,8 @@ const Progress := preload("res://scripts/save/progress.gd")
 const MAP_SCENE := "res://scenes/map.tscn"
 const PHONE_SIZE := Vector2i(720, 1558)  ## iPhone 14 shape at the project's 720 px width
 const BASE_SIZE := Vector2i(720, 1280)  ## project.godot viewport (a shorter phone)
+## M13.1: 375×812 and 393×852 (Dmitriy's iPhone) at the 720 px width, and 393×698 — what Safari leaves of the latter.
+const PHONES_M13_1: Array[Vector2i] = [Vector2i(720, 1559), Vector2i(720, 1561), Vector2i(720, 1279)]
 
 var _saved_progress
 var _saved_window_size: Vector2i
@@ -50,14 +52,57 @@ func test_markers_fit_the_screen_without_overlapping() -> void:
 			_close(screen)
 
 
+## The map fills the screen height where the crown, the captions and the camp fit between the bars that way (a tall
+## phone); on a short screen (Safari on Dmitriy's iPhone leaves about 393×698, i.e. 720×1280) it may be a little
+## smaller, but it still covers the width and most of the height, centred.
 func test_the_map_fills_the_screen_height() -> void:
 	for window in [PHONE_SIZE, BASE_SIZE]:
-		var screen = await _open_map(window, 0, [])
-		var picture: Control = screen.get_node("%MapPicture")
-		assert_near(picture.size.y, window.y, 0.5, "%s: the map is as tall as the screen" % window)
-		assert_true(picture.size.x > window.x, "%s: the sides are cut off" % window)
-		assert_near(picture.position.x + picture.size.x / 2.0, window.x / 2.0, 0.5, "%s: the map is centred" % window)
-		_close(screen)
+		for chapter_id in [1, 2, 3]:
+			var screen = await _open_map(window, 30, [])
+			screen.show_chapter(chapter_id)
+			var picture: Control = screen.get_node("%MapPicture")
+			var where := "%s, chapter %d" % [window, chapter_id]
+			if window == PHONE_SIZE and chapter_id == 1:
+				assert_near(picture.size.y, window.y, 0.5, "%s: the map is as tall as the screen" % where)
+			assert_true(picture.size.y >= window.y * 0.9, "%s: the map is at least 90%% of the screen height (%s)" % [where, picture.size.y])
+			assert_true(picture.position.y <= 0.5 + window.y * 0.1 and picture.get_rect().end.y >= window.y * 0.9,
+					"%s: the map is under both paper bars" % where)
+			assert_true(picture.size.x > window.x, "%s: the sides are cut off" % where)
+			assert_near(picture.position.x + picture.size.x / 2.0, window.x / 2.0, 0.5, "%s: the map is centred" % where)
+			_close(screen)
+
+
+## M13.1 (playtest): on every phone shape and every chapter the boss's crown is seen whole (not under the top bar),
+## the boss's caption touches neither its circle (at the top of its pulse) nor the crown, and the camp at the bottom
+## of the picture (stages.json → chapters[].map_camp_bottom) is above the «Назад» button.
+func test_boss_crown_caption_and_camp_are_seen() -> void:
+	for window in PHONES_M13_1:
+		for chapter_id in [1, 2, 3]:
+			for cleared in [(chapter_id - 1) * 10, 30]:  # the chapter just opened (the boss locked) and all won
+				var screen = await _open_map(window, cleared, [])
+				screen.show_chapter(chapter_id)
+				await (Engine.get_main_loop() as SceneTree).process_frame
+				var where := "%s, chapter %d, %d stages won" % [window, chapter_id, cleared]
+				assert_eq(screen.shown_chapter(), chapter_id, "%s: the chapter is shown" % where)
+				var top_bar: Rect2 = screen.get_node("%TopBar").get_global_rect()
+				var bottom_bar: Rect2 = screen.get_node("%BottomBar").get_global_rect()
+				var data = screen.get_node("/root/GameState").data
+				var boss_id: int = data.chapter_stage_ids(chapter_id).back()
+				var boss = null
+				for marker in screen._markers:
+					if marker["button"] == screen._stage_buttons[boss_id]:
+						boss = marker
+				var crown: Rect2 = boss["crown"].get_global_rect()
+				var token: Control = boss["token"]
+				var circle_side: float = token.get_global_rect().size.x * screen.CURRENT_PULSE_SCALE / token.scale.x  # pulse top
+				var circle := Rect2(token.get_global_rect().get_center() - Vector2.ONE * circle_side / 2.0, Vector2.ONE * circle_side)
+				var caption: Rect2 = boss["caption"].get_global_rect().grow(4.0)  # «does not touch»: at least 4 px apart
+				assert_true(crown.position.y >= top_bar.end.y, "%s: the boss's crown is below the top bar (%s, bar ends %s)" % [where, crown.position.y, top_bar.end.y])
+				assert_true(not caption.intersects(circle), "%s: the boss's caption is 4+ px from its circle (%s, %s)" % [where, caption, circle])
+				assert_true(not caption.intersects(crown), "%s: the boss's caption is 4+ px from the crown" % where)
+				var camp: Vector2 = screen.map_point_on_screen({"x": 0.5, "y": data.get_chapter(chapter_id)["map_camp_bottom"]})
+				assert_true(camp.y <= bottom_bar.position.y, "%s: the camp is above «Назад» (%s, button at %s)" % [where, camp.y, bottom_bar.position.y])
+				_close(screen)
 
 
 func test_stage_states_and_red_recommended_power() -> void:

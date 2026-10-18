@@ -30,6 +30,35 @@ func test_every_hero_on_the_formation_screen_can_be_reached_with_a_full_bench() 
 	_close(screen)
 
 
+## M13.1: «Герои» shows what each hero's role does under the role line.
+func test_the_heroes_screen_explains_each_role() -> void:
+	var screen = await _open(HEROES_SCENE, false)
+	var data = _game_state().data
+	for hero_id in screen._rows:
+		var hero: Dictionary = data.get_hero(hero_id)
+		var label: Label = screen._rows[hero_id]["level"].get_parent().get_node("RoleDescription")
+		assert_eq(label.text, data.get_hero_class(hero)["role_description"], "%s: the role's line" % hero_id)
+		assert_eq(label.get_index(), screen._rows[hero_id]["level"].get_index() + 1, "%s: right under the role" % hero_id)
+	_close(screen)
+
+
+## M13.1: on «Отряд» a tap on a hero (taken out of the squad or put in) shows the hero's role line above «Назад»,
+## on the screen whatever the scroll.
+func test_a_tap_on_a_hero_shows_the_role_line() -> void:
+	var screen = await _open(FORMATION_SCENE, false)
+	var hint: Label = screen.get_node("%RoleHint")
+	assert_true(not hint.visible, "nothing before a tap")
+	screen._on_slot_pressed("eyvind")
+	await (Engine.get_main_loop() as SceneTree).process_frame
+	assert_true(hint.visible, "shown after the tap")
+	assert_eq(hint.text, "Эйвинд · Поддержка — Сам бьёт слабо, но делает сильнее всю дружину.", "taking Eyvind out")
+	assert_true(not screen.get_node("%Scroll").is_ancestor_of(hint), "the line does not scroll away")
+	assert_true(screen.get_viewport_rect().encloses(hint.get_global_rect()), "the line is on the screen")
+	screen._on_bench_hero_pressed("angrboda")
+	assert_eq(hint.text, "Ангрбода · Лекарь — Лечит дружину в бою.", "the last hero tapped")
+	_close(screen)
+
+
 func test_the_heroes_list_follows_the_finger_and_a_drag_does_not_level_up() -> void:
 	var screen = await _open(HEROES_SCENE, false)
 	var progress = _game_state().progress

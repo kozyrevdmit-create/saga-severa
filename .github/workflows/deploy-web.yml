@@ -1,5 +1,6 @@
 # Runs tests and builds the web version on every pull request (check only)
 # and on every push to main (tests + build + deploy to GitHub Pages).
+# The balance simulation smoke check (~11 min) runs separately: balance-check.yml.
 name: Web build and deploy
 
 on:
@@ -57,9 +58,6 @@ jobs:
       - name: Run tests (headless)
         run: ~/godot/godot --headless --path . --script res://tests/run_tests.gd
 
-      - name: Balance simulation runs (smoke check)
-        run: ~/godot/godot --headless --path . --script res://tools/balance_sim.gd -- --runs=2 --campaigns=2
-
       - name: Export web version
         run: |
           mkdir -p build/web
@@ -67,6 +65,7 @@ jobs:
           test -f build/web/index.html
           test -f build/web/index.pck
           ls -la build/web
+          echo "Game data (index.pck): $(( $(stat -c %s build/web/index.pck) / 1024 )) KB"
 
       - name: Upload site for GitHub Pages
         if: github.ref == 'refs/heads/main'

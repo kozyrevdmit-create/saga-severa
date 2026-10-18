@@ -4,6 +4,8 @@
 ## background, the income for the time away goes into the bank (Progress.collect_offline_income);
 ## leaving, hiding or unfocusing the game saves the time it was last seen and stops the heartbeat,
 ## so the time in the background is not overwritten before it is counted.
+## M13.1: the debug panel opens only where debug_allowed — in the editor and local builds always, on the site only
+## when the page was opened with ?debug=1 (players who stumble on the long press must not reach «Сбросить прогресс»).
 extends Node
 
 signal offline_bank_changed  ## new offline income is waiting for «Забрать»
@@ -16,6 +18,7 @@ var progress
 var settings
 var selected_stage := 1  ## stage the battle screen should fight (set by the chapter map)
 var selected_pack := ""  ## beast pack the battle screen should fight instead of a stage; "" = a stage (set by the chapter map)
+var debug_allowed := true  ## the long press on the silver opens the debug panel (set in _ready, see debug_allowed_for)
 
 var _visibility_callback  ## keeps the browser callback alive
 var _heartbeat := Timer.new()  ## refreshes "last seen" while the game is in front
@@ -32,10 +35,25 @@ func _ready() -> void:
 	add_child(_heartbeat)
 	_bank_offline_income()
 	_heartbeat.start()
+	var query := ""
+	if OS.has_feature("web"):
+		query = str(JavaScriptBridge.eval("window.location.search", true))
+	debug_allowed = debug_allowed_for(OS.has_feature("web"), query)
 	if OS.has_feature("web"):
 		# Switching away from the browser tab and back does not always reach the engine as a notification.
 		_visibility_callback = JavaScriptBridge.create_callback(_on_page_visibility_changed)
 		JavaScriptBridge.get_interface("document").addEventListener("visibilitychange", _visibility_callback)
+
+
+## The site (web) opens the debug panel only with debug=1 in the page address's query («?debug=1», also among other
+## parameters); everywhere else (the editor, a local build) it always opens.
+static func debug_allowed_for(is_web: bool, query: String) -> bool:
+	if not is_web:
+		return true
+	for pair in query.trim_prefix("?").split("&", false):
+		if pair == "debug=1":
+			return true
+	return false
 
 
 ## «Забрать»: adds the offline income bank to the silver.

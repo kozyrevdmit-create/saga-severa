@@ -70,6 +70,31 @@ func test_the_chapter_map_is_a_tall_picture() -> void:
 			assert_eq(picture.get_size(), Vector2(1024, 1536), "chapter %d: the map keeps its full 1024×1536 size (it fills the phone's height)" % chapter_id)
 
 
+## M13.1: every character picture (heroes, enemies, ravens) has at most prepare_art's CHARACTER_COLORS colours and
+## ALPHA_LEVELS steps of transparency — the site stays small (5.81 → ~2.8 MB); a new picture must go through
+## tools/prepare_art.gd (or its --reduce-colors). Pixel colours are read from the files in the game (lossless).
+func test_character_pictures_keep_their_few_colours() -> void:
+	var tool := load("res://tools/prepare_art.gd")
+	for folder in ["heroes", "enemies", "story"]:
+		for file in DirAccess.get_files_at("res://assets/art/" + folder):
+			if file.get_extension() != "png":
+				continue
+			var image: Image = load("res://assets/art/%s/%s" % [folder, file]).get_image()
+			image.convert(Image.FORMAT_RGBA8)
+			var pixels := image.get_data().to_int32_array()
+			var colours := {}
+			var alphas := {}
+			for pixel in pixels:
+				var alpha := (pixel >> 24) & 255
+				if alpha > 0:
+					colours[pixel & 0xffffff] = true
+					alphas[alpha] = true
+			assert_true(colours.size() <= tool.CHARACTER_COLORS, "%s/%s: at most %d colours (%d)" % [
+					folder, file, tool.CHARACTER_COLORS, colours.size()])
+			assert_true(alphas.size() <= tool.ALPHA_LEVELS, "%s/%s: at most %d steps of transparency (%d)" % [
+					folder, file, tool.ALPHA_LEVELS, alphas.size()])
+
+
 func test_five_heroes_and_four_enemies_fit_the_phone_field() -> void:
 	for window in [PHONE_SIZE, BASE_SIZE]:
 		var screen = await _open_battle(7, window)
@@ -207,7 +232,7 @@ var _saved_progress
 var _saved_window_size: Vector2i
 
 
-func _open_battle(stage_id: int, window: Vector2i) -> Control:
+func _open_battle(stage_id: int, window: Vector2i, hero_level := 0) -> Control:
 	var tree := Engine.get_main_loop() as SceneTree
 	var game_state = tree.root.get_node("GameState")
 	while game_state.data == null:
@@ -215,6 +240,8 @@ func _open_battle(stage_id: int, window: Vector2i) -> Control:
 	_saved_progress = game_state.progress
 	var progress = Progress.new_game(game_state.data)
 	progress.jump_to_stage(game_state.data, stage_id)
+	for hero_id in progress.hero_levels if hero_level > 0 else []:
+		progress.hero_levels[hero_id] = hero_level
 	progress.mark_hint_shown = true
 	game_state.progress = progress
 	game_state.selected_stage = stage_id
@@ -225,6 +252,41 @@ func _open_battle(stage_id: int, window: Vector2i) -> Control:
 	for i in 3:
 		await tree.process_frame
 	return screen
+
+
+## M13.1 (playtest): Fafnir is darker only for the 5 s he is burrowed into his gold. After them his figure has its
+## own colour again; so does it when the battle ends while he is burrowed («Отступить»).
+func test_fafnir_is_dark_only_while_burrowed() -> void:
+	for ending in ["comes out", "retreat"]:
+		var screen = await _open_battle(30, PHONE_SIZE, 45)
+		await _reach_wave(screen, screen._battle.wave_count - 1)
+		screen.set_process(false)  # the test moves the battle on itself, 0.05 s at a time
+		var fafnir = null
+		for enemy in screen._battle.enemies():
+			if enemy.def_id == "fafnir":
+				fafnir = enemy
+		fafnir.hp = int(fafnir.max_hp * 0.52)
+		var view = screen._views[fafnir.id]
+		for i in 400:
+			if fafnir.is_invulnerable():
+				break
+			screen._process(0.05)
+		assert_true(fafnir.is_invulnerable(), "%s: Fafnir burrows into the gold at half HP" % ending)
+		assert_eq(view._pose.modulate, view.BURROWED_TINT, "%s: darker while burrowed" % ending)
+		if ending == "retreat":
+			screen._battle.retreat()
+			screen._process(0.05)
+		else:
+			var burrowed_seconds := 0.0
+			while fafnir.is_invulnerable() and burrowed_seconds < 10.0:
+				screen._process(0.05)
+				burrowed_seconds += 0.05
+			assert_near(burrowed_seconds, 5.0, 0.11, "burrowed for 5 s")
+			for i in 20:  # one more second of the second phase
+				screen._process(0.05)
+			assert_true(not screen._battle.finished, "the second phase goes on")
+		assert_eq(view._pose.modulate, Color.WHITE, "%s: Fafnir has his own colour again" % ending)
+		_close(screen)
 
 
 ## Clears the waves before `index` (enemies drop to 0 HP) until the battle shows that wave.

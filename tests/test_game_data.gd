@@ -69,6 +69,33 @@ func test_every_stage_has_a_growing_recommended_power() -> void:
 		previous = power
 
 
+## M13.1: one line per role, word for word from the task (heroes.json → classes[].role_description); only the healer heals.
+func test_every_role_has_its_line() -> void:
+	var lines := {
+		"Танк": "Стоит впереди и принимает удары на себя.",
+		"Урон": "Главная сила дружины — бьёт врагов.",
+		"Лекарь": "Лечит дружину в бою.",
+		"Поддержка": "Сам бьёт слабо, но делает сильнее всю дружину.",
+	}
+	for class_id in data.heroes["classes"]:
+		var hero_class: Dictionary = data.heroes["classes"][class_id]
+		assert_eq(hero_class.get("role_description", ""), lines[hero_class["role_short"]], "%s: the line of its role" % class_id)
+		if hero_class["role_short"] == "Поддержка":
+			assert_true(hero_class["action"] != "heal_or_attack", "%s: support does not heal" % class_id)
+
+
+## M13.1: every support hero has a line for the result window, word for word from the task; nobody else has one.
+func test_support_heroes_have_their_result_line() -> void:
+	var expected := {
+		"regin": {"stat": "damage_prevented", "text": "Регин: броня спасла от %d урона"},
+		"eyvind": {"stat": "damage_added", "text": "Эйвинд: песнь добавила %d урона"},
+	}
+	for hero in data.heroes["heroes"]:
+		var support: bool = data.get_hero_class(hero)["role_short"] == "Поддержка"
+		assert_eq(hero.get("battle_summary", {}), expected.get(hero["id"], {}), "%s: its result line" % hero["id"])
+		assert_eq(hero.has("battle_summary"), support, "%s: a line only for support heroes" % hero["id"])
+
+
 func test_heroes_have_role_details() -> void:
 	for hero in data.heroes["heroes"]:
 		var detail: String = hero.get("role_detail", "")

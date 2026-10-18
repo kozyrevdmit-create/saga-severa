@@ -9,10 +9,14 @@
 ## Saga scenes: a hero's scene right after their «Новый герой» window is closed; the boss's last scene after «Победа!»
 ## (on the way to the map). Both are queued by the first win (Progress.apply_victory).
 ## A boss with phases (Thjazi) changes its picture when it enters the next one; Fafnir keeps his and is darkened while
-## burrowed into his gold (blows at him then show «Неуязвим»). A cave spider's «Паутина» is written over the hero it
+## burrowed into his gold (blows at him then show «Неуязвим»), only for those seconds: his own colour comes back when
+## he comes out, and when the battle ends while he is burrowed. A cave spider's «Паутина» is written over the hero it
 ## caught; the hero cards show the web, the poison and Regin's «Закалка» (HeroCard).
 ## A defeat (or a retreat) adds the first tip of data/hints.json → defeat whose condition the battle met
 ## (StageBattle.defeat_hint), every time.
+## M13.1: while «Закалка» is on a hero, the damage numbers over them carry the anvil (as on the card): the damage is cut.
+## The result window («Победа!» or a defeat) ends with a line for each support hero who fought (heroes.json →
+## battle_summary): «Регин: броня спасла от N урона», «Эйвинд: песнь добавила N урона» (Battle._count_help).
 extends Control
 
 const StageBattle := preload("res://scripts/battle/stage_battle.gd")
@@ -41,6 +45,7 @@ const HEAL_COLOR := Color("#6bff8a")
 const POISON_COLOR := Color("#b6f06a")
 const IMMUNE_TEXT := "Неуязвим"
 const POPUP_STACK_STEP := 36.0
+const POPUP_BADGE_GAP := 4.0  ## between the anvil and the damage number
 const PHASE_FONT_SIZE := 34
 const PHASE_SECONDS := 2.2
 const NEW_HERO_PORTRAIT_SIZE := 260.0
@@ -118,7 +123,7 @@ func _on_speed_pressed() -> void:
 func _refresh() -> void:
 	%RetreatButton.disabled = _battle.finished
 	for unit in _battle.units:
-		_views[unit.id].refresh(unit, unit.id == _battle.marked_target_id)
+		_views[unit.id].refresh(unit, unit.id == _battle.marked_target_id, _battle.finished)
 		if _cards.has(unit.id):
 			_cards[unit.id].refresh(unit, _battle.can_use_ultimate(unit.id))
 
@@ -222,7 +227,7 @@ func _show_event(event: Dictionary) -> void:
 					font_size = 40
 				"poison":
 					color = POISON_COLOR
-			_popup(event["target"], str(event["amount"]), color, font_size)
+			_popup(event["target"], str(event["amount"]), color, font_size, 0.9, event.get("cut_badge", ""))
 		"heal":
 			_popup(event["target"], "+%d" % event["amount"], HEAL_COLOR, 32)
 		"ultimate":
@@ -264,11 +269,19 @@ func _animate(unit_id: int, animation: String) -> void:
 		_views[unit_id].call(animation)
 
 
-## Floating text that rises above a fighter and fades out.
-func _popup(unit_id: int, text_value: String, color: Color, font_size: int, duration := 0.9) -> void:
+## Floating text that rises above a fighter and fades out; badge ("temper"): the hero card's badge left of the text.
+func _popup(unit_id: int, text_value: String, color: Color, font_size: int, duration := 0.9, badge := "") -> void:
 	if not _views.has(unit_id):
 		return
 	var label := _make_floating_label(text_value, color, font_size)
+	if badge != "":
+		var icon := HeroCard.Badges.new()
+		icon.name = "Badge"
+		icon.shown = [badge] as Array[String]
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.size = Vector2.ONE * HeroCard.BADGE_SIZE
+		icon.position = Vector2(-HeroCard.BADGE_SIZE - POPUP_BADGE_GAP, (label.size.y - HeroCard.BADGE_SIZE) / 2.0)
+		label.add_child(icon)
 	var origin: Vector2 = _views[unit_id].popup_origin()
 	var stacked: int = _popups_this_frame.get(unit_id, 0)
 	_popups_this_frame[unit_id] = stacked + 1
@@ -361,9 +374,23 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 		var tip: String = _battle.defeat_hint(GameState.data.hints["defeat"])
 		if tip != "":
 			%ResultHint.text += "\n\n" + tip
+	var help := support_lines(GameState.data, _battle.heroes())
+	if not help.is_empty():
+		%ResultHint.text += "\n\n" + "\n".join(help)
 	GameState.save()
 	%ResultOverlay.visible = true
 	_show_next_new_hero()
+
+
+## A line for each support hero in the battle (heroes.json → battle_summary: which of the unit's help totals and the
+## text), the number rounded to whole damage.
+static func support_lines(data, hero_units: Array) -> Array[String]:
+	var lines: Array[String] = []
+	for unit in hero_units:
+		var summary: Dictionary = data.get_hero(unit.def_id).get("battle_summary", {})
+		if not summary.is_empty():
+			lines.append(summary["text"] % roundi(float(unit.get(summary["stat"]))))
+	return lines
 
 
 ## «+120 серебра · +30 опыта», with «· +20 припасов» once construction is open (M12).

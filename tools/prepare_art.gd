@@ -10,6 +10,12 @@
 ## is copied like a map; the buildings (1024×1024 on a transparent background) are made BUILDING_SIZE × BUILDING_SIZE
 ## whole, margins included (data/buildings.json places them by shares of the square), in the four colours.
 ## `--only=settlement` (or another folder) prepares only that folder.
+## M13.1: the character pictures (heroes/, enemies/, story/) keep at most CHARACTER_COLORS colours of their own and
+## ALPHA_LEVELS steps of transparency (_reduce_colors): the resized art had 5 000–30 000 near-identical shades (soft
+## noise around the ink), which made each picture ~200 KB in the game; with its own 128 colours it is ~70 KB and looks
+## the same (the colours are averages of the picture's own shades, no new tones, the edges stay sharp).
+##   godot --headless --path . --script res://tools/prepare_art.gd -- --reduce-colors   (only reduces the pictures
+## already in assets/art/heroes, enemies and story, in place; a picture that is reduced already stays as it is)
 extends SceneTree
 
 const SIZE := 512  ## enough for a sharp 270 px boss on a 3× iPhone screen (game is 720 px wide)
@@ -25,6 +31,8 @@ const GAME_NAMES := {"thorvald.png": "torvald.png"}
 const PALETTE := ["#1a1a1a", "#efe3c8", "#b5442c", "#3f6a96"]  ## docs/ART_STYLE.md: the only four colours
 const RED := 2  ## index of the rust red in PALETTE
 const REDDISH := 50  ## a source pixel may turn rust red only if its red is this much above its green and blue
+const CHARACTER_COLORS := 128  ## colours per character picture (64 is still close, 32 shows on the highlights)
+const ALPHA_LEVELS := 16  ## steps of transparency on the soft edges
 
 
 func _initialize() -> void:
@@ -35,6 +43,10 @@ func _initialize() -> void:
 			src = arg.trim_prefix("--src=")
 		elif arg.begins_with("--only="):
 			only = arg.trim_prefix("--only=")
+		elif arg == "--reduce-colors":
+			_reduce_colors_in_place()
+			quit()
+			return
 	if src.is_empty():
 		printerr("Usage: ... -- --src=<folder with heroes/, enemies/, story/ and maps/>")
 		quit(1)
@@ -49,6 +61,7 @@ func _initialize() -> void:
 				continue
 			var image := Image.load_from_file(src.path_join(folder).path_join(file))
 			var result := _normalize(image)
+			reduce_colors(result, CHARACTER_COLORS, ALPHA_LEVELS)
 			var game_name: String = GAME_NAMES.get(file, file)
 			result.save_png(out_dir.path_join(game_name))
 			print("%s/%s: %s -> %s %d×%d" % [folder, file, image.get_size(), game_name, SIZE, SIZE])
@@ -116,6 +129,125 @@ func _snap_to_palette(image: Image) -> void:
 		bytes[i + 1] = palette[best * 3 + 1]
 		bytes[i + 2] = palette[best * 3 + 2]
 	image.set_data(image.get_width(), image.get_height(), false, format, bytes)
+
+
+func _reduce_colors_in_place() -> void:
+	for folder in FOLDERS:
+		var dir := ProjectSettings.globalize_path("res://assets/art/%s" % folder)
+		for file in DirAccess.get_files_at(dir):
+			if file.get_extension() != "png":
+				continue
+			var path := dir.path_join(file)
+			var image := Image.load_from_file(path)
+			image.convert(Image.FORMAT_RGBA8)
+			var before := FileAccess.get_file_as_bytes(path).size()
+			reduce_colors(image, CHARACTER_COLORS, ALPHA_LEVELS)
+			image.save_png(path)
+			print("%s/%s: %d -> %d bytes (png)" % [folder, file, before, FileAccess.get_file_as_bytes(path).size()])
+
+
+## Leaves the RGBA8 picture at most `colors` colours of its own (median cut: the picture's shades split into boxes
+## of similar colours, each box becomes its weighted average) and `alpha_levels` steps of transparency. Fully
+## transparent pixels become transparent black. A picture with `colors` colours or fewer keeps them as they are.
+static func reduce_colors(image: Image, colors: int, alpha_levels: int) -> void:
+	var bytes := image.get_data()
+	var counts := {}  ## 0xRRGGBB -> pixels (only the mostly opaque ones choose the palette)
+	var all_codes := {}
+	for i in range(0, bytes.size(), 4):
+		var code := (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2]
+		all_codes[code] = true
+		if bytes[i + 3] >= 128:
+			counts[code] = counts.get(code, 0) + 1
+	var nearest := {}  ## 0xRRGGBB -> 0xRRGGBB of its palette colour
+	if all_codes.size() <= colors:
+		for code in all_codes:
+			nearest[code] = code
+	else:
+		var palette := _median_cut(counts, colors)
+		for code in all_codes:
+			var best := 0
+			var best_distance := 1 << 30
+			for entry in palette:
+				var dr: int = ((code >> 16) & 255) - ((entry >> 16) & 255)
+				var dg: int = ((code >> 8) & 255) - ((entry >> 8) & 255)
+				var db: int = (code & 255) - (entry & 255)
+				var distance := dr * dr + dg * dg + db * db
+				if distance < best_distance:
+					best_distance = distance
+					best = entry
+			nearest[code] = best
+	var alpha_step := 255.0 / (alpha_levels - 1)
+	for i in range(0, bytes.size(), 4):
+		var alpha := roundi(roundf(bytes[i + 3] / alpha_step) * alpha_step)
+		if alpha == 0:
+			bytes[i] = 0
+			bytes[i + 1] = 0
+			bytes[i + 2] = 0
+			bytes[i + 3] = 0
+			continue
+		var code: int = nearest[(bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2]]
+		bytes[i] = (code >> 16) & 255
+		bytes[i + 1] = (code >> 8) & 255
+		bytes[i + 2] = code & 255
+		bytes[i + 3] = alpha
+	image.set_data(image.get_width(), image.get_height(), false, Image.FORMAT_RGBA8, bytes)
+
+
+## Splits the colours (0xRRGGBB -> pixels) into `colors` boxes: each time the box with the widest channel (weighted
+## by the root of its pixels) is cut at its pixel median along that channel. Returns the boxes' weighted averages.
+static func _median_cut(counts: Dictionary, colors: int) -> Array[int]:
+	var boxes: Array[Array] = [counts.keys()]
+	while boxes.size() < colors:
+		var widest := -1
+		var widest_channel := 0
+		var widest_score := 0.0
+		for b in boxes.size():
+			var box: Array = boxes[b]
+			if box.size() < 2:
+				continue
+			var low := [255, 255, 255]
+			var high := [0, 0, 0]
+			var pixels := 0
+			for code in box:
+				for channel in 3:
+					var value: int = (code >> (16 - 8 * channel)) & 255
+					low[channel] = mini(low[channel], value)
+					high[channel] = maxi(high[channel], value)
+				pixels += counts[code]
+			for channel in 3:
+				var score := float(high[channel] - low[channel]) * sqrt(pixels)
+				if score > widest_score:
+					widest_score = score
+					widest = b
+					widest_channel = channel
+		if widest < 0:
+			break
+		var box: Array = boxes[widest]
+		var shift := 16 - 8 * widest_channel
+		box.sort_custom(func(a, b): return ((a >> shift) & 255) < ((b >> shift) & 255))
+		var total := 0
+		for code in box:
+			total += counts[code]
+		var running := 0
+		var cut := 1
+		for i in box.size():
+			running += counts[box[i]]
+			if running * 2 >= total:
+				cut = clampi(i + 1, 1, box.size() - 1)
+				break
+		boxes[widest] = box.slice(0, cut)
+		boxes.append(box.slice(cut))
+	var palette: Array[int] = []
+	for box in boxes:
+		var sums := [0.0, 0.0, 0.0]
+		var pixels := 0.0
+		for code in box:
+			var weight: float = counts[code]
+			for channel in 3:
+				sums[channel] += ((code >> (16 - 8 * channel)) & 255) * weight
+			pixels += weight
+		palette.append((roundi(sums[0] / pixels) << 16) | (roundi(sums[1] / pixels) << 8) | roundi(sums[2] / pixels))
+	return palette
 
 
 func _normalize(image: Image) -> Image:

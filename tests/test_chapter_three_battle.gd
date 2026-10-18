@@ -418,3 +418,59 @@ func test_fafnir_burrows_into_the_gold_at_half_hp() -> void:
 	battle._deal_damage(front, fafnir, 1.0, "attack")
 	assert_true(not fafnir.is_alive(), "and can be killed")
 	assert_eq(events_of(battle.take_events(), "phase").size(), 0, "no more phases")
+
+
+# --- M13.1: what the support heroes did ----------------------------------------------------------
+
+## Regin's help: every hit on a front-row hero counts how much bigger it would be without Regin's cuts (the armour and
+## «Закалка»), the others still there. Torvald's own cuts count for Torvald. A hit under «Закалка» carries the anvil.
+func test_regin_counts_the_damage_his_armour_and_temper_saved() -> void:
+	var regin = hero_from_data("regin")
+	var torvald = hero_from_data("torvald")
+	var back = make_target("back")
+	var enemy = make_target("front")
+	enemy.team = ENEMIES
+	var battle = make_battle([torvald, back, regin], [enemy])
+	var tank := float(data.get_hero("torvald")["passive"]["damage_taken_multiplier"])
+	var armour := float(data.get_hero("regin")["passive"]["damage_taken_multiplier"])
+	var hit := roundi(100 * tank * armour)
+	assert_eq(blow_of_100(battle, torvald), hit, "a hit on Torvald")
+	assert_eq(regin.damage_prevented, roundi(100 * tank) - hit, "the armour saved the difference to the hit without it")
+	assert_eq(torvald.damage_prevented, roundi(100 * armour) - hit, "Torvald's passive counts for Torvald")
+	assert_eq(events_of(battle.take_events(), "damage").back()["cut_badge"], "", "no anvil without «Закалка»")
+	blow_of_100(battle, back)
+	assert_eq(regin.damage_prevented, roundi(100 * tank) - hit, "the back row: nothing saved")
+	regin.energy = regin.ultimate_cost()
+	battle.use_ultimate(regin.id)
+	battle.take_events()
+	var tempered := roundi(100 * tank * armour * 0.5)
+	assert_eq(blow_of_100(battle, torvald), tempered, "a hit under «Закалка»")
+	assert_eq(regin.damage_prevented, roundi(100 * tank) - hit + roundi(100 * tank) - tempered,
+			"armour and «Закалка» together: the hit without both minus the hit")
+	assert_eq(events_of(battle.take_events(), "damage").back()["cut_badge"], "temper", "the number carries the anvil")
+	var before: int = regin.damage_prevented
+	torvald.apply_poison(enemy.id, 100.0, 1.0, 1)
+	torvald.poison["timer"] = 1.0
+	battle._tick_poison(torvald)
+	assert_eq(regin.damage_prevented - before, roundi(100 * tank) - tempered, "poison is cut and counted too")
+	assert_near(battle.damage_taken_factors(torvald).values().reduce(func(a, b): return a * b, 1.0),
+			battle.damage_taken_multiplier(torvald), 0.0001, "the cuts by who gives them multiply to the whole cut")
+
+
+## Eyvind's help: «Песнь битвы» makes the squad's hits bigger; each counts the hit minus the hit without the song.
+func test_eyvind_counts_the_damage_his_song_added() -> void:
+	var eyvind = hero_from_data("eyvind")
+	var hitter = make_unit(HEROES, "front", 1000, 100, 1000.0)
+	var enemy = make_target("front")
+	enemy.team = ENEMIES
+	var battle = make_battle([hitter, eyvind], [enemy])
+	battle._deal_damage(hitter, enemy, 1.0, "attack")
+	assert_eq(eyvind.damage_added, 0, "nothing without the song")
+	eyvind.energy = eyvind.ultimate_cost()
+	battle.use_ultimate(eyvind.id)
+	var song := float(data.get_hero("eyvind")["ultimate"]["effects"][0]["multiplier"])
+	battle._deal_damage(hitter, enemy, 1.0, "attack")
+	assert_eq(eyvind.damage_added, roundi(100 * song) - 100, "the song added the difference")
+	battle._deal_damage(hitter, enemy, 2.0, "ultimate")
+	assert_eq(eyvind.damage_added, roundi(100 * song) - 100 + roundi(200 * song) - 200, "ultimates too")
+	assert_eq(eyvind.damage_prevented, 0, "the song cuts nothing")

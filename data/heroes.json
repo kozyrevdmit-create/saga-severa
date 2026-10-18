@@ -4,6 +4,7 @@
       "name": "Щитоносец",
       "role": "Танк, принимает удары",
       "role_short": "Танк",
+      "role_description": "Стоит впереди и принимает удары на себя.",
       "row": "front",
       "color": "#2f6fdb",
       "action": "attack_front_row"
@@ -12,6 +13,7 @@
       "name": "Берсерк",
       "role": "Урон вблизи",
       "role_short": "Урон",
+      "role_description": "Главная сила дружины — бьёт врагов.",
       "row": "front",
       "color": "#d23c3c",
       "action": "attack_front_row"
@@ -20,6 +22,7 @@
       "name": "Лучник",
       "role": "Урон издалека",
       "role_short": "Урон",
+      "role_description": "Главная сила дружины — бьёт врагов.",
       "row": "back",
       "color": "#3aa356",
       "action": "attack_lowest_hp"
@@ -28,6 +31,7 @@
       "name": "Вёльва",
       "role": "Лечение и магия",
       "role_short": "Лекарь",
+      "role_description": "Лечит дружину в бою.",
       "row": "back",
       "color": "#8a4fd0",
       "action": "heal_or_attack",
@@ -38,6 +42,7 @@
       "name": "Скальд",
       "role": "Усиление отряда",
       "role_short": "Поддержка",
+      "role_description": "Сам бьёт слабо, но делает сильнее всю дружину.",
       "row": "back",
       "color": "#e0b51f",
       "action": "attack_front_row"
@@ -46,6 +51,7 @@
       "name": "Кузнец",
       "role": "Броня для первого ряда",
       "role_short": "Поддержка",
+      "role_description": "Сам бьёт слабо, но делает сильнее всю дружину.",
       "row": "back",
       "color": "#c46a2a",
       "action": "attack_front_row"
@@ -121,6 +127,7 @@
       "name": "Эйвинд",
       "portrait": { "x": 0.61, "y": 0.19, "size": 0.4 },
       "role_detail": "Поддержка · усиление атаки",
+      "battle_summary": { "stat": "damage_added", "text": "Эйвинд: песнь добавила %d урона" },
       "class": "skald",
       "clan": "midgard",
       "hp": 650,
@@ -216,6 +223,7 @@
       "name": "Регин",
       "portrait": { "x": 0.64, "y": 0.24, "size": 0.38 },
       "role_detail": "Поддержка · броня",
+      "battle_summary": { "stat": "damage_prevented", "text": "Регин: броня спасла от %d урона" },
       "class": "smith",
       "clan": "svartalfheim",
       "hp": 700,

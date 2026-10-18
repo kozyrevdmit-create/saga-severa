@@ -159,9 +159,11 @@ static func art_size_for(height: float) -> float:
 	return height - bars_height() - NAME_HEIGHT
 
 
-func refresh(unit, marked := false) -> void:
+## battle_over: the fight has ended (a win, a defeat, «Отступить») — a boss that was burrowed into his gold at that
+## moment gets his own colour back too (M13.1: darker only for the seconds he cannot be hit).
+func refresh(unit, marked := false, battle_over := false) -> void:
 	_mark.visible = marked and unit.is_alive()
-	_pose.modulate = BURROWED_TINT if unit.is_invulnerable() else Color.WHITE
+	_pose.modulate = BURROWED_TINT if unit.is_invulnerable() and not battle_over else Color.WHITE
 	_hp_bar.value = unit.hp_fraction()
 	if unit.has_ultimate():
 		_energy_bar.value = float(unit.energy) / unit.ultimate_cost()

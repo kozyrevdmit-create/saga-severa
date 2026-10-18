@@ -244,7 +244,9 @@ func _tick_poison(unit) -> void:
 	poison["ticks_left"] -= 1
 	if poison["ticks_left"] <= 0:
 		unit.poison = {}
-	var amount := maxi(1, roundi(float(poison["amount"]) * damage_taken_multiplier(unit)))
+	var taken := damage_taken_multiplier(unit)
+	var amount := maxi(1, roundi(float(poison["amount"]) * taken))
+	_count_help(null, unit, float(poison["amount"]), taken, amount)
 	_take_damage(int(poison["source"]), unit, amount, "poison", false)
 
 
@@ -310,8 +312,48 @@ func _deal_damage(source, target, multiplier: float, kind: String) -> void:
 	if target.is_invulnerable():
 		_events.append({"type": "immune", "unit": target.id, "source": source.id})
 		return
-	var amount := maxi(1, roundi(source.attack_power() * multiplier * damage_taken_multiplier(target)))
+	var raw: float = source.attack_power() * multiplier
+	var taken := damage_taken_multiplier(target)
+	var amount := maxi(1, roundi(raw * taken))
+	_count_help(source, target, raw, taken, amount)
 	_take_damage(source.id, target, amount, kind, true)
+
+
+## M13.1: who changed this hit and by how much, for the result screen. raw: the blow before the target's reductions,
+## taken: the target's damage_taken_multiplier, amount: the hit as dealt. Every unit whose buff made the source stronger
+## gets damage_added += the hit minus the hit without that unit's buffs («Песнь битвы»); every unit that cut the hit
+## (damage_taken_factors) gets damage_prevented += the hit without that unit's cut minus the hit. Each helper is
+## measured on its own, with the others still there. source: null for poison (no attack buffs count).
+func _count_help(source, target, raw: float, taken: float, amount: int) -> void:
+	if source != null:
+		var boosts := {}
+		for buff in source.buffs:
+			if buff["stat"] == "attack":
+				boosts[buff["source"]] = boosts.get(buff["source"], 1.0) * float(buff["multiplier"])
+		for helper_id in boosts:
+			if helper_id >= 0 and helper_id < units.size():
+				units[helper_id].damage_added += amount - maxi(1, roundi(raw / boosts[helper_id] * taken))
+	var cuts := damage_taken_factors(target)
+	for helper_id in cuts:
+		if helper_id >= 0 and helper_id < units.size():
+			units[helper_id].damage_prevented += maxi(1, roundi(raw * taken / cuts[helper_id])) - amount
+
+
+## The cuts that make up damage_taken_multiplier, by who gives them: unit id -> multiplier. Buffs count for their
+## source (Torvald's «Стена щитов», Regin's «Закалка»), the unit's own passive for itself (the shieldbearers), the
+## front-row guard's passive for the guard (Regin's «Кузнечная броня»). Their product is damage_taken_multiplier.
+func damage_taken_factors(unit) -> Dictionary:
+	var factors := {}
+	for buff in unit.buffs:
+		if buff["stat"] == "damage_taken":
+			factors[buff["source"]] = factors.get(buff["source"], 1.0) * float(buff["multiplier"])
+	if unit.passive.get("type", "") == "damage_taken_reduction":
+		factors[unit.id] = factors.get(unit.id, 1.0) * float(unit.passive["damage_taken_multiplier"])
+	if unit.row == "front":
+		for ally in _alive(_allies_of(unit)):
+			if ally.passive.get("type", "") == "front_row_damage_taken_reduction":
+				factors[ally.id] = factors.get(ally.id, 1.0) * float(ally.passive["damage_taken_multiplier"])
+	return factors
 
 
 ## The share of damage the unit takes: its own buffs and passive (BattleUnit.damage_taken_multiplier) times the passive
@@ -327,11 +369,18 @@ func damage_taken_multiplier(unit) -> float:
 
 
 ## kind: "attack", "ultimate", "special" or "poison". A unit that dies with a death blast (the forge spirit) blows up.
+## "cut_badge": the badge of a damage cut on the target at that moment ("temper" while Regin's «Закалка» is on: the
+## screen shows the number with the anvil), "" without one.
 func _take_damage(source_id: int, target, amount: int, kind: String, gives_energy: bool) -> void:
 	target.hp = maxi(0, target.hp - amount)
+	var cut_badge := ""
+	for buff in target.buffs:
+		if buff["stat"] == "damage_taken" and buff["badge"] != "":
+			cut_badge = buff["badge"]
+			break
 	_events.append({
 		"type": "damage", "source": source_id, "target": target.id, "amount": amount,
-		"kind": kind, "target_is_hero": target.team == BattleUnit.Team.HEROES,
+		"kind": kind, "target_is_hero": target.team == BattleUnit.Team.HEROES, "cut_badge": cut_badge,
 	})
 	if target.is_alive():
 		if gives_energy:
