@@ -23,7 +23,7 @@ func test_the_result_window_names_what_regin_and_eyvind_did() -> void:
 	for hero_id in progress.hero_levels:  # strong enough that nobody falls before using the ultimate
 		progress.hero_levels[hero_id] = 38
 	progress.formation[progress.formation.find("skadi")] = "regin"
-	progress.mark_hint_shown = true
+	progress.finish_tutorial(data)
 	progress.mark_all_scenes_seen(data)
 	game_state.progress = progress
 	game_state.selected_stage = 24

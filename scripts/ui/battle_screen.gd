@@ -3,8 +3,11 @@
 ## (less for a replay) and may bring a new hero; «Отступить» ends the battle as a defeat.
 ## A beast pack picked on the map (GameState.selected_pack) is one wave at the strength of the last stage won;
 ## a win pays the pack reward and sends the pack away for a while, a defeat or a retreat leaves it on the map.
-## Tapping an enemy marks it as the target (tap again to remove the mark). The player's first battle shows a hint
-## about it, once per game (Progress.mark_hint_shown), until the first mark or for balance.json → mark_hint.seconds.
+## Tapping an enemy marks it as the target (tap again to remove the mark).
+## M14: the beginner's tutorial (data/tutorial.json, TutorialHint) shows its battle hints here, each once per game: when a
+## battle starts (the battle runs by itself; the target mark — this replaced the M6.1 mark hint; «Авто» and «x2»), the
+## first time a hero's ultimate is charged (pointing at the glowing card) and after a defeat without a tip of hints.json
+## (pointing at «На карту»). While a hint is on the screen the battle stands still.
 ## Progress is saved after every stage.
 ## Saga scenes: a hero's scene right after their «Новый герой» window is closed; the boss's last scene after «Победа!»
 ## (on the way to the map). Both are queued by the first win (Progress.apply_victory).
@@ -27,6 +30,7 @@ const Art := preload("res://scripts/ui/art.gd")
 const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 const NewHeroWindow := preload("res://scripts/ui/new_hero_window.gd")
+const TutorialHint := preload("res://scripts/ui/tutorial_hint.gd")
 
 const MAP_SCENE := "res://scenes/map.tscn"
 
@@ -49,7 +53,6 @@ const POPUP_BADGE_GAP := 4.0  ## between the anvil and the damage number
 const PHASE_FONT_SIZE := 34
 const PHASE_SECONDS := 2.2
 const NEW_HERO_PORTRAIT_SIZE := 260.0
-const MARK_HINT_TEXT := "Нажми на врага, чтобы отряд бил его первым"
 
 var _battle
 var _stage_id := 1
@@ -60,7 +63,8 @@ var _popups_this_frame := {}  ## unit id -> popups already shown this frame (sta
 var _cards := {}  ## unit id -> HeroCard
 var _new_heroes: Array[String] = []  ## heroes still to announce after a win
 var _announced_hero := ""  ## the hero in the «Новый герой» window
-var _mark_hint: PanelContainer  ## null unless the hint is on screen
+var _tutorial_shown_before: Array[String] = []  ## tutorial hints shown before this battle (Progress.tutorial_hints_due)
+var _tutorial: Control  ## the tutorial hint on the screen, if any: the battle stands still under it
 
 
 func _ready() -> void:
@@ -93,17 +97,56 @@ func _ready() -> void:
 	%MenuButton.pressed.connect(_on_to_map_pressed)
 	%NewHeroButton.pressed.connect(_on_new_hero_closed)
 	%Field.resized.connect(_layout_fighters)
-	if not progress.mark_hint_shown:
-		_show_mark_hint()
+	_tutorial_shown_before = progress.tutorial_shown.duplicate()
+	_show_tutorial("start")
 	_refresh()
 
 
 func _process(delta: float) -> void:
 	_popups_this_frame.clear()
+	if is_tutorial_on():
+		return
 	_battle.advance(delta * _speed)
 	for event in _battle.take_events():
 		_show_event(event)
 	_refresh()
+	if not _battle.finished and _battle.heroes().any(func(hero): return _battle.can_use_ultimate(hero.id)):
+		_show_tutorial("ultimate_ready")
+
+
+## A tutorial hint is on the screen (the battle stands still).
+func is_tutorial_on() -> bool:
+	return is_instance_valid(_tutorial) and not _tutorial.is_queued_for_deletion()
+
+
+## The first tutorial hint due at `moment` (data/tutorial.json → screen "battle"), if any.
+func _show_tutorial(moment: String, facts := {}) -> void:
+	facts["shown_before"] = _tutorial_shown_before
+	var shown: Control = TutorialHint.try_show(self, "battle", moment, _tutorial_targets, facts)
+	if shown != null:
+		_tutorial = shown
+
+
+## What a battle hint points at (tutorial.json → hints[].target).
+func _tutorial_targets(target: String) -> Array:
+	match target:
+		"field":
+			return [%Field]
+		"ready_card":
+			for hero in _battle.heroes():
+				if _battle.can_use_ultimate(hero.id):
+					return [_cards[hero.id]]
+		"enemy":
+			for enemy in _battle.enemies():
+				if enemy.is_alive() and _views.has(enemy.id):
+					return [_views[enemy.id]]
+		"auto_and_speed":
+			return [%AutoButton, %SpeedButton]
+		"to_map_button":
+			return [%MenuButton]
+		_:
+			push_error("Unknown tutorial target on the battle screen: %s" % target)
+	return []
 
 
 func _on_card_pressed(unit_id: int) -> void:
@@ -241,9 +284,6 @@ func _show_event(event: Dictionary) -> void:
 			_popup(event["unit"], IMMUNE_TEXT, Color.WHITE, 26)
 		"phase":
 			_show_phase(event["unit"], event["phase"])
-		"mark":
-			if event["unit"] >= 0:
-				_hide_mark_hint()
 		"wave":
 			_show_wave()
 			_banner("Волна %d" % (event["index"] + 1))
@@ -318,42 +358,10 @@ func _float_away(label: Label, duration: float) -> void:
 	tween.chain().tween_callback(label.queue_free)
 
 
-## Shown once per game; the flag is saved at once, so leaving the battle early does not bring it back.
-## Real seconds: the hint stays as long at x2.
-func _show_mark_hint() -> void:
-	GameState.progress.mark_hint_shown = true
-	GameState.save()
-	_mark_hint = PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.7)
-	style.border_color = FighterView.MARK_COLOR
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(12)
-	style.set_content_margin_all(12)
-	_mark_hint.add_theme_stylebox_override("panel", style)
-	_mark_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_mark_hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	var label := Label.new()
-	label.text = MARK_HINT_TEXT
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", 26)
-	label.add_theme_color_override("font_color", FighterView.MARK_COLOR)
-	_mark_hint.add_child(label)
-	%Field.add_child(_mark_hint)
-	get_tree().create_timer(float(GameState.data.balance["mark_hint"]["seconds"])).timeout.connect(_hide_mark_hint)
-
-
-func _hide_mark_hint() -> void:
-	if _mark_hint != null:
-		_mark_hint.queue_free()
-		_mark_hint = null
-
-
 ## A retreat counts as a defeat; only the title and the hint's first line differ.
 func _finish_stage(victory: bool, retreat: bool) -> void:
-	_hide_mark_hint()
 	var progress = GameState.progress
+	var defeat_tip_given := false
 	if victory and _pack_id != "":
 		var pack_reward: Dictionary = progress.apply_pack_victory(GameState.data, _pack_id, GameState.now())
 		%ResultTitle.text = "Победа!"
@@ -374,12 +382,15 @@ func _finish_stage(victory: bool, retreat: bool) -> void:
 		var tip: String = _battle.defeat_hint(GameState.data.hints["defeat"])
 		if tip != "":
 			%ResultHint.text += "\n\n" + tip
+		defeat_tip_given = tip != ""
 	var help := support_lines(GameState.data, _battle.heroes())
 	if not help.is_empty():
 		%ResultHint.text += "\n\n" + "\n".join(help)
 	GameState.save()
 	%ResultOverlay.visible = true
 	_show_next_new_hero()
+	if not victory:
+		_show_tutorial("defeat", {"defeat_tip": defeat_tip_given})
 
 
 ## A line for each support hero in the battle (heroes.json → battle_summary: which of the unit's help totals and the

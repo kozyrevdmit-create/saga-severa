@@ -1,0 +1,109 @@
+{
+  "hints": [
+    {
+      "id": "open_map",
+      "screen": "main_menu",
+      "moment": "open",
+      "target": "map_button",
+      "text": "Открой карту — там этапы саги."
+    },
+    {
+      "id": "pick_stage",
+      "screen": "map",
+      "moment": "open",
+      "target": "next_stage",
+      "text": "Нажми на этап, чтобы начать бой."
+    },
+    {
+      "id": "auto_battle",
+      "screen": "battle",
+      "moment": "start",
+      "target": "field",
+      "text": "Бой идёт сам: дружина бьёт врагов без твоей помощи."
+    },
+    {
+      "id": "ultimate",
+      "screen": "battle",
+      "moment": "ultimate_ready",
+      "target": "ready_card",
+      "text": "Карточка героя светится — нажми на неё, и герой нанесёт суперудар."
+    },
+    {
+      "id": "mark_target",
+      "screen": "battle",
+      "moment": "start",
+      "if": { "hint_shown_before": "auto_battle" },
+      "target": "enemy",
+      "text": "Нажми на врага — дружина будет бить его первым. Нажми ещё раз, чтобы снять метку."
+    },
+    {
+      "id": "silver",
+      "screen": "main_menu",
+      "moment": "open",
+      "if": { "stages_won": 1 },
+      "target": "heroes_button",
+      "text": "За победы дают серебро. Потрать его в «Героях» — прокачанный герой сильнее."
+    },
+    {
+      "id": "beast_pack",
+      "screen": "map",
+      "moment": "open",
+      "if": { "stages_won": 1, "pack_available": true },
+      "target": "available_pack",
+      "text": "Стая — необязательный бой за серебро. После победы она вернётся через 2 часа."
+    },
+    {
+      "id": "recommended_power",
+      "screen": "map",
+      "moment": "open",
+      "if": { "hint_shown_before": "beast_pack" },
+      "target": "next_stage_caption",
+      "text": "Рек. сила — сколько силы нужно для этапа. Если у отряда меньше — прокачай героев или переставь их."
+    },
+    {
+      "id": "formation_rows",
+      "screen": "formation",
+      "moment": "open",
+      "target": "front_row",
+      "text": "Первый ряд принимает удары, второй бьёт и лечит из-за спины. Ставь крепких вперёд."
+    },
+    {
+      "id": "auto_and_speed",
+      "screen": "battle",
+      "moment": "start",
+      "if": { "hint_shown_before": "mark_target" },
+      "target": "auto_and_speed",
+      "text": "«Авто» сам жмёт суперудары, «x2» ускоряет бой. Удобно, когда проходишь этап повторно."
+    },
+    {
+      "id": "defeat",
+      "screen": "battle",
+      "moment": "defeat",
+      "if": { "defeat_tip": false },
+      "target": "to_map_button",
+      "text": "Не беда. Прокачай героев или переставь отряд — и попробуй снова."
+    },
+    {
+      "id": "build",
+      "screen": "settlement",
+      "moment": "open",
+      "if": { "construction_open": true, "scene_seen": "settlement_intro" },
+      "target": "empty_plot",
+      "text": "Строй дома за припасы — они навсегда усиливают дружину. Припасы дают стаи и первые победы на этапах."
+    }
+  ],
+  "old_saves": {
+    "tutorial_off_once_stages_won": 1,
+    "kept_while_construction_open": ["build"],
+    "mark_hint_shown_counts_as": "mark_target"
+  },
+  "texts": {
+    "got_it": "Понятно",
+    "how_to_play": "Как играть",
+    "how_to_play_roles": "Роли героев",
+    "how_to_play_role_line": "%s — %s",
+    "how_to_play_back": "Назад",
+    "debug_reset_tutorial": "Сбросить обучение",
+    "debug_tutorial_reset_done": "Обучение сброшено: подсказки покажутся снова"
+  }
+}

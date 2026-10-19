@@ -1,6 +1,7 @@
 ## Player progress: silver, experience (jarl level), won stages, unlocked heroes with their levels,
 ## the squad formation, the time the game was last open (for offline income), when beaten beast packs come back,
-## which saga scenes have been seen, and the settlement (M12): supplies and the buildings' levels.
+## which saga scenes have been seen, the settlement (M12): supplies and the buildings' levels, and which hints of the
+## beginner's tutorial (M14, data/tutorial.json) have been shown.
 ## Rules only; reading and writing the save file lives in save_storage.gd.
 extends RefCounted
 
@@ -14,7 +15,6 @@ var hero_levels := {}  ## unlocked hero id -> level, in unlock order
 var formation: Array[String] = []  ## one hero id or EMPTY per slot; front slots first
 var last_seen_unix := 0  ## when the game was last open; 0 = never
 var offline_bank := 0  ## offline income collected on return, waiting for «Забрать»
-var mark_hint_shown := false  ## the battle hint about the target mark was shown (once per game; a reset shows it again)
 var pack_respawn_unix := {}  ## beaten beast pack id -> when it comes back to the map (unix time)
 var pack_clock_unix := 0  ## when the pack timers were last checked against the clock (to notice it turned back); 0 = never
 var seen_scenes: Array[String] = []  ## saga scenes (story.json ids) that have started: each is shown once per game
@@ -22,6 +22,7 @@ var scene_queue: Array[String] = []  ## scenes whose moment has come but that ha
 var supplies := 0  ## «Припасы» (wood, stone, iron) for the settlement's buildings
 var building_levels := {}  ## built building id -> level (1..max); a building not built yet is not here
 var start_supplies_given := false  ## the starting supplies came with the opening of construction (once per game)
+var tutorial_shown: Array[String] = []  ## tutorial hints (tutorial.json ids) already shown: each once per game
 
 
 static func new_game(data) -> RefCounted:
@@ -36,8 +37,8 @@ static func new_game(data) -> RefCounted:
 
 
 ## Debug panel «Сбросить прогресс»: everything back to a new game (stages, heroes and their levels, squad,
-## silver, jarl experience, offline bank, the target mark hint, beast pack timers, seen saga scenes: the intro is due
-## again; supplies and buildings). The offline clock restarts now, so the time before the reset earns nothing.
+## silver, jarl experience, offline bank, beast pack timers, seen saga scenes: the intro is due again; supplies and
+## buildings; the tutorial starts again). The offline clock restarts now, so the time before the reset earns nothing.
 func reset(data, now_unix: int) -> void:
 	var fresh = new_game(data)
 	silver = fresh.silver
@@ -46,7 +47,6 @@ func reset(data, now_unix: int) -> void:
 	hero_levels = fresh.hero_levels
 	formation = fresh.formation
 	offline_bank = fresh.offline_bank
-	mark_hint_shown = fresh.mark_hint_shown
 	pack_respawn_unix = fresh.pack_respawn_unix
 	pack_clock_unix = fresh.pack_clock_unix
 	seen_scenes = fresh.seen_scenes
@@ -54,6 +54,7 @@ func reset(data, now_unix: int) -> void:
 	supplies = fresh.supplies
 	building_levels = fresh.building_levels
 	start_supplies_given = fresh.start_supplies_given
+	tutorial_shown = fresh.tutorial_shown
 	last_seen_unix = now_unix
 
 
@@ -245,6 +246,89 @@ func seen_scene_ids(data) -> Array[String]:
 func mark_all_scenes_seen(data) -> void:
 	for scene_id in data.scene_ids():
 		start_scene(scene_id)
+
+
+# --- the beginner's tutorial (data/tutorial.json, M14) -----------------------------
+
+## The tutorial hints due on `screen` at `moment` (tutorial.json → hints[].screen / moment) that have not been shown and
+## whose conditions (hints[].if) hold, in data order. The screen shows the first one whose target is on it, only one at a
+## time; the others wait for their next moment. Moments: "open" (the screen is opened and nothing else is over it:
+## a saga scene, a window), "start" (a battle starts), "ultimate_ready" (a hero's ultimate is charged), "defeat".
+## Conditions: stages_won N (at least N stages won), hint_shown_before (that hint was shown before this screen was
+## opened: facts.shown_before, so «the next battle after hint 3»), pack_available (a beast pack of the current chapter can
+## be fought now: facts.now), construction_open, scene_seen (that saga scene has started), defeat_tip (the defeat has a
+## tip of hints.json: facts.defeat_tip).
+func tutorial_hints_due(data, screen: String, moment: String, facts := {}) -> Array[String]:
+	var due: Array[String] = []
+	for hint in data.tutorial["hints"]:
+		if hint["screen"] == screen and hint["moment"] == moment and not hint["id"] in tutorial_shown \
+				and _tutorial_conditions_met(data, hint.get("if", {}), facts):
+			due.append(hint["id"])
+	return due
+
+
+func _tutorial_conditions_met(data, conditions: Dictionary, facts: Dictionary) -> bool:
+	for key in conditions:
+		var wanted = conditions[key]
+		var met := false
+		match key:
+			"stages_won":
+				met = cleared_stage >= int(wanted)
+			"hint_shown_before":
+				met = wanted in facts.get("shown_before", [])
+			"pack_available":
+				var now_unix: int = facts.get("now", 0)
+				var available: bool = data.pack_ids(current_chapter(data)).any(
+						func(pack_id): return is_pack_available(data, pack_id, now_unix))
+				met = available == bool(wanted)
+			"construction_open":
+				met = is_construction_open(data) == bool(wanted)
+			"scene_seen":
+				met = is_scene_seen(wanted)
+			"defeat_tip":
+				met = bool(facts.get("defeat_tip", false)) == bool(wanted)
+			_:
+				push_error("Unknown tutorial.json condition: %s" % key)
+		if not met:
+			return false
+	return true
+
+
+## The hint is on the screen: it counts as shown at once (also if the game is closed while it is open).
+func show_tutorial_hint(hint_id: String) -> void:
+	if not hint_id in tutorial_shown:
+		tutorial_shown.append(hint_id)
+
+
+func is_tutorial_hint_shown(hint_id: String) -> bool:
+	return hint_id in tutorial_shown
+
+
+## Debug panel «Сбросить обучение»: every hint is due again; the progress stays as it is.
+func reset_tutorial() -> void:
+	tutorial_shown.clear()
+
+
+## Every hint counts as shown: no tutorial (a save that had passed stage 1 before M14; tests of other screens).
+func finish_tutorial(data) -> void:
+	for hint_id in data.tutorial_hint_ids():
+		show_tutorial_hint(hint_id)
+
+
+## A save from before M14 (no tutorial flags in it). Once it has won tutorial.json → old_saves.tutorial_off_once_stages_won
+## stages, the tutorial is off: every hint counts as shown, except the hints of old_saves.kept_while_construction_open
+## (the settlement's) while construction is open (the settlement has not been opened since the update: it explains the
+## buildings there once). The old target mark hint (mark_hint_shown, M6.1) is the tutorial's hint
+## old_saves.mark_hint_shown_counts_as: shown there, shown here.
+func _migrate_tutorial(data, mark_hint_was_shown: bool) -> void:
+	var old_saves: Dictionary = data.tutorial["old_saves"]
+	if cleared_stage >= int(old_saves["tutorial_off_once_stages_won"]):
+		var kept: Array = old_saves["kept_while_construction_open"] if is_construction_open(data) else []
+		for hint_id in data.tutorial_hint_ids():
+			if not hint_id in kept:
+				show_tutorial_hint(hint_id)
+	if mark_hint_was_shown:
+		show_tutorial_hint(old_saves["mark_hint_shown_counts_as"])
 
 
 # --- beast packs ----------------------------------------------------------------
@@ -649,7 +733,6 @@ func to_dict() -> Dictionary:
 		"formation": formation.duplicate(),
 		"last_seen_unix": last_seen_unix,
 		"offline_bank": offline_bank,
-		"mark_hint_shown": mark_hint_shown,
 		"pack_respawn_unix": pack_respawn_unix.duplicate(),
 		"pack_clock_unix": pack_clock_unix,
 		"seen_scenes": seen_scenes.duplicate(),
@@ -657,6 +740,7 @@ func to_dict() -> Dictionary:
 		"supplies": supplies,
 		"building_levels": building_levels.duplicate(),
 		"start_supplies_given": start_supplies_given,
+		"tutorial_shown": tutorial_shown.duplicate(),
 	}
 
 
@@ -683,9 +767,6 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 				progress.building_levels[building_id] = saved_level
 	var given = saved.get("start_supplies_given")
 	progress.start_supplies_given = given is bool and given
-	# A save from before M6.1 has no flag: the hint is new, so it is shown once there too.
-	var hint_shown = saved.get("mark_hint_shown")
-	progress.mark_hint_shown = hint_shown is bool and hint_shown
 	# A save from before M9 has no pack timers: every unlocked pack is on the map.
 	var respawns = saved.get("pack_respawn_unix")
 	if respawns is Dictionary:
@@ -742,6 +823,14 @@ static func from_dict(saved: Dictionary, data) -> RefCounted:
 		progress.hero_levels[hero_id] = join_level
 		progress.formation_add(data, hero_id)  # like a new hero: into a free slot, if there is one
 	progress._open_construction(data)
+	var shown = saved.get("tutorial_shown")
+	if shown is Array:
+		for hint_id in data.tutorial_hint_ids():
+			if hint_id in shown:
+				progress.show_tutorial_hint(hint_id)
+	else:
+		var mark_hint_shown = saved.get("mark_hint_shown")  # M6.1–M13.2: the battle hint about the target mark
+		progress._migrate_tutorial(data, mark_hint_shown is bool and mark_hint_shown)
 	return progress
 
 

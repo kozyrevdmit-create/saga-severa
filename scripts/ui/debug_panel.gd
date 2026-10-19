@@ -1,10 +1,12 @@
 ## Debug panel (spec 5.6), opened by a long press on the silver counter of the main screen:
 ## add silver or supplies, unlock all heroes, jump to stage N, mark all saga scenes seen, skip time, reset the progress
 ## («Точно сбросить?» first). Unlocking heroes and jumping to a stage play no saga scenes.
+## M14: «Сбросить обучение» — every tutorial hint shows again (the progress stays as it is).
 ## Amounts come from balance.json → debug_panel.
 extends Control
 
 signal progress_changed  ## the panel changed the progress; the screen behind should refresh
+signal closed  ## the panel was closed
 
 var _jump_stage := 1  ## stage chosen with − / +
 
@@ -20,6 +22,8 @@ func _ready() -> void:
 	%AddSuppliesButton.pressed.connect(_on_add_supplies)
 	%UnlockHeroesButton.pressed.connect(_on_unlock_heroes)
 	%UnlockScenesButton.pressed.connect(_on_unlock_scenes)
+	%ResetTutorialButton.text = GameState.data.tutorial_text("debug_reset_tutorial")
+	%ResetTutorialButton.pressed.connect(_on_reset_tutorial)
 	%StageDownButton.pressed.connect(_change_jump_stage.bind(-1))
 	%StageUpButton.pressed.connect(_change_jump_stage.bind(1))
 	%JumpButton.pressed.connect(_on_jump)
@@ -40,6 +44,7 @@ func open() -> void:
 
 func close() -> void:
 	visible = false
+	closed.emit()
 
 
 func _on_add_silver() -> void:
@@ -63,6 +68,11 @@ func _on_unlock_heroes() -> void:
 func _on_unlock_scenes() -> void:
 	GameState.debug_mark_all_scenes_seen()
 	_done("Сцены открыты: «Настройки», пункт «Сцены саги»")  # no arrow: the game font has no such glyph
+
+
+func _on_reset_tutorial() -> void:
+	GameState.debug_reset_tutorial()
+	_done(GameState.data.tutorial_text("debug_tutorial_reset_done"))
 
 
 func _change_jump_stage(step: int) -> void:

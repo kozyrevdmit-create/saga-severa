@@ -19,11 +19,16 @@
 ## the camp as a share of the picture's height) stays above the «Назад» button. Where the screen is too short for
 ## that with the map at the full screen height, the map is made a little smaller and shifted (_layout); what is left
 ## of the screen under the paper bars is paper.
+## M14: under «Глава N · Название» stands the chapter's goal (stages.json → chapters[].goal), in a smaller font. Once
+## nothing is over the map (a chapter's scene, «Новый герой»), the beginner's tutorial (data/tutorial.json,
+## TutorialHint) shows its map hints, one per opening of the map: the next stage, a beast pack that can be fought,
+## the stage's «Рек. сила».
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 const NewHeroWindow := preload("res://scripts/ui/new_hero_window.gd")
+const TutorialHint := preload("res://scripts/ui/tutorial_hint.gd")
 
 const BATTLE_SCENE := "res://scenes/battle.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -94,6 +99,7 @@ var _chapter := 0  ## the chapter on the map now
 var _map_size := Vector2.ONE  ## the map picture's own size
 var _markers: Array[Dictionary] = []  ## {button, token, caption, side, point (shares of the picture)[, crown]}
 var _stage_buttons := {}  ## stage id -> Button
+var _stage_markers := {}  ## stage id -> its marker
 var _pack_markers := {}  ## pack id -> its marker plus {status: Label, state: "ready" / "away" / "locked"}
 var _map_origin := Vector2.ZERO  ## where the map picture's corner is on the screen
 var _map_shown := Vector2.ONE  ## the map picture's size on the screen
@@ -104,6 +110,8 @@ var _previous_arrow := ChapterArrow.new(true)
 var _next_arrow := ChapterArrow.new(false)
 var _story: Control  ## the saga scene on screen, if any
 var _new_hero_window: Control  ## «Новый герой» after a chapter's scene, if on screen
+var _tutorial_shown_before: Array[String] = []  ## tutorial hints shown before this map was opened
+var _tutorial_tried := false  ## this opening of the map has had its moment for a tutorial hint (one per opening)
 
 
 func _ready() -> void:
@@ -123,7 +131,39 @@ func _ready() -> void:
 	_clock.timeout.connect(_refresh_packs)
 	add_child(_clock)
 	_clock.start()
+	_tutorial_shown_before = progress.tutorial_shown.duplicate()
 	show_chapter(progress.current_chapter(data))
+	_show_tutorial()
+
+
+## The map's tutorial hint once nothing is over the map (a chapter's scene and «Новый герой» first).
+func _show_tutorial() -> void:
+	if _tutorial_tried or _is_on_screen(_story) or _is_on_screen(_new_hero_window):
+		return
+	_tutorial_tried = true
+	TutorialHint.try_show(self, "map", "open", _tutorial_targets, {"shown_before": _tutorial_shown_before})
+
+
+static func _is_on_screen(node) -> bool:
+	return is_instance_valid(node) and not node.is_queued_for_deletion()
+
+
+## What a map hint points at (tutorial.json → hints[].target), on the chapter shown.
+func _tutorial_targets(target: String) -> Array:
+	var next_stage: int = GameState.progress.next_stage_id(GameState.data)
+	match target:
+		"next_stage":
+			return [_stage_markers[next_stage]["token"]] if _stage_markers.has(next_stage) else []
+		"next_stage_caption":
+			return [_stage_markers[next_stage]["caption"]] if _stage_markers.has(next_stage) else []
+		"available_pack":
+			for pack_id in _pack_markers:
+				if _pack_markers[pack_id]["state"] == "ready" \
+						and GameState.progress.is_pack_unlocked(GameState.data, pack_id):
+					return [_pack_markers[pack_id]["token"]]
+			return []
+	push_error("Unknown tutorial target on the map: %s" % target)
+	return []
 
 
 ## Puts the chapter's map, stages and packs on the board (only an open chapter); its scene plays the first time.
@@ -138,9 +178,11 @@ func show_chapter(chapter_id: int) -> void:
 		marker["button"].queue_free()
 	_markers.clear()
 	_stage_buttons.clear()
+	_stage_markers.clear()
 	_pack_markers.clear()
 	var chapter: Dictionary = data.get_chapter(chapter_id)
 	%Title.text = "Глава %d · %s" % [chapter_id, chapter["name"]]
+	%GoalLabel.text = chapter["goal"]
 	%MapPicture.texture = Art.map_picture(chapter["map"])
 	_map_size = %MapPicture.texture.get_size()
 	_camp_bottom = float(chapter["map_camp_bottom"])
@@ -160,10 +202,16 @@ func show_chapter(chapter_id: int) -> void:
 func _on_chapter_scene_finished(scene_id: String) -> void:
 	var joined: Array[String] = GameState.progress.join_heroes_after_scene(GameState.data, scene_id)
 	if joined.is_empty():
+		_show_tutorial()
 		return
 	GameState.save()
 	_new_hero_window = NewHeroWindow.open(self, joined)
-	_new_hero_window.closed.connect(func(): show_chapter(_chapter), CONNECT_DEFERRED)
+	_new_hero_window.closed.connect(_on_new_hero_window_closed, CONNECT_DEFERRED)
+
+
+func _on_new_hero_window_closed() -> void:
+	show_chapter(_chapter)
+	_show_tutorial()
 
 
 func shown_chapter() -> int:
@@ -246,6 +294,7 @@ func _add_stage(stage_id: int) -> void:
 	button.disabled = not open
 	button.pressed.connect(_on_stage_pressed.bind(stage_id))
 	_stage_buttons[stage_id] = button
+	_stage_markers[stage_id] = marker
 
 
 func _on_stage_pressed(stage_id: int) -> void:

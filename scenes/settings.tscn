@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/settings_screen.gd" id="1_settings"]
+[ext_resource type="Script" path="res://scripts/ui/touch_scroll.gd" id="2_scroll"]
 
 [node name="Settings" type="Control"]
 layout_mode = 3
@@ -59,6 +60,13 @@ layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 34
 text = "Сцены саги"
+
+[node name="HowToButton" type="Button" parent="Margin/Layout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 34
 
 [node name="Spacer" type="Control" parent="Margin/Layout"]
 layout_mode = 2
@@ -134,3 +142,58 @@ layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 40
 text = "Назад"
+
+[node name="HowToOverlay" type="ColorRect" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.07, 0.09, 0.13, 1)
+
+[node name="HowToMargin" type="MarginContainer" parent="HowToOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 48
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 48
+
+[node name="HowToLayout" type="VBoxContainer" parent="HowToOverlay/HowToMargin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 24
+
+[node name="HowToTitle" type="Label" parent="HowToOverlay/HowToMargin/HowToLayout"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+
+[node name="HowToScroll" type="ScrollContainer" parent="HowToOverlay/HowToMargin/HowToLayout"]
+unique_name_in_owner = true
+script = ExtResource("2_scroll")
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="HowToList" type="VBoxContainer" parent="HowToOverlay/HowToMargin/HowToLayout/HowToScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 22
+
+[node name="HowToBackButton" type="Button" parent="HowToOverlay/HowToMargin/HowToLayout"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 112)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40

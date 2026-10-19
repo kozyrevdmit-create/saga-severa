@@ -478,6 +478,7 @@ func _use(progress, window: Vector2i) -> Node:
 	if _saved_progress == null:
 		_saved_progress = game_state.progress
 		_saved_window_size = tree.root.size
+	progress.finish_tutorial(game_state.data)  # no tutorial hint over the settlement (tests/test_tutorial.gd)
 	game_state.progress = progress
 	tree.root.size = window
 	return game_state

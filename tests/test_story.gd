@@ -21,6 +21,7 @@ const Art := preload("res://scripts/ui/art.gd")
 const STORY_MDS := ["res://docs/STORY_M10.md", "res://docs/STORY_M11.md", "res://docs/STORY_M12.md", "res://docs/STORY_M13.md"]
 const NewHeroWindow := preload("res://scripts/ui/new_hero_window.gd")
 const LORE_MD := "res://docs/LORE.md"
+const TUTORIAL_MD := "res://docs/TUTORIAL_M14.md"  ## M14: its section 3 is the new, shorter intro
 const SETTINGS_SCENE := "res://scenes/settings.tscn"
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const MAP_SCENE := "res://scenes/map.tscn"
@@ -66,6 +67,9 @@ func test_texts_match_story_md_word_for_word() -> void:
 		elif not expected.is_empty() and card.search(line):
 			expected.back()["end_card"] = card.search(line).get_string(1)
 	assert_eq(expected.map(func(scene): return scene["id"]), SCENES, "six scenes in STORY_M10.md, four in STORY_M11.md, one in STORY_M12.md, four in STORY_M13.md")
+	# M14: the intro is the new version of docs/TUTORIAL_M14.md (section 3), 6 lines instead of the 12 of STORY_M10.md.
+	expected[0]["lines"] = tutorial_intro_lines()
+	assert_eq(expected[0]["lines"].size(), 6, "TUTORIAL_M14.md: the intro has 6 lines")
 	assert_eq(data.scene_ids(), SCENES, "the same fifteen scenes in story.json, in the same order")
 	for scene in expected:
 		if not data.has_scene(scene["id"]):
@@ -84,6 +88,26 @@ func test_texts_match_story_md_word_for_word() -> void:
 	assert_eq([last_line["speaker"], last_line["text"]], ["regin", "Бейте в брюхо — там доспех тоньше. Я сам его ковал."],
 			"«Брат» ends with Regin's line of STORY_M13.md v1.1 (M13.1)")
 	assert_true(FileAccess.get_file_as_string("res://docs/STORY_M13.md").contains("Версия 1.1"), "STORY_M13.md is v1.1")
+
+
+## The intro's lines of docs/TUTORIAL_M14.md (section 3): [look, speaker's name, text].
+static func tutorial_intro_lines() -> Array:
+	var md := FileAccess.get_file_as_string(TUTORIAL_MD)
+	var spoken := RegEx.create_from_string("^- \\*\\*(.+?):\\*\\* (.+)$")
+	var lines := []
+	var in_intro := false
+	var view := ""
+	for line in md.split("\n"):
+		if line.begins_with("## "):
+			in_intro = line.begins_with("## 3. Вступление `intro`")
+		elif in_intro and line == "[страница саги]":
+			view = "page"
+		elif in_intro and line == "[диалог]":
+			view = "dialog"
+		elif in_intro and view != "" and spoken.search(line):
+			var found := spoken.search(line)
+			lines.append([view, found.get_string(1), found.get_string(2)])
+	return lines
 
 
 ## Page lines are the ravens'; dialog lines are heroes', ravens' or Thjazi's; every scene has its moment.
@@ -422,9 +446,8 @@ func test_the_caption_is_under_the_name_at_every_line() -> void:
 	var screen := _blank_screen()
 	var player = StoryPlayer.play(screen, "intro")
 	await tree.process_frame
-	var expected := ["ворон Одина · Память", "ворон Одина · Память", "ворон Одина · Мысль", "ворон Одина · Память",
-			"ворон Одина · Мысль", "ворон Одина · Мысль", "ворон Одина · Память", "щитоносец дружины", "берсерк дружины",
-			"скальд дружины", "скальд дружины", "берсерк дружины"]
+	var expected := ["ворон Одина · Память", "ворон Одина · Мысль", "ворон Одина · Мысль", "щитоносец дружины",
+			"скальд дружины", "берсерк дружины"]  # the intro of M14 (docs/TUTORIAL_M14.md)
 	for i in expected.size():
 		var on_page: bool = player.get_node("%Page").visible
 		var prefix := "%Page" if on_page else "%Dialog"
@@ -773,7 +796,7 @@ func test_the_battle_plays_the_heroes_scene_after_the_new_hero_window() -> void:
 	var progress = Progress.new_game(data)
 	progress.start_scene("intro")
 	progress.jump_to_stage(data, 3)
-	progress.mark_hint_shown = true
+	progress.finish_tutorial(data)
 	var game_state = await _use_progress(progress)
 	game_state.selected_stage = 3
 	game_state.selected_pack = ""

@@ -1,5 +1,5 @@
-## Loads game content (heroes, enemies, stages, beast packs, settlement buildings, balance, visual, saga scenes, hints)
-## from JSON files in res://data/.
+## Loads game content (heroes, enemies, stages, beast packs, settlement buildings, balance, visual, saga scenes, hints,
+## the beginner's tutorial) from JSON files in res://data/.
 ## All balance numbers live in those files, never in code; visual.json holds the tunable strength of the hit feedback;
 ## story.json holds the texts of the saga scenes (word for word from docs/STORY_M10.md, M11, M12) and when each scene is shown.
 extends RefCounted
@@ -15,6 +15,7 @@ var balance: Dictionary  ## balance.json
 var visual: Dictionary  ## visual.json: hit flash and shake
 var story: Dictionary  ## story.json: saga scenes (lines, when shown), the ravens who speak in them, speakers' captions
 var hints: Dictionary  ## hints.json: tips under «Дружина пала» (defeat: [{when, text}], see StageBattle.defeat_hint)
+var tutorial: Dictionary  ## tutorial.json (M14): the beginner's hints (when, what they point at, text), old saves, texts by key
 
 
 static func load_all() -> RefCounted:
@@ -28,6 +29,7 @@ static func load_all() -> RefCounted:
 	data.visual = load_json("visual.json")
 	data.story = load_json("story.json")
 	data.hints = load_json("hints.json")
+	data.tutorial = load_json("tutorial.json")
 	return data
 
 
@@ -138,6 +140,34 @@ func is_raven(speaker_id: String) -> bool:
 ## The enemy (enemies.json id) whose head is the speaker's portrait (Thjazi in chapter 2), or "".
 func speaker_enemy(speaker_id: String) -> String:
 	return story.get("speakers", {}).get(speaker_id, {}).get("enemy", "")
+
+
+# --- the beginner's tutorial (tutorial.json, M14) ----------------------------------
+
+func get_tutorial_hint(hint_id: String) -> Dictionary:
+	for hint in tutorial.get("hints", []):
+		if hint["id"] == hint_id:
+			return hint
+	push_error("Unknown tutorial hint: %s" % hint_id)
+	return {}
+
+
+## Tutorial hint ids in data order (the order of the table in docs/TUTORIAL_M14.md and of «Как играть»).
+func tutorial_hint_ids() -> Array[String]:
+	var ids: Array[String] = []
+	for hint in tutorial.get("hints", []):
+		ids.append(hint["id"])
+	return ids
+
+
+## A text of the tutorial's screens by its key (tutorial.json → texts): every new line of M14 lives there with its own
+## key, so that the game can get other languages.
+func tutorial_text(key: String) -> String:
+	var texts: Dictionary = tutorial.get("texts", {})
+	if not texts.has(key):
+		push_error("Unknown tutorial text: %s" % key)
+		return ""
+	return texts[key]
 
 
 func get_pack(pack_id: String) -> Dictionary:

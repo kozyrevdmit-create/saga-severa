@@ -49,9 +49,6 @@
     "pack_victory": 300,
     "pack_victory_once_the_next_chapter_is_open": 100
   },
-  "mark_hint": {
-    "seconds": 6
-  },
   "debug_panel": {
     "long_press_seconds": 0.8,
     "add_silver": 10000,

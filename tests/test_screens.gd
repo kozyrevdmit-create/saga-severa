@@ -221,6 +221,7 @@ func _open(scene_path: String, bench_most: bool) -> Control:
 		for hero_id in progress.squad_ids().duplicate():
 			if hero_id != "torvald":
 				progress.formation_remove(hero_id)
+	progress.finish_tutorial(game_state.data)  # no tutorial hint over the screen (tests/test_tutorial.gd)
 	game_state.progress = progress
 	# Headless, the window is not the phone's shape: make it the project's base size for the test.
 	_saved_window_size = tree.root.size

@@ -113,6 +113,13 @@ focus_mode = 0
 theme_override_font_sizes/font_size = 38
 text = "Промотать время на 1 час"
 
+[node name="ResetTutorialButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 38
+
 [node name="ResetButton" type="Button" parent="Box"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 104)

@@ -5,9 +5,13 @@
 ## (GameState.debug_allowed, M13.1), otherwise the long press does nothing.
 ## Saga scenes waiting in the queue are played over this screen: the intro on a new game (also once for a save from
 ## before M10 and after «Сбросить прогресс»), or a scene left unseen when the game was closed.
+## M14: once nothing is over the screen (no scene, no «Пока тебя не было», no debug panel), the beginner's tutorial
+## (data/tutorial.json, TutorialHint) shows its main screen hints, one per visit: «Карта главы» after the intro,
+## «Герои» after the first win.
 extends Control
 
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
+const TutorialHint := preload("res://scripts/ui/tutorial_hint.gd")
 
 const MAP_SCENE := "res://scenes/map.tscn"
 const HEROES_SCENE := "res://scenes/heroes.tscn"
@@ -18,6 +22,7 @@ const SETTINGS_SCENE := "res://scenes/settings.tscn"
 const JARL_BAR_COLOR := Color("#8fb8ff")
 var _long_press: Timer  ## holding the silver counter this long opens the debug panel
 var _story: Control  ## the saga scene on screen, if any
+var _tutorial_tried := false  ## this visit has had its moment for a tutorial hint (one per visit)
 
 
 func _ready() -> void:
@@ -36,6 +41,7 @@ func _ready() -> void:
 	%SilverLabel.gui_input.connect(_on_silver_input)
 	%SilverLabel.mouse_exited.connect(_long_press.stop)
 	%DebugPanel.progress_changed.connect(_on_debug_changed)
+	%DebugPanel.closed.connect(_show_tutorial)
 	GameState.offline_bank_changed.connect(_show_offline_income)
 	_show_offline_income()
 	_refresh()
@@ -50,6 +56,30 @@ func _play_queued_scene() -> void:
 	if scene_id != "":
 		_story = StoryPlayer.play(self, scene_id)
 		_story.finished.connect(_play_queued_scene, CONNECT_DEFERRED)
+	else:
+		_show_tutorial()
+
+
+## The screen's tutorial hint, once nothing else is over the screen; one per visit of the screen (a second due hint
+## waits for the next visit).
+func _show_tutorial() -> void:
+	if _tutorial_tried or %OfflineOverlay.visible or %DebugPanel.visible:
+		return
+	if is_instance_valid(_story) and not _story.is_queued_for_deletion():
+		return
+	_tutorial_tried = true
+	TutorialHint.try_show(self, "main_menu", "open", _tutorial_targets)
+
+
+## What a main screen hint points at (tutorial.json → hints[].target).
+func _tutorial_targets(target: String) -> Array:
+	match target:
+		"map_button":
+			return [%MapButton]
+		"heroes_button":
+			return [%HeroesButton]
+	push_error("Unknown tutorial target on the main screen: %s" % target)
+	return []
 
 
 ## «Пока тебя не было»: shown when the game starts or comes back with offline income waiting.
@@ -76,6 +106,7 @@ func _on_debug_changed() -> void:
 	%OfflineOverlay.visible = false
 	_show_offline_income()
 	_refresh()
+	_tutorial_tried = false  # «Сбросить обучение» / «Сбросить прогресс»: the first hint shows once the panel is closed
 	_play_queued_scene()  # after «Сбросить прогресс» the intro is due again
 
 
@@ -83,6 +114,7 @@ func _on_claim_pressed() -> void:
 	GameState.claim_offline_income()
 	%OfflineOverlay.visible = false
 	_refresh()
+	_show_tutorial()
 
 
 func _refresh() -> void:

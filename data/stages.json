@@ -3,12 +3,14 @@
     {
       "id": 1,
       "name": "Мидгард",
+      "goal": "Цель: остановить мёртвых и сразить Драугр-конунга",
       "map": "map_midgard",
       "map_camp_bottom": 0.88
     },
     {
       "id": 2,
       "name": "Ётунхейм",
+      "goal": "Цель: пройти Ётунхейм и одолеть Тьяцци",
       "map": "map_jotunheim",
       "map_camp_bottom": 0.935,
       "enemy_power_growth_per_stage": 0.055
@@ -16,6 +18,7 @@
     {
       "id": 3,
       "name": "Свартальфхейм",
+      "goal": "Цель: спуститься к золоту и сразить Фафнира",
       "map": "map_svartalfheim",
       "map_camp_bottom": 0.92,
       "enemy_power_growth_per_stage": 0.055

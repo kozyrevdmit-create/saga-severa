@@ -190,7 +190,7 @@ func _open_battle(stage_id: int) -> Control:
 		await tree.process_frame
 	var progress = Progress.new_game(game_state.data)
 	progress.jump_to_stage(game_state.data, stage_id)
-	progress.mark_hint_shown = true
+	progress.finish_tutorial(game_state.data)
 	if _saved_progress == null:
 		_saved_progress = game_state.progress
 	game_state.progress = progress
