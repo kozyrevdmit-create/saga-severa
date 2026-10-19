@@ -1,4 +1,5 @@
-# The balance simulation smoke check: every player profile through every stage, 2 runs × 2 campaigns (~11 min).
+# The balance simulation smoke check: every player profile through every stage, 2 runs × 2 campaigns (~11 min),
+# then the battle length rule (M13.2, ~3 min): fails when a normal stage or a beast pack lasts longer than allowed.
 # Split off the web build (deploy-web.yml) in M13.1 so the build and deploy stay ~2 min.
 # Runs by itself when a pull request or a push to main changes the game data, the battle or progress rules,
 # or the simulation; any time by hand: Actions → Balance check → Run workflow (pick the branch).
@@ -63,3 +64,10 @@ jobs:
 
       - name: Balance simulation runs (smoke check)
         run: ~/godot-sim/godot --headless --path . --script res://tools/balance_sim.gd -- --runs=2 --campaigns=2
+
+      - name: Battle length rule
+        run: |
+          set -o pipefail
+          ~/godot-sim/godot --headless --path . --script res://tools/balance_sim.gd -- --durations | tee durations.txt
+          # A script error also ends Godot with exit code 0: the check passes only with its own last line.
+          grep -q "^Длительность боёв — в правиле.$" durations.txt

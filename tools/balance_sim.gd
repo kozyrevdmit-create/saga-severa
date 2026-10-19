@@ -11,6 +11,7 @@
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --players=human   (only these players: human, sensible, uneven, power)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --packs   (beast packs only, table 7)
 ##   godot --headless --path . --script res://tools/balance_sim.gd -- --packs --visit-fights=2,4,6 --pack-share=0.5
+##   godot --headless --path . --script res://tools/balance_sim.gd -- --durations   (battle length rule only, table 8)
 ## 1. Campaign: a player goes through the chapter from a new game. Before every fight they spend all their
 ##    silver; when they lose a stage they replay the previous one (for the replay reward) and try again.
 ##    Two players: "человек" (M6, like a real first-time player) spreads silver evenly over all heroes
@@ -40,6 +41,10 @@
 ##    every pack on the map, then fights stages as in table 1 (an attempt at the next stage, a replay of the previous
 ##    one after a defeat, …) until the visit's stage fights (--visit-fights, several lengths) are used up.
 ##    Prints the replays per stage with and without packs, and how often the human beats each pack.
+## 8. (--durations) Battle length rule (M13.2): the human's average won battle on every stage and against every pack at
+##    the recommended power, against balance.json → balance_check.battle_length. A normal stage or a pack over its limit,
+##    or with no won battle at all, fails the check (exit code 1) and is named; boss stages are only printed (the rule
+##    does not cover them).
 ## Settlement (M12): every player builds with their supplies (from chapter 2 on: first wins, packs) before spending
 ## silver, the simple way: the open building with the lowest level, in data order on a tie (капище → двор → пристань →
 ## курган), as soon as the supplies are there. Table 1 and table 7 print the buildings' levels at the first win of
@@ -55,7 +60,9 @@ const Progress := preload("res://scripts/save/progress.gd")
 const POLICY_NAMES := {"human": "человек", "sensible": "разумный", "uneven": "неидеальный", "power": "старый разумный (M4)"}
 
 var data
-var _variant_failed := false  ## a sensitivity variant failed, or --recommend found a stage it cannot reach (exit code 1)
+## A sensitivity variant failed, --recommend found a stage it cannot reach or --durations found a battle over its limit
+## (exit code 1).
+var _variant_failed := false
 ## A battle can stall: a lone völva against the boss heals herself about as fast as he hits her and rarely attacks
 ## (found in M5.1, about 1 in 2000–4000 test fights). A battle still running after
 ## balance.json → balance_check.stall_after_seconds of battle time counts as a defeat and is reported as stalled.
@@ -91,6 +98,7 @@ func _initialize() -> void:
 	var packs := false
 	var visit_fights: Array = [2, 4, 6]
 	var pack_share := -1.0
+	var durations := false
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			runs = int(arg.get_slice("=", 1))
@@ -120,6 +128,8 @@ func _initialize() -> void:
 			recommend = true
 		elif arg == "--packs":
 			packs = true
+		elif arg == "--durations":
+			durations = true
 		elif arg.begins_with("--pack-share="):
 			pack_share = float(arg.get_slice("=", 1))
 		elif arg.begins_with("--visit-fights="):
@@ -140,6 +150,11 @@ func _initialize() -> void:
 	if packs:
 		_print_packs(campaigns, runs, visit_fights)
 		quit()
+		return
+
+	if durations:
+		_print_durations()
+		quit(1 if _variant_failed else 0)
 		return
 
 	if recommend:
@@ -1080,6 +1095,100 @@ func _boss_time_text(stage: int, squad: Array, fights: int) -> String:
 	return "  этап %d (%s): побед %d%%, весь этап в среднем %d с (самый долгий %d с), волна босса %d с" % [
 		stage, data.get_enemy(data.get_stage(stage)["waves"].back()[0])["name"], roundi(100.0 * wins / fights),
 		roundi(stage_time / won), roundi(longest), roundi(boss_time / won)]
+
+
+# --- battle length (table 8) ----------------------------------------------------
+
+## M13.2: the human's average won battle at the recommended power. A stage: the squad of the heroes unlocked before it
+## at the stage's recommended power (as --recommend). A pack: at every strength it has while open (the last stage won
+## in its chapter, Progress.pack_stage), the squad that has just won that stage, at that stage's recommended power.
+func _print_durations() -> void:
+	var rule: Dictionary = data.balance["balance_check"]["battle_length"]
+	var fights := int(rule["fights"])
+	var stage_limit := float(rule["max_average_won_seconds_stage"])
+	var pack_limit := float(rule["max_average_won_seconds_pack"])
+	print("8. Длительность боя: средний победный бой человека на рекомендуемой силе (%d боёв; время боя, на x2 вдвое быстрее)" % fights)
+	print("Правило (balance.json → balance_check.battle_length): обычный этап — не дольше %s с, стая — не дольше %s с; этап с боссом — не проверяется." % [
+		_number(stage_limit), _number(pack_limit)])
+	var over := []
+	print("Этап | глава | рек. сила | побед | средний победный бой | самый долгий")
+	for stage in range(1, data.stage_count() + 1):
+		var progress = Progress.new_game(data)
+		for won in range(1, stage):
+			progress.apply_victory(data, won)
+			_see_chapter_maps(progress)
+		var squad := _squad_at_power(progress, data.recommended_power(stage))
+		var result := _won_time(func(run): return StageBattle.from_data(data, stage, squad, run * 7919 + stage), fights)
+		var boss: bool = data.is_boss_stage(stage)
+		var mark := ""
+		if boss:
+			mark = "  (босс, не проверяется)"
+		elif result["won"] == 0:
+			mark = "  ! ни одной победы — длительность не измерить"
+			over.append("этап %d — ни одной победы" % stage)
+		elif result["average"] > stage_limit:
+			mark = "  ! дольше %s с" % _number(stage_limit)
+			over.append("этап %d — %d с" % [stage, roundi(result["average"])])
+		print("%4d | %5d | %9d | %4d%% | %20s | %s%s" % [stage, data.chapter_of_stage(stage), data.recommended_power(stage), result["share"],
+				result["text"], result["longest"], mark])
+	print("")
+	print("Стая | сила этапа | рек. сила | побед | средний победный бой | самый долгий")
+	for pack_id in data.pack_ids():
+		var pack: Dictionary = data.get_pack(pack_id)
+		var chapter_stages: Array[int] = data.chapter_stage_ids(int(pack["chapter"]))
+		for stage in range(maxi(chapter_stages[0], int(pack["unlock_after_stage"])), chapter_stages.back() + 1):
+			var progress = Progress.new_game(data)
+			for won in range(1, stage + 1):
+				progress.apply_victory(data, won)
+				_see_chapter_maps(progress)
+			var squad := _squad_at_power(progress, data.recommended_power(stage))
+			var power_stage: int = progress.pack_stage(data, pack_id)
+			var result := _won_time(func(run): return StageBattle.from_pack(data, pack_id, power_stage, squad, run * 7919 + stage), fights)
+			var mark := ""
+			if result["won"] == 0:
+				mark = "  ! ни одной победы — длительность не измерить"
+				over.append("стая «%s» на силе этапа %d — ни одной победы" % [pack["name"], power_stage])
+			elif result["average"] > pack_limit:
+				mark = "  ! дольше %s с" % _number(pack_limit)
+				over.append("стая «%s» на силе этапа %d — %d с" % [pack["name"], power_stage, roundi(result["average"])])
+			print("%-22s | %10d | %9d | %4d%% | %20s | %s%s" % [pack["name"], power_stage, data.recommended_power(stage), result["share"],
+					result["text"], result["longest"], mark])
+	print("")
+	if over.is_empty():
+		print("Длительность боёв — в правиле.")
+		return
+	print("Длительность боёв — НЕ в правиле: " + "; ".join(over) + ".")
+	push_error("Battle length rule broken: " + "; ".join(over))
+	_variant_failed = true
+
+
+## Levels the squad of `progress` the human way (evenly, one level at a time in unlock order, as --recommend) from
+## level 1 until its power reaches `power`.
+func _squad_at_power(progress, power: int) -> Array:
+	var ids: Array = progress.squad_ids()
+	var max_step: int = ids.size() * (data.max_level() - 1)
+	for step in max_step + 1:
+		for k in ids.size():
+			progress.hero_levels[ids[k]] = mini(data.max_level(), 1 + step / ids.size() + (1 if k < step % ids.size() else 0))
+		if progress.squad_power(data) >= power:
+			break
+	return progress.squad(data)
+
+
+## The human's fights (`make_battle`: run -> battle): how many and what share were won, the average and longest won
+## battle time. A battle stopped at stall_after_seconds is lost (see _run). With no wins there is no length to check:
+## _print_durations fails such a stage or pack (an enemy too strong or too "fat" must not pass as a short battle).
+func _won_time(make_battle: Callable, fights: int) -> Dictionary:
+	var times := []
+	for run in fights:
+		var battle = make_battle.call(run)
+		_run(battle, "human")
+		if battle.victory:
+			times.append(battle.time)
+	var average := _average(times) if not times.is_empty() else 0.0
+	return {"won": times.size(), "share": roundi(100.0 * times.size() / fights), "average": average,
+			"text": "%d с" % roundi(average) if not times.is_empty() else "—",
+			"longest": "%d с" % roundi(times.max()) if not times.is_empty() else "—"}
 
 
 func _levels_text(squad: Array) -> String:
