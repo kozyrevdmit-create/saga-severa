@@ -4,9 +4,12 @@
 ## M13.1: a tap on a hero (put in or taken out) also shows what the hero's role does, in a line above «Назад» that
 ## does not scroll away: «Регин · Поддержка — Сам бьёт слабо, но делает сильнее всю дружину.» (heroes.json →
 ## classes[].role_description).
+## M14: the first time the screen is opened, the beginner's tutorial (data/tutorial.json, TutorialHint) points at the
+## front row.
 extends Control
 
 const HeroesScreen := preload("res://scripts/ui/heroes_screen.gd")
+const TutorialHint := preload("res://scripts/ui/tutorial_hint.gd")
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 const CARD_HEIGHT := 210.0
@@ -20,6 +23,15 @@ const INACTIVE_SYNERGY_COLOR := Color(1, 1, 1, 0.5)
 func _ready() -> void:
 	%BackButton.pressed.connect(func(): get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 	_refresh()
+	TutorialHint.try_show(self, "formation", "open", _tutorial_targets)
+
+
+## What a squad hint points at (tutorial.json → hints[].target).
+func _tutorial_targets(target: String) -> Array:
+	if target == "front_row":
+		return [%FrontRow]
+	push_error("Unknown tutorial target on the formation screen: %s" % target)
+	return []
 
 
 func _on_slot_pressed(hero_id: String) -> void:

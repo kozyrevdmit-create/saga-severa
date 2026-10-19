@@ -626,22 +626,7 @@ func test_bench_hero_does_not_count_and_level_up_gain_matches() -> void:
 		assert_true(gain > 0, "%s gains power" % hero_id)
 
 
-# --- target mark hint and the map's red numbers (M6.1) -------------------------
-
-func test_mark_hint_is_shown_once_per_game_and_again_after_a_reset() -> void:
-	var progress = Progress.new_game(data)
-	assert_true(not progress.mark_hint_shown, "a new game has not shown the hint")
-	progress.mark_hint_shown = true
-	var restored = Progress.from_dict(JSON.parse_string(JSON.stringify(progress.to_dict())), data)
-	assert_true(restored.mark_hint_shown, "the flag is saved")
-	restored.reset(data, 1000)
-	assert_true(not restored.mark_hint_shown, "«Сбросить прогресс» shows the hint again")
-	var old_save: Dictionary = Progress.new_game(data).to_dict()
-	old_save.erase("mark_hint_shown")
-	assert_true(not Progress.from_dict(old_save, data).mark_hint_shown, "a save from before M6.1 shows the hint once")
-	old_save["mark_hint_shown"] = "yes"
-	assert_true(not Progress.from_dict(old_save, data).mark_hint_shown, "a broken flag counts as not shown")
-
+# --- the map's red numbers (M6.1; the target mark hint became the tutorial's hint, M14: test_tutorial.gd) ---
 
 func test_recommended_power_is_red_only_while_the_squad_is_weaker() -> void:
 	var progress = Progress.new_game(data)

@@ -11,11 +11,14 @@
 ## the offline income and «Стройка откроется после главы 1». The first visit with construction open plays the saga
 ## scene «Зерно нового мира» (story.json → settlement), once per game.
 ## The offline income (spec 5.1) stays on a paper strip at the bottom, with «Забрать» while the bank holds silver.
+## M14: after «Зерно нового мира» (or on the first visit with construction open, if the scene was seen before), the
+## beginner's tutorial (data/tutorial.json, TutorialHint) points at an empty plot.
 extends Control
 
 const Art := preload("res://scripts/ui/art.gd")
 const StoryPlayer := preload("res://scripts/ui/story_player.gd")
 const BattleScreen := preload("res://scripts/ui/battle_screen.gd")
+const TutorialHint := preload("res://scripts/ui/tutorial_hint.gd")
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
 
@@ -56,7 +59,27 @@ func _ready() -> void:
 	_layout()
 	var scene_id: String = GameState.progress.scene_on_settlement(data)
 	if scene_id != "":
-		StoryPlayer.play(self, scene_id)
+		StoryPlayer.play(self, scene_id).finished.connect(_show_tutorial, CONNECT_DEFERRED)
+	else:
+		_show_tutorial()
+
+
+func _show_tutorial() -> void:
+	TutorialHint.try_show(self, "settlement", "open", _tutorial_targets)
+
+
+## What a settlement hint points at (tutorial.json → hints[].target): "empty_plot" — the caption of the first open plot
+## with nothing built yet (the first open plot if every one is built).
+func _tutorial_targets(target: String) -> Array:
+	if target != "empty_plot":
+		push_error("Unknown tutorial target in the settlement: %s" % target)
+		return []
+	var data = GameState.data
+	var progress = GameState.progress
+	var open: Array = data.building_ids().filter(func(id): return _buildings.has(id) and progress.is_building_open(data, id))
+	var empty: Array = open.filter(func(id): return progress.building_level(id) == 0)
+	var plots: Array = empty if not empty.is_empty() else open
+	return [_buildings[plots[0]]["caption"]] if not plots.is_empty() else []
 
 
 func _refresh() -> void:

@@ -242,7 +242,7 @@ func _open_battle(stage_id: int, window: Vector2i, hero_level := 0) -> Control:
 	progress.jump_to_stage(game_state.data, stage_id)
 	for hero_id in progress.hero_levels if hero_level > 0 else []:
 		progress.hero_levels[hero_id] = hero_level
-	progress.mark_hint_shown = true
+	progress.finish_tutorial(game_state.data)
 	game_state.progress = progress
 	game_state.selected_stage = stage_id
 	_saved_window_size = tree.root.size

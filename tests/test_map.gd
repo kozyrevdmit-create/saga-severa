@@ -250,6 +250,7 @@ func _open_map(window: Vector2i, cleared: int, beaten: Array) -> Control:
 	for pack_id in beaten:
 		progress.apply_pack_victory(game_state.data, pack_id, game_state.now())
 	progress.mark_all_scenes_seen(game_state.data)  # no saga scene over the map
+	progress.finish_tutorial(game_state.data)  # and no tutorial hint (tests/test_tutorial.gd)
 	game_state.progress = progress
 	_saved_window_size = tree.root.size
 	tree.root.size = window

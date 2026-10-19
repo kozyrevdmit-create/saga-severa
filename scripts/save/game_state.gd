@@ -76,6 +76,18 @@ func start_scene(scene_id: String) -> void:
 	save()
 
 
+## A tutorial hint is put on the screen: it counts as shown at once (also if the game is closed while it is open).
+func show_tutorial_hint(hint_id: String) -> void:
+	progress.show_tutorial_hint(hint_id)
+	save()
+
+
+## Debug panel «Сбросить обучение»: every tutorial hint is due again; the progress stays as it is.
+func debug_reset_tutorial() -> void:
+	progress.reset_tutorial()
+	save()
+
+
 ## Debug panel «Открыть все сцены»: every scene counts as seen, so all can be watched from «Сцены саги».
 func debug_mark_all_scenes_seen() -> void:
 	progress.mark_all_scenes_seen(data)
